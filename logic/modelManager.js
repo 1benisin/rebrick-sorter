@@ -124,9 +124,7 @@ export const detect = async (imageData) => {
 //       // }
 
 //       // classificationModel = await automl.loadImageClassification('/models/all_color/model.json');
-//       classificationModel = await loadGraphModel(
-//         process.cwd() + '/models/all_classes/model.json'
-//       );
+//       classificationModel = await loadGraphModel(process.cwd() + '/models/all_classes/model.json');
 //       console.log(
 //         'CLASSIFICATION MODEL LOADED',
 //         Date.now() - startTime,

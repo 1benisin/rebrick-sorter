@@ -20,9 +20,7 @@ const SocketHandler = (req, res) => {
       io.emit('server-message', msg);
     });
 
-    socket.on('test', (msg) => {
-      console.log('test');
-    });
+    socket.on('test', (msg) => console.log('test'));
   });
 
   res.end();

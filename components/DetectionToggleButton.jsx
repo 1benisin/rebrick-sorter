@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import ToggleButton from './ToggleButton';
-import { start, stop } from '../logic/detectionManager';
+import { start, stop } from '../logic/sorterManager';
 import { useAtom } from 'jotai';
 import { videoRefAtom, canvasRefAtom } from '../logic/atoms';
 
