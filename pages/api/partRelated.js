@@ -1,14 +1,3 @@
-import {
-  serverTimestamp,
-  doc,
-  updateDoc,
-  query,
-  limit,
-  collection,
-  getDocs,
-} from 'firebase/firestore';
-import { randomBetween, fetchBricklinkURL, sleep } from '../../logic/utils';
-import { db } from '../../logic/firebase';
 import { fetchRelatedParts } from '../../dataManagers/partBasics';
 
 // Path: /api/partRelated

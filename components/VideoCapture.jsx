@@ -2,16 +2,15 @@
 import { useEffect, useState, useRef } from 'react';
 import { Row } from 'react-bootstrap';
 import { DISPLAY_DIMENSIONS } from '../logic/globalConfig';
-import { useAtom } from 'jotai';
-import { videoRefAtom, canvasRefAtom } from '../logic/atoms';
 import styled from 'styled-components';
 import { getMediaStream } from '../logic/videoManager';
+import { useGeneralStore } from '../logic/store';
 
 const VideoCapture = ({ onVideoClick, onCanvasClick }) => {
   const videoRef = useRef();
   const canvasRef = useRef();
-  const [_videoRef, setVideoRef] = useAtom(videoRefAtom);
-  const [_canvasRef, setCanvasRef] = useAtom(canvasRefAtom);
+  const setVideoRef = useGeneralStore((state) => state.setVideoRef);
+  const setCanvasRef = useGeneralStore((state) => state.setCanvasRef);
 
   useEffect(() => {
     setVideoRef(videoRef);

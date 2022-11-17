@@ -1,13 +1,5 @@
-import { randomBetween, fetchBricklinkURL, sleep } from '../../../logic/utils';
-import {
-  serverTimestamp,
-  doc,
-  updateDoc,
-  query,
-  limit,
-  collection,
-  getDocs,
-} from 'firebase/firestore';
+import { randomBetween, fetchBricklinkURL, delay } from '../../../logic/utils';
+import { serverTimestamp, doc, updateDoc, query, limit, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../logic/firebase';
 
 let parts = [];
@@ -31,15 +23,11 @@ export default async (req, res) => {
     const part = parts[i];
 
     // is stale or not have a timestamp
-    const isStale =
-      !part?.timestamp?.seconds ||
-      Date.now() / 1000 - part?.timestamp?.seconds > STALE_TIME;
+    const isStale = !part?.timestamp?.seconds || Date.now() / 1000 - part?.timestamp?.seconds > STALE_TIME;
 
     if (isStale) {
       // get Bricklink
-      const partDetails = await fetchBricklinkURL(
-        `https://api.bricklink.com/api/store/v1/items/part/${part.partId}`
-      );
+      const partDetails = await fetchBricklinkURL(`https://api.bricklink.com/api/store/v1/items/part/${part.partId}`);
 
       if (partDetails) {
         // update DB
@@ -55,7 +43,7 @@ export default async (req, res) => {
       }
 
       // delay so we don't overwhelm bricklink api
-      sleep(randomBetween(100, 1000));
+      delay(randomBetween(100, 1000));
     }
   }
 

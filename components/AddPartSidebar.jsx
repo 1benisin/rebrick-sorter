@@ -1,14 +1,13 @@
-import { useMemo, useState } from 'react';
 import { Button, Offcanvas, Spinner } from 'react-bootstrap';
 import styled from 'styled-components';
-import { useAtom } from 'jotai';
-import { sideBarPartNumAtom, sideBarOpenAtom } from '../logic/atoms';
 import useColors from '../fetchers/useColors';
+import { useGeneralStore } from '../logic/store';
 
 export default function AddPartSidebar() {
-  const [partNum] = useAtom(sideBarPartNumAtom);
-  const [open, setOpen] = useAtom(sideBarOpenAtom);
-  const { data: colors, isLoading, error } = useColors(partNum);
+  const partId = useGeneralStore((state) => state.sideBarPartId);
+  const open = useGeneralStore((state) => state.sideBarOpen);
+  const setOpen = useGeneralStore((state) => state.setSideBarOpen);
+  const { data: colors, isLoading, error } = useColors(partId);
 
   const toggleSideBar = (e) => {
     setOpen(!open);
@@ -17,7 +16,7 @@ export default function AddPartSidebar() {
   return (
     <div>
       <Offcanvas show={open} placement="end" onHide={toggleSideBar}>
-        <Offcanvas.Header>{`Known Colors for part ${partNum}`}</Offcanvas.Header>
+        <Offcanvas.Header>{`Known Colors for part ${partId}`}</Offcanvas.Header>
         <Offcanvas.Body>
           {isLoading ? (
             <Spinner />

@@ -1,10 +1,8 @@
 import { Form } from 'react-bootstrap';
-import { searchFilterAtom, filteredaPartsAtom } from '../logic/atoms';
-import { useAtom } from 'jotai';
+import { useGeneralStore } from '../logic/store';
 
 export default function SearchInput() {
-  const [_, setSearchFilter] = useAtom(searchFilterAtom);
-  // const [_, setFilteredParts] = useAtom(filteredaPartsAtom);
+  const setSearchFilter = useGeneralStore((state) => state.setSearchFilter);
 
   const onSearchSubmit = async (e) => {
     if (e.key === 'Enter') {

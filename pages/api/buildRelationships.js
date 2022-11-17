@@ -1,4 +1,4 @@
-import { splitArrayIntoGroups, sleep } from '../../logic/utils';
+import { splitArrayIntoGroups, delay } from '../../logic/utils';
 const fs = require('fs');
 import { writeBatch, doc, getDocs, collection } from 'firebase/firestore';
 import { db } from '../../logic/firebase';
@@ -114,9 +114,7 @@ export default async (req, res) => {
 
   // -----------------------------
   // upload each relation in batches to DB
-  const data = fs.readFileSync(
-    process.cwd() + `/public/partNameRelationships.json`
-  );
+  const data = fs.readFileSync(process.cwd() + `/public/partNameRelationships.json`);
   const nameRelations = JSON.parse(data);
 
   const partIds = [];
@@ -142,7 +140,7 @@ export default async (req, res) => {
 
     await batch.commit();
 
-    await sleep(1000);
+    await delay(1000);
     console.log(logcount++, '/', partIdGroups.length, 'groups');
   }
 

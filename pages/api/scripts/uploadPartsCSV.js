@@ -1,14 +1,7 @@
 const fs = require('fs');
 const csv = require('csv-parser');
-import {
-  writeBatch,
-  doc,
-  getDocs,
-  query,
-  collection,
-  limit,
-} from 'firebase/firestore';
-import { splitArrayIntoGroups, sleep } from '../../../logic/utils';
+import { writeBatch, doc, getDocs, query, collection, limit } from 'firebase/firestore';
+import { splitArrayIntoGroups, delay } from '../../../logic/utils';
 import { db } from '../../../logic/firebase';
 
 // UPLOADS PARTS FROM A CSV FILE WITH NO HEADERS BUT COLUMNS IN ORDER (category Id, category Name,	part Id, part Name)
@@ -28,9 +21,7 @@ export default async (req, res) => {
         });
     });
   };
-  const csvParts = await readCSV(
-    process.cwd() + '/public/bricklink_data/parts.csv'
-  );
+  const csvParts = await readCSV(process.cwd() + '/public/bricklink_data/parts.csv');
 
   // ------------------ CREATE ARRAY OF PARTS NOT IN PART_BASICS COLLECTION ------------------
   console.log('downloading all part basics...');
@@ -79,16 +70,13 @@ export default async (req, res) => {
           id: p['2'],
           name: p['3'],
         };
-        batch.set(
-          doc(db, collectionName, partWithPropertyNames.id),
-          partWithPropertyNames
-        );
+        batch.set(doc(db, collectionName, partWithPropertyNames.id), partWithPropertyNames);
       });
 
       await batch.commit();
 
       console.log(i, 'groups of ', groupCount, 'complete');
-      await sleep(1000);
+      await delay(1000);
     }
   };
 

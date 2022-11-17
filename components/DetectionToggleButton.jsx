@@ -1,13 +1,9 @@
 import React, { useRef } from 'react';
 import ToggleButton from './ToggleButton';
-import { start, stop } from '../logic/sorterManager';
-import { useAtom } from 'jotai';
-import { videoRefAtom, canvasRefAtom } from '../logic/atoms';
+import { startDetecting, stop } from '../logic/detectionManager';
 
 const DetectionToggleButton = () => {
   const buttonRef = useRef();
-  const [videoRef, setVideoRef] = useAtom(videoRefAtom);
-  const [canvasRef, setCanvasRef] = useAtom(canvasRefAtom);
 
   const stopCallback = () => {
     console.log('stopCallback');
@@ -18,7 +14,7 @@ const DetectionToggleButton = () => {
     <ToggleButton
       activeText="detect off"
       inActiveText="detect on"
-      toggleOn={() => start(stopCallback)}
+      toggleOn={() => startDetecting(stopCallback)}
       toggleOff={stop}
       useRef={buttonRef}
     />

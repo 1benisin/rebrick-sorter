@@ -1,20 +1,16 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import { useAtom } from 'jotai';
 import { Spinner } from 'react-bootstrap';
 import PartCard from '../components/PartCard';
-import { searchFilterAtom } from '../logic/atoms';
 import useFilteredParts from '../fetchers/useFilteredParts';
 import useRelatedParts from '../fetchers/useRelatedParts';
+import { useGeneralStore } from '../logic/store';
 
 export default function SearchResults({}) {
   const [selectedPartId, setSelectedPartId] = useState('');
-  const [searchFilter, setSearchFilter] = useAtom(searchFilterAtom);
-  const {
-    data: filteredParts,
-    isLoading,
-    error,
-  } = useFilteredParts(searchFilter);
+  const setSearchFilter = useGeneralStore((state) => state.setSearchFilter);
+  const searchFilter = useGeneralStore((state) => state.searchFilter);
+  const { data: filteredParts, isLoading, error } = useFilteredParts(searchFilter);
   const {
     data: relatedParts,
     isLoading: relatedPartsLoading,

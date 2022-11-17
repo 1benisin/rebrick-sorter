@@ -1,10 +1,9 @@
 // import Image from 'next/image';
 import { Card, Badge, Spinner } from 'react-bootstrap';
 import styled from 'styled-components';
-import { useAtom } from 'jotai';
 import Image from './ImageWithFallback';
-import { sideBarPartNumAtom, sideBarOpenAtom } from '../logic/atoms';
 import useParts from '../fetchers/useParts';
+import { useGeneralStore } from '../logic/store';
 
 const removeCategoryFromName = (name, category) => {
   const categoryWords = category.split(' ');
@@ -17,16 +16,10 @@ const removeCategoryFromName = (name, category) => {
   return newName.replace(/[^a-zA-Z0-9\s]/, ''); // get rid of non alpha=numberic at beginning of scentence
 };
 
-export default function PartCard({
-  name,
-  partId,
-  category,
-  onSelect,
-  selected,
-}) {
+export default function PartCard({ name, partId, category, onSelect, selected }) {
   const { data: part, isLoading, error } = useParts(partId);
-  const [sideBarPartId, setSideBarPartId] = useAtom(sideBarPartNumAtom);
-  const [open, setOpen] = useAtom(sideBarOpenAtom);
+  const setSideBarPartId = useGeneralStore((state) => state.setSideBarPartId);
+  const setOpen = useGeneralStore((state) => state.setSideBarOpen);
 
   const handleAddClick = (e) => {
     setSideBarPartId(partId);

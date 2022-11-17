@@ -1,14 +1,6 @@
-import {
-  serverTimestamp,
-  doc,
-  updateDoc,
-  query,
-  limit,
-  collection,
-  getDocs,
-} from 'firebase/firestore';
+import { serverTimestamp, doc, updateDoc, query, limit, collection, getDocs } from 'firebase/firestore';
 import { db } from '../logic/firebase';
-import { randomBetween, fetchBricklinkURL, sleep } from '../logic/utils';
+import { randomBetween, fetchBricklinkURL, delay } from '../logic/utils';
 
 const parts = [];
 let splitPartNames = [];
