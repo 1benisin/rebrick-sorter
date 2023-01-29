@@ -10,7 +10,7 @@ function NavigationBar({ children }) {
           <Navbar.Brand href="/">Rebrick Cataloger</Navbar.Brand>
           <Nav>
             {/* <Nav.Item> */}
-            <Nav.Link href="/search/">Search</Nav.Link>
+            {/* <Nav.Link href="/search/">Search</Nav.Link> */}
             <Nav.Link href="/video/">Video</Nav.Link>
             {/* </Nav.Item> */}
           </Nav>

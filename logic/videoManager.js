@@ -1,8 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
 import { mediaDim } from './globalConfig';
-import { detectingAtom } from './atoms';
-import { useAtom } from 'jotai';
-import { classify, detect } from './modelManager';
 
 const mediaStream = null;
 const imageCapture = null;
@@ -26,12 +22,7 @@ export const getDectections = async (videoRef, canvasRef) => {
     displayCanvas.height
   );
 
-  const imageData = displayCtx.getImageData(
-    0,
-    0,
-    displayCanvas.width,
-    displayCanvas.height
-  );
+  const imageData = displayCtx.getImageData(0, 0, displayCanvas.width, displayCanvas.height);
 
   // get scaling dimensions
   // if (!scalar) scalar = img.width / DETECT_DIMENSIONS.width;

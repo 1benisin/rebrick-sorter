@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import { Button } from 'react-bootstrap';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../lib/AuthContextProvider';
 
 export default function AuthButton(props) {
   const { user, logOut } = useAuth();

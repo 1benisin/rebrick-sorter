@@ -4,7 +4,7 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { Stack, Form, Button, Alert } from 'react-bootstrap';
 
-import { useAuth } from '../components/AuthContext';
+import { useAuth } from '../lib/AuthContextProvider';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
