@@ -10,8 +10,8 @@ function NavigationBar({ children }) {
           <Navbar.Brand href="/">Rebrick Cataloger</Navbar.Brand>
           <Nav>
             {/* <Nav.Item> */}
-            {/* <Nav.Link href="/search/">Search</Nav.Link> */}
-            <Nav.Link href="/video/">Video</Nav.Link>
+            <Nav.Link href="/catalog/">Catalog</Nav.Link>
+            <Nav.Link href="/collect/">Collect Images</Nav.Link>
             {/* </Nav.Item> */}
           </Nav>
           <AuthButton />

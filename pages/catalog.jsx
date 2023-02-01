@@ -1,11 +1,11 @@
 import Head from 'next/head';
 import ProtectedRoute from '../components/ProtectedRoute';
-import SearchInput from '../components/SearchInput';
-import SearchResults from '../components/SearchResults';
+import PartsSearchInput from '../components/PartsSearchInput';
+import PartsSearchResults from '../components/PartsSearchResults';
 import AddPartSidebar from '../components/AddPartSidebar';
 // import '../logic/scrapeBLRelationships';
 
-export default function Search() {
+export default function Catalog() {
   return (
     <>
       <Head>
@@ -14,8 +14,8 @@ export default function Search() {
 
       <ProtectedRoute>
         <AddPartSidebar />
-        <SearchInput />
-        <SearchResults />
+        <PartsSearchInput />
+        <PartsSearchResults />
       </ProtectedRoute>
     </>
   );

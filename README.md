@@ -1,3 +1,11 @@
+## Folder stuctures
+
+- pages/ (contains all Next.js pages)
+- components/ (contains all reusable React components)
+- lib/ (contains all front-end logic, such as helper functions, stores, etc)
+- api/ (contains all back-end logic, such as API endpoints, database models, etc)
+- public/ (contains all static assets)
+
 ## Getting Started
 
 First, run the development server:

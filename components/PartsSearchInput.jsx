@@ -2,7 +2,7 @@ import { Form } from 'react-bootstrap';
 import { searchFilterAtom, filteredaPartsAtom } from '../logic/atoms';
 import { useAtom } from 'jotai';
 
-export default function SearchInput() {
+export default function PartsSearchInput() {
   const [_, setSearchFilter] = useAtom(searchFilterAtom);
   // const [_, setFilteredParts] = useAtom(filteredaPartsAtom);
 

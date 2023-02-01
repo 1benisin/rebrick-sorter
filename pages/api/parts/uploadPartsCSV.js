@@ -1,13 +1,6 @@
 const fs = require('fs');
 const csv = require('csv-parser');
-import {
-  writeBatch,
-  doc,
-  getDocs,
-  query,
-  collection,
-  limit,
-} from 'firebase/firestore';
+import { writeBatch, doc, getDocs, query, collection, limit } from 'firebase/firestore';
 import { splitArrayIntoGroups, sleep } from '../../../logic/utils';
 import { db } from '../../../logic/firebase';
 
@@ -28,9 +21,7 @@ export default async (req, res) => {
         });
     });
   };
-  const csvParts = await readCSV(
-    process.cwd() + '/public/bricklink_data/parts.csv'
-  );
+  const csvParts = await readCSV(process.cwd() + '/public/bricklink_data/parts.csv');
 
   // ------------------ CREATE ARRAY OF PARTS NOT IN PART_BASICS COLLECTION ------------------
   console.log('downloading all part basics...');
@@ -41,6 +32,8 @@ export default async (req, res) => {
   docs.forEach((doc) => {
     existingBasicPartIds.push(doc.id);
   });
+  console.log('existingBasicPartIds: ', existingBasicPartIds.length);
+
   // filter csvParts out that already exist in part_basics collection
   const newBasicParts = csvParts.filter((p) => {
     return !existingBasicPartIds.includes(p['2']);
@@ -79,10 +72,7 @@ export default async (req, res) => {
           id: p['2'],
           name: p['3'],
         };
-        batch.set(
-          doc(db, collectionName, partWithPropertyNames.id),
-          partWithPropertyNames
-        );
+        batch.set(doc(db, collectionName, partWithPropertyNames.id), partWithPropertyNames);
       });
 
       await batch.commit();

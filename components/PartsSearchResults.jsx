@@ -2,24 +2,23 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { useAtom } from 'jotai';
 import { Spinner } from 'react-bootstrap';
-import PartCard from '../components/PartCard';
+import PartCard from './PartCard';
 import { searchFilterAtom } from '../logic/atoms';
 import useFilteredParts from '../fetchers/useFilteredParts';
 import useRelatedParts from '../fetchers/useRelatedParts';
+import partStore from '../lib/stores/partStore';
 
-export default function SearchResults({}) {
+export default function PartsSearchResults({}) {
   const [selectedPartId, setSelectedPartId] = useState('');
   const [searchFilter, setSearchFilter] = useAtom(searchFilterAtom);
-  const {
-    data: filteredParts,
-    isLoading,
-    error,
-  } = useFilteredParts(searchFilter);
+  const { data: filteredParts, isLoading, error } = useFilteredParts(searchFilter);
   const {
     data: relatedParts,
     isLoading: relatedPartsLoading,
     error: relatedPartsError,
   } = useRelatedParts(selectedPartId);
+
+  const parts = partStore((state) => state.parts);
 
   const handleSelectPart = (partId) => {
     setSearchFilter('');
@@ -31,7 +30,7 @@ export default function SearchResults({}) {
 
   return (
     <>
-      {relatedPartsLoading ? (
+      {/* {relatedPartsLoading ? (
         <Spinner />
       ) : (
         <Grid>
@@ -44,7 +43,7 @@ export default function SearchResults({}) {
             ></PartCard>
           ))}
         </Grid>
-      )}
+      )} */}
       {filteredParts && (
         <Grid>
           {filteredParts.map((id) => (
