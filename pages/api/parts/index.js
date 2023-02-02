@@ -9,41 +9,77 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { db } from '../../../logic/firebase';
+const fs = require('fs');
 
 let parts = [];
 // const STALE_TIME = 0;
 export const STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
 export const RESULTS_PER_PAGE = 200;
 
+// fetches parts catalog from local file first then from db if local file is stale
 export const getParts = async () => {
-  // fetch all parts from db
+  // if parts haven't been loaded yet
   if (!parts.length) {
     const startTime = Date.now();
-    // const q = query(collection(db, 'part_basics'), limit(1000));
-    // const querySnapshot = await getDocs(q);
-    const querySnapshot = await getDocs(collection(db, 'part_details'));
-    querySnapshot.forEach((doc) => {
-      parts.push(doc.data());
-    });
-    console.log(`getParts took:  ${(Date.now() - startTime) / 1000} seconds`);
+
+    // fetch local JSON part catalog file
+    let localPartsCatalog = { timeStamp: Date.now(), parts: [] };
+    if (fs.existsSync(process.cwd() + `/public/local_parts_catalog.json`)) {
+      const data = fs.readFileSync(process.cwd() + `/public/local_parts_catalog.json`);
+      localPartsCatalog = JSON.parse(data);
+      parts = localPartsCatalog.parts;
+    }
+    const fileAge = Date.now() - localPartsCatalog.timeStamp;
+
+    // if parts are stale set parts to local parts
+    if (fileAge > STALE_TIME) {
+      console.log(`refetching parts from db`);
+
+      const databaseParts = [];
+      // fetch all parts from db
+      // const q = query(collection(db, 'part_basics'), limit(1000));
+      // const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(collection(db, 'parts'));
+      querySnapshot.forEach((doc) => {
+        databaseParts.push(doc.data());
+      });
+
+      // save parts to local JSON file
+      localPartsCatalog = { timeStamp: Date.now(), parts: databaseParts };
+      const jsonData = JSON.stringify(localPartsCatalog);
+      fs.writeFileSync(process.cwd() + `/public/local_parts_catalog.json`, jsonData);
+
+      parts = databaseParts;
+    }
+
+    const fetchTime = Date.now() - startTime;
+    console.log(`Fetched ${parts.length} parts.
+    Fetch took: ${fetchTime / 1000} seconds.
+    Local catalog file is ${fileAge / 1000 / 60 / 60} hours old.`);
   }
+
   return parts;
+};
+
+const checkPartCatalogFreshness = async (partId) => {
+  //
 };
 
 export default async (req, res) => {
   const startTime = Date.now();
   // fetch all parts from db if haven't already
-  if (!parts.length) {
-    const q = query(collection(db, 'part_basics'), limit(1000));
-    const querySnapshot = await getDocs(q);
-    // const querySnapshot = await getDocs(collection(db, 'part_basics'));
-    querySnapshot.forEach((doc) => {
-      parts.push(doc.data());
-    });
-  }
+  // if (!parts.length) {
+  //   const q = query(collection(db, 'part_basics'), limit(1000));
+  //   const querySnapshot = await getDocs(q);
+  //   // const querySnapshot = await getDocs(collection(db, 'part_basics'));
+  //   querySnapshot.forEach((doc) => {
+  //     parts.push(doc.data());
+  //   });
+  // }
+  const fetchedParts = await getParts();
 
-  console.log('getParts', Date.now() - startTime);
-  res.status(200).json(parts);
+  const fetchTime = Date.now() - startTime;
+  res.status(200).json(`Fetched ${parts.length} parts. Fetch took: ${fetchTime / 1000} seconds`);
 };
 
 // --------------------------------------------
@@ -75,8 +111,7 @@ const oldFetch = async (req, res) => {
       );
 
       if (partDetails) {
-        // update DB
-        console.log(`updating image for part ${part.partId}`);
+        // update DB\
         await updateDoc(doc(db, 'parts', part.partId), {
           img: partDetails.image_url,
           timestamp: serverTimestamp(),
