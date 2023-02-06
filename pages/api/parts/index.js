@@ -113,7 +113,7 @@ export const checkPartsFreshness = async (parts) => {
       }
     }
 
-    freshParts.push(part);
+    freshParts.push(updatedPart);
     sleep(randomBetween(100, 500)); // sleep to avoid rate limiting db
   }
 
