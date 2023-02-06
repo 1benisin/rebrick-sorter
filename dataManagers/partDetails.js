@@ -1,13 +1,7 @@
 const OAuth = require('oauth').OAuth;
-import {
-  serverTimestamp,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
+import { serverTimestamp, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../logic/firebase';
-import { fetchBricklinkURL } from './bricklink';
+import { fetchBricklinkURL } from '../lib/services/bricklink';
 
 // const STALE_TIME = 0;
 const STALE_TIME = 1000 * 60 * 60 * 24 * 30; // days old
@@ -37,9 +31,7 @@ export async function getPart(partId) {
   // add part to our db
   partDetails = {
     ...partDetails,
-    image_url: partDetails?.image_url
-      ? `https:${partDetails.image_url}`
-      : '/fallback.webp',
+    image_url: partDetails?.image_url ? `https:${partDetails.image_url}` : '/fallback.webp',
     thumbnail_url: partDetails?.thumbnail_url
       ? `https:${partDetails.thumbnail_url}`
       : '/fallback.webp',

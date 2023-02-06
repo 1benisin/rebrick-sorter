@@ -1,32 +1,32 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import { useAtom } from 'jotai';
-import { Spinner } from 'react-bootstrap';
+// import { useAtom } from 'jotai';
+// import { Spinner } from 'react-bootstrap';
 import PartCard from './PartCard';
-import { searchFilterAtom } from '../logic/atoms';
-import useFilteredParts from '../fetchers/useFilteredParts';
-import useRelatedParts from '../fetchers/useRelatedParts';
+// import { searchFilterAtom } from '../logic/atoms';
+// import useFilteredParts from '../fetchers/useFilteredParts';
+// import useRelatedParts from '../fetchers/useRelatedParts';
 import partStore from '../lib/stores/partStore';
 
 export default function PartsSearchResults({}) {
   const [selectedPartId, setSelectedPartId] = useState('');
-  const [searchFilter, setSearchFilter] = useAtom(searchFilterAtom);
-  const { data: filteredParts, isLoading, error } = useFilteredParts(searchFilter);
-  const {
-    data: relatedParts,
-    isLoading: relatedPartsLoading,
-    error: relatedPartsError,
-  } = useRelatedParts(selectedPartId);
+  // const [searchFilter, setSearchFilter] = useAtom(searchFilterAtom);
+  // const { data: filteredParts, isLoading, error } = useFilteredParts(searchFilter);
+  // const {
+  //   data: relatedParts,
+  //   isLoading: relatedPartsLoading,
+  //   error: relatedPartsError,
+  // } = useRelatedParts(selectedPartId);
 
-  const parts = partStore((state) => state.parts);
+  const searchResults = partStore((state) => state.searchResults);
 
-  const handleSelectPart = (partId) => {
-    setSearchFilter('');
-    setSelectedPartId(partId);
-  };
+  // const handleSelectPart = (partId) => {
+  //   setSearchFilter('');
+  //   setSelectedPartId(partId);
+  // };
 
-  if (isLoading) return <Spinner animation="border" />;
-  if (error) return <p>error</p>;
+  // if (isLoading) return <Spinner animation="border" />;
+  // if (error) return <p>error</p>;
 
   return (
     <>
@@ -44,14 +44,15 @@ export default function PartsSearchResults({}) {
           ))}
         </Grid>
       )} */}
-      {filteredParts && (
+      {searchResults && (
         <Grid>
-          {filteredParts.map((id) => (
+          {searchResults.map((part) => (
             <PartCard
-              onSelect={() => handleSelectPart(id)}
-              selected={selectedPartId == id ? true : false}
-              key={id}
-              partId={id}
+              onSelect={() => handleSelectPart(part.partId)}
+              selected={selectedPartId == part.partId ? true : false}
+              key={part.partId}
+              partId={part.partId}
+              part={part}
             ></PartCard>
           ))}
         </Grid>

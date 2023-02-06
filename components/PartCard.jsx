@@ -17,29 +17,23 @@ const removeCategoryFromName = (name, category) => {
   return newName.replace(/[^a-zA-Z0-9\s]/, ''); // get rid of non alpha=numberic at beginning of scentence
 };
 
-export default function PartCard({
-  name,
-  partId,
-  category,
-  onSelect,
-  selected,
-}) {
-  const { data: part, isLoading, error } = useParts(partId);
+export default function PartCard({ part, name, partId, category, onSelect, selected }) {
+  // const { data: part, isLoading, error } = useParts(partId);
   const [sideBarPartId, setSideBarPartId] = useAtom(sideBarPartNumAtom);
   const [open, setOpen] = useAtom(sideBarOpenAtom);
 
   const handleAddClick = (e) => {
-    setSideBarPartId(partId);
+    setSideBarPartIdpart(part.partId);
     setOpen(true);
   };
 
-  if (isLoading) return <Spinner animation="border" />;
-  if (error) return <p>error</p>;
+  // if (isLoading) return <Spinner animation="border" />;
+  // if (error) return <p>error</p>;
   return (
     <Card bg={selected ? 'primary' : null} onClick={onSelect}>
       <Image
         src={part.thumbnail_url}
-        alt={partId}
+        alt={part.partId}
         width={200}
         height={150}
         // layout="intrinsic" // you can use "responsive", "fill" or the default "intrinsic"
@@ -48,11 +42,11 @@ export default function PartCard({
       <PartCategory>{part.category_id}</PartCategory>
       <PartName selected={selected}>
         {/* {JSON.stringify(part)} */}
-        {part.name}
+        {part.partName}
         {/* {removeCategoryFromName(name, part.catName)} */}
       </PartName>
       <FlexDiv>
-        <PartId selected={selected}>{partId}</PartId>
+        <PartId selected={selected}>{part.partId}</PartId>
         <AddButton pill={true} bg="success" onClick={handleAddClick}>
           +
         </AddButton>

@@ -1,15 +1,19 @@
 import { Form } from 'react-bootstrap';
-import { searchFilterAtom, filteredaPartsAtom } from '../logic/atoms';
-import { useAtom } from 'jotai';
+// import { searchFilterAtom, filteredaPartsAtom } from '../logic/atoms';
+// import { useAtom } from 'jotai';
+import partStore from '../lib/stores/partStore';
 
 export default function PartsSearchInput() {
-  const [_, setSearchFilter] = useAtom(searchFilterAtom);
+  // const [_, setSearchFilter] = useAtom(searchFilterAtom);
   // const [_, setFilteredParts] = useAtom(filteredaPartsAtom);
+
+  const search = partStore((state) => state.search);
 
   const onSearchSubmit = async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      setSearchFilter(e.target.value);
+      // setSearchFilter(e.target.value);
+      search(e.target.value);
     }
   };
 

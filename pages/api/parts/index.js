@@ -1,4 +1,4 @@
-import { randomBetween, fetchBricklinkURL, sleep } from '../../../logic/utils';
+import { randomBetween, sleep } from '../../../logic/utils';
 import {
   serverTimestamp,
   doc,
@@ -9,156 +9,113 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { db } from '../../../logic/firebase';
+import { fetchBricklinkURL } from '../../../lib/services/bricklink';
 const fs = require('fs');
 
-let parts = [];
+let PARTS = [];
 // const STALE_TIME = 0;
 export const STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
-export const RESULTS_PER_PAGE = 200;
+export const RESULTS_PER_PAGE = 100;
 
 // fetches parts catalog from local file first then from db if local file is stale
 export const getParts = async () => {
-  // if parts haven't been loaded yet
-  if (!parts.length) {
-    const startTime = Date.now();
+  // if parts already fetched, return them
+  if (PARTS.length) return PARTS;
 
-    // fetch local JSON part catalog file
-    let localPartsCatalog = { timeStamp: Date.now(), parts: [] };
-    if (fs.existsSync(process.cwd() + `/public/local_parts_catalog.json`)) {
-      const data = fs.readFileSync(process.cwd() + `/public/local_parts_catalog.json`);
-      localPartsCatalog = JSON.parse(data);
-      parts = localPartsCatalog.parts;
-    }
-    const fileAge = Date.now() - localPartsCatalog.timeStamp;
-
-    // if parts are stale set parts to local parts
-    if (fileAge > STALE_TIME) {
-      console.log(`refetching parts from db`);
-
-      const databaseParts = [];
-      // fetch all parts from db
-      // const q = query(collection(db, 'part_basics'), limit(1000));
-      // const querySnapshot = await getDocs(q);
-      const querySnapshot = await getDocs(collection(db, 'parts'));
-      querySnapshot.forEach((doc) => {
-        databaseParts.push(doc.data());
-      });
-
-      // save parts to local JSON file
-      localPartsCatalog = { timeStamp: Date.now(), parts: databaseParts };
-      const jsonData = JSON.stringify(localPartsCatalog);
-      fs.writeFileSync(process.cwd() + `/public/local_parts_catalog.json`, jsonData);
-
-      parts = databaseParts;
-    }
-
-    const fetchTime = Date.now() - startTime;
-    console.log(`Fetched ${parts.length} parts.
-    Fetch took: ${fetchTime / 1000} seconds.
-    Local catalog file is ${fileAge / 1000 / 60 / 60} hours old.`);
-  }
-
-  return parts;
-};
-
-const checkPartCatalogFreshness = async (partId) => {
-  //
-};
-
-export default async (req, res) => {
   const startTime = Date.now();
-  // fetch all parts from db if haven't already
-  // if (!parts.length) {
-  //   const q = query(collection(db, 'part_basics'), limit(1000));
-  //   const querySnapshot = await getDocs(q);
-  //   // const querySnapshot = await getDocs(collection(db, 'part_basics'));
-  //   querySnapshot.forEach((doc) => {
-  //     parts.push(doc.data());
-  //   });
-  // }
-  const fetchedParts = await getParts();
 
-  const fetchTime = Date.now() - startTime;
-  res.status(200).json(`Fetched ${parts.length} parts. Fetch took: ${fetchTime / 1000} seconds`);
-};
-
-// --------------------------------------------
-
-const oldFetch = async (req, res) => {
-  console.log('FETCH - parts');
-
-  // fetch all parts from db if haven't already
-  if (!parts.length) {
-    const q = query(collection(db, 'parts'), limit(1000));
-    const querySnapshot = await getDocs(q);
-    querySnapshot.forEach((doc) => {
-      parts.push(doc.data());
-    });
+  // fetch local JSON part catalog file
+  let localPartsCatalog = { timestamp: Date.now() - (STALE_TIME + 100), parts: [] }; // default to stale
+  if (fs.existsSync(process.cwd() + `/public/parts_catalog.json`)) {
+    const data = fs.readFileSync(process.cwd() + `/public/parts_catalog.json`);
+    localPartsCatalog = JSON.parse(data);
+    PARTS = localPartsCatalog.parts;
   }
 
-  // update parts that are stale
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
+  console.log(`Fetched ${PARTS.length} parts.`);
 
-    // is stale or not have a timestamp
+  const fileAge = Date.now() - localPartsCatalog.timestamp;
+  console.log(`Local catalog file age:
+  ${Math.floor(fileAge / 1000 / 60 / 60 / 24)} days,
+  ${Math.floor((fileAge / 1000 / 60 / 60) % 24)} hours,
+  ${Math.floor((fileAge / 1000 / 60) % 60)} minutes,
+  ${Math.floor((fileAge / 1000) % 60)} seconds old.`);
+
+  if (fileAge > STALE_TIME) updateCatalogFreshness();
+
+  return PARTS;
+};
+
+const updateCatalogFreshness = async () => {
+  console.log(`updating local catalog file from db`);
+
+  const databaseParts = [];
+  // fetch all parts from db
+  const querySnapshot = await getDocs(collection(db, 'parts'));
+  querySnapshot.forEach((doc) => {
+    databaseParts.push(doc.data());
+  });
+
+  // save parts to local JSON file
+  const localPartsCatalog = { timestamp: Date.now(), parts: databaseParts };
+  const jsonData = JSON.stringify(localPartsCatalog);
+  fs.writeFileSync(process.cwd() + `/public/parts_catalog.json`, jsonData);
+
+  PARTS = databaseParts;
+};
+
+// export default async (req, res) => {
+//   const startTime = Date.now();
+//   const fetchedParts = await getParts();
+
+//   const fetchTime = Date.now() - startTime;
+//   res.status(200).json(`Fetched ${PARTS.length} parts. Fetch took: ${fetchTime / 1000} seconds`);
+// };
+
+export const checkPartsFreshness = async (parts) => {
+  const freshParts = [];
+  for (let part of parts) {
+    // is stale if requirements aren't met
+    let updatedPart = part;
     const isStale =
-      !part?.timestamp?.seconds || Date.now() / 1000 - part?.timestamp?.seconds > STALE_TIME;
+      !part?.timestamp?.seconds || // no timestamp
+      Date.now() / 1000 - part?.timestamp?.seconds > STALE_TIME; // timestamp is stale
 
     if (isStale) {
-      // get Bricklink
-      const partDetails = await fetchBricklinkURL(
+      console.log(`part ${part.partId} is stale, fetching from Bricklink...`);
+      // get Bricklink part details
+      const brickLinkPartDetails = await fetchBricklinkURL(
         `https://api.bricklink.com/api/store/v1/items/part/${part.partId}`
       );
+      console.log(`brickLinkPartDetails`, brickLinkPartDetails);
 
-      if (partDetails) {
-        // update DB\
-        await updateDoc(doc(db, 'parts', part.partId), {
-          img: partDetails.image_url,
+      if (brickLinkPartDetails) {
+        updatedPart = {
+          ...part,
+          ...brickLinkPartDetails,
+          image_url: brickLinkPartDetails?.image_url
+            ? `https:${brickLinkPartDetails.image_url}`
+            : '/fallback.webp',
+          thumbnail_url: brickLinkPartDetails?.thumbnail_url
+            ? `https:${brickLinkPartDetails.thumbnail_url}`
+            : '/fallback.webp',
           timestamp: serverTimestamp(),
-        });
+        };
+
+        // update DB
+        await updateDoc(doc(db, 'parts', part.partId), updatedPart);
+
         // update local
-        parts[i] = { ...parts[i], img: partDetails.image_url };
+        const i = PARTS.findIndex((p) => p.partId === updatedPart.partId);
+        PARTS[i] = updatedPart;
       } else {
         console.warn(`part ${part.partId} exists on DB but not Bricklink`);
       }
-
-      // delay so we don't overwhelm bricklink api
-      sleep(randomBetween(100, 1000));
-    }
-  }
-
-  res.status(200).json(parts);
-};
-
-const updateStaleParts = async () => {
-  // is stale or not have a timestamp
-  const isStale =
-    !part?.timestamp?.seconds || Date.now() / 1000 - part?.timestamp?.seconds > STALE_TIME;
-
-  if (isStale) {
-    // get Bricklink
-    const partDetails = await fetchBricklinkURL(
-      `https://api.bricklink.com/api/store/v1/items/part/${part.partId}`
-    );
-
-    if (partDetails) {
-      // update DB
-      console.log(`updating image for part ${part.partId}`);
-      await updateDoc(doc(db, 'parts', part.partId), {
-        img: partDetails.image_url,
-        timestamp: serverTimestamp(),
-      });
-      // update local
-      parts[i] = { ...parts[i], img: partDetails.image_url };
-    } else {
-      console.warn(`part ${part.partId} exists on DB but not Bricklink`);
     }
 
-    // delay so we don't overwhelm bricklink api
-    sleep(randomBetween(100, 1000));
+    freshParts.push(part);
+    sleep(randomBetween(100, 500)); // sleep to avoid rate limiting db
   }
-};
 
-export const test = () => {
-  return 'test';
+  return freshParts;
 };
