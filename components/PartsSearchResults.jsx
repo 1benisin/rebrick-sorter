@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 // import { useAtom } from 'jotai';
-// import { Spinner } from 'react-bootstrap';
+import { Spinner } from 'react-bootstrap';
 import PartCard from './PartCard';
 // import { searchFilterAtom } from '../logic/atoms';
 // import useFilteredParts from '../fetchers/useFilteredParts';
@@ -19,13 +19,14 @@ export default function PartsSearchResults({}) {
   // } = useRelatedParts(selectedPartId);
 
   const searchResults = partStore((state) => state.searchResults);
+  const searching = partStore((state) => state.searching);
 
   // const handleSelectPart = (partId) => {
   //   setSearchFilter('');
   //   setSelectedPartId(partId);
   // };
 
-  // if (isLoading) return <Spinner animation="border" />;
+  if (searching) return <Spinner animation="border" />;
   // if (error) return <p>error</p>;
 
   return (

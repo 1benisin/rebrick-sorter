@@ -73,7 +73,7 @@ const updateCatalogFreshness = async () => {
 // };
 
 export const checkPartsFreshness = async (parts) => {
-  const freshParts = [];
+  const freshParts = parts;
   const staleParts = [];
 
   // seperate out stale and fresh parts
@@ -83,17 +83,11 @@ export const checkPartsFreshness = async (parts) => {
       !part?.timestamp || // no timestamp
       Date.now() / 1000 - part?.timestamp?.seconds > CATALOG_STALE_TIME || // timestamp is stale
       !part?.image_url || // missing image_url
-      !part?.thumbnail_url; // missing thumbnail_url
+      !part?.thumbnail_url || // missing thumbnail_url
+      !part?.image_url?.startsWith('https:') ||
+      !part?.thumbnail_url?.startsWith('https:');
 
-    console.log(
-      `part ${part.partId} is stale:`,
-      !part?.timestamp?.seconds, // no timestamp
-      Date.now() / 1000 - part?.timestamp?.seconds > CATALOG_STALE_TIME, // timestamp is stale
-      !part?.image_url, // missing image_url
-      !part?.thumbnail_url
-    );
     if (partNeedsUpdate) staleParts.push(part);
-    else freshParts.push(part);
   }
 
   // update stale parts
@@ -129,10 +123,9 @@ export const checkPartsFreshness = async (parts) => {
       console.warn(`part ${part.partId} exists on DB but not Bricklink`);
     }
 
-    // console.log(`updatedPart freshness`, updatedPart);
-
-    freshParts.push(updatedPart);
-    // sleep(randomBetween(100, 300)); // sleep to avoid rate limiting db
+    // replace part in freshParts with updated part
+    const i = freshParts.findIndex((p) => p.partId === updatedPart.partId);
+    freshParts[i] = updatedPart;
   }
 
   // resave parts catalog file if any parts were updated
