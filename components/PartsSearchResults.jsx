@@ -51,7 +51,6 @@ export default function PartsSearchResults({}) {
               onSelect={() => handleSelectPart(part.partId)}
               selected={selectedPartId == part.partId ? true : false}
               key={part.partId}
-              partId={part.partId}
               part={part}
             ></PartCard>
           ))}

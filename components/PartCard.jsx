@@ -17,7 +17,7 @@ const removeCategoryFromName = (name, category) => {
   return newName.replace(/[^a-zA-Z0-9\s]/, ''); // get rid of non alpha=numberic at beginning of scentence
 };
 
-export default function PartCard({ part, name, partId, category, onSelect, selected }) {
+export default function PartCard({ part, onSelect, selected }) {
   // const { data: part, isLoading, error } = useParts(partId);
   const [sideBarPartId, setSideBarPartId] = useAtom(sideBarPartNumAtom);
   const [open, setOpen] = useAtom(sideBarOpenAtom);
@@ -33,7 +33,7 @@ export default function PartCard({ part, name, partId, category, onSelect, selec
     <Card bg={selected ? 'primary' : null} onClick={onSelect}>
       <Image
         src={part.thumbnail_url}
-        alt={part.partId}
+        alt={part.partName}
         width={200}
         height={150}
         // layout="intrinsic" // you can use "responsive", "fill" or the default "intrinsic"

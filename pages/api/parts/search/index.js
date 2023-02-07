@@ -7,7 +7,7 @@ export default async (req, res) => {
   console.log('searchString', searchString);
 
   const parts = await getParts();
-  console.log('searchparts', parts.slice(0, 2));
+  // console.log('searchparts', parts.slice(0, 2));
 
   if (!parts) res.status(500).json({ error: 'Unable to fetch parts' });
 
@@ -23,6 +23,6 @@ export default async (req, res) => {
   const freshParts = await checkPartsFreshness(filteredParts);
   // const freshParts = filteredParts;
 
-  console.log('searchparts fresh', freshParts.slice(0, 2));
+  // console.log('searchparts fresh', freshParts.slice(0, 2));
   res.status(200).json(freshParts);
 };
