@@ -40,6 +40,7 @@ export default function PartCard({ part, selected }) {
         objectFit="contain"
       />
       <PartCategory>{part.category_id}</PartCategory>
+      <PartCategory>{part.searchScore.toFixed(2)}</PartCategory>
       <PartName selected={selected}>
         {/* {JSON.stringify(part)} */}
         {part.name}
