@@ -1,47 +1,54 @@
-import { getParts, RESULTS_PER_PAGE } from '../index';
+import { getParts, RESULTS_PER_PAGE, checkPartsFreshness } from '../index';
 
-let splitPartNames = [];
+let partsWithSplitNames = [];
 
 export default async (req, res) => {
-  const { partId } = req.query;
-  console.log('partId', partId);
+  const { partId: similarToPartId } = req.query;
+  console.log('partId', similarToPartId);
 
-  const parts = await getParts();
-  if (!parts) res.status(500).json({ error: 'Unable to fetch parts' });
+  const PARTS = await getParts();
+  if (!PARTS) res.status(500).json({ error: 'Unable to fetch parts' });
 
   // create an array of all part names split into words
-  if (!splitPartNames.length) {
-    splitPartNames = parts
-      .filter((p) => p.name) // filter out parts without names
-      .map((p) => ({ partId: p.id, splitName: new Set(p.name.split(' ')) }));
+  if (!partsWithSplitNames.length) {
+    partsWithSplitNames = PARTS.filter((p) => p.name) // filter out parts without names
+      .map((p) => ({ ...p, splitName: new Set(p.name.split(' ')) }));
   }
+  console.log('splitPartNames', partsWithSplitNames.slice(0, 2));
 
-  // get the part name for the partId
-  const part = splitPartNames.filter((p) => p.partId === partId)[0];
-  if (!part) res.status(500).json({ error: 'unable to find part or part has no name' });
+  // get the part name for the similarToPartId
+  const similarToPart = partsWithSplitNames.find((p) => p.id === similarToPartId);
+  if (!similarToPart) res.status(500).json({ error: 'unable to find part or part has no name' });
 
-  const titleSimilarity = [];
+  const partsWithTitleSimilarity = [];
 
   // for every part in catalog
-  for (const { partId, splitName } of splitPartNames) {
+  for (const splitNamePart of partsWithSplitNames) {
     // find strength of titles relationship
     let titleOverlapStrength = 0;
-    for (const word of part.splitName) {
-      if (splitName.has(word)) titleOverlapStrength++;
+    for (const word of similarToPart.splitName) {
+      if (splitNamePart.splitName.has(word)) titleOverlapStrength++;
     }
     // if title overlap strength is greater than 1 & partId is not the same as otherPartId
     titleOverlapStrength > 1 &&
-      titleSimilarity.push({
-        partId,
-        strength: titleOverlapStrength,
+      partsWithTitleSimilarity.push({
+        ...splitNamePart,
+        similarity: titleOverlapStrength,
       });
   }
 
-  const mostSimilarParts = titleSimilarity
-    .sort((a, b) => b.strength - a.strength)
+  let mostSimilarParts = partsWithTitleSimilarity
+    .sort((a, b) => b.similarity - a.similarity)
     .slice(0, RESULTS_PER_PAGE)
-    // map partId to matching part id in parts and return part
-    .map((p) => parts.filter((part) => part.id === p.partId)[0]);
+    .map((p) => {
+      delete p.splitName;
+      delete p.similarity;
+      return p;
+    });
+
+  mostSimilarParts = await checkPartsFreshness(mostSimilarParts);
+
+  if (mostSimilarParts?.error) res.status(500).json({ error: mostSimilarParts.error });
 
   res.status(200).json(mostSimilarParts);
 };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-// import { useAtom } from 'jotai';
+import { shallow } from 'zustand/shallow';
 import { Spinner } from 'react-bootstrap';
 import PartCard from './PartCard';
 // import { searchFilterAtom } from '../logic/atoms';
@@ -18,45 +18,46 @@ export default function PartsSearchResults({}) {
   //   error: relatedPartsError,
   // } = useRelatedParts(selectedPartId);
 
-  const searchResults = partStore((state) => state.searchResults);
-  const searching = partStore((state) => state.searching);
+  // const searchResults = partStore((state) => state.searchResults);
+  // const isLoading = partStore((state) => state.isLoading);
+  const searchResults = partStore((state) => state.searchResults, shallow);
+  const similarResults = partStore((state) => state.similarResults, shallow);
+  const similarToPartId = partStore((state) => state.similarToPartId);
 
   // const handleSelectPart = (partId) => {
   //   setSearchFilter('');
   //   setSelectedPartId(partId);
   // };
 
-  if (searching) return <Spinner animation="border" />;
+  if (searchResults.isLoading) return <Spinner animation="border" />;
   // if (error) return <p>error</p>;
 
   return (
     <>
-      {/* {relatedPartsLoading ? (
+      {similarResults.isLoading ? (
         <Spinner />
       ) : (
         <Grid>
-          {relatedParts.map((id) => (
+          {similarResults.data.map((part) => (
             <PartCard
-              onSelect={() => handleSelectPart(id)}
-              selected={selectedPartId == id ? true : false}
-              key={id}
-              partId={id}
-            ></PartCard>
-          ))}
-        </Grid>
-      )} */}
-      {searchResults && (
-        <Grid>
-          {searchResults.map((part) => (
-            <PartCard
-              onSelect={() => handleSelectPart(part.partId)}
-              selected={selectedPartId == part.partId ? true : false}
-              key={part.partId}
+              // onSelect={() => handleSelectPart(part.id)}
+              selected={similarToPartId == part.id ? true : false}
+              key={part.id}
               part={part}
             ></PartCard>
           ))}
         </Grid>
       )}
+      <Grid>
+        {searchResults.data.map((part) => (
+          <PartCard
+            // onSelect={() => handleSelectPart(part.id)}
+            selected={selectedPartId == part.id ? true : false}
+            key={part.id}
+            part={part}
+          ></PartCard>
+        ))}
+      </Grid>
     </>
   );
 }
