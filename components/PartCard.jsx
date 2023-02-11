@@ -16,12 +16,13 @@ const removeCategoryFromName = (name, category) => {
   return newName.replace(/[^a-zA-Z0-9\s]/, ''); // get rid of non alpha=numberic at beginning of scentence
 };
 
-export default function PartCard({ part, selected }) {
+export default function PartCard({ part }) {
   const [sideBarPartId, setSideBarPartId] = useAtom(sideBarPartNumAtom);
   const [open, setOpen] = useAtom(sideBarOpenAtom);
 
   const findSimilar = partStore((state) => state.findSimilar);
   const search = partStore((state) => state.search);
+  const similarToPartId = partStore((state) => state.similarToPartId);
 
   const handleAddClick = (e) => {
     setSideBarPartIdpart(part.id);
@@ -31,7 +32,8 @@ export default function PartCard({ part, selected }) {
   // if (isLoading) return <Spinner animation="border" />;
   // if (error) return <p>error</p>;
   return (
-    <Card bg={selected ? 'primary' : null} onClick={() => findSimilar(part.id)}>
+    <Card bg={similarToPartId == part.id ? 'primary' : null} onClick={() => findSimilar(part.id)}>
+      {similarToPartId}
       <Image
         src={part.thumbnail_url}
         alt={part.name}
@@ -41,14 +43,16 @@ export default function PartCard({ part, selected }) {
         objectFit="contain"
       />
       {/* <PartCategory>{part.category_id}</PartCategory> */}
-      <PartId selected={selected}>{part.id}</PartId>
-      <PartName selected={selected}>
+      <PartId selected={similarToPartId == part.id}>{part.id}</PartId>
+      <PartName selected={similarToPartId == part.id}>
         {/* {JSON.stringify(part)} */}
         {part.name}
         {/* {removeCategoryFromName(name, part.category_name)} */}
       </PartName>
       <FlexDiv>
-        <MatchPercent>{`${part.searchScore?.toFixed(2) * 100}% match`}</MatchPercent>
+        {part.searchScore && (
+          <MatchPercent>{`${(part.searchScore * 100).toFixed(0)}% match`}</MatchPercent>
+        )}
         <AddButton pill={true} bg="success" onClick={handleAddClick}>
           +
         </AddButton>

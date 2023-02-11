@@ -39,23 +39,13 @@ export default function PartsSearchResults({}) {
       ) : (
         <Grid>
           {similarResults.data.map((part) => (
-            <PartCard
-              // onSelect={() => handleSelectPart(part.id)}
-              selected={similarToPartId == part.id ? true : false}
-              key={part.id}
-              part={part}
-            ></PartCard>
+            <PartCard key={part.id} part={part}></PartCard>
           ))}
         </Grid>
       )}
       <Grid>
         {searchResults.data.map((part) => (
-          <PartCard
-            // onSelect={() => handleSelectPart(part.id)}
-            selected={selectedPartId == part.id ? true : false}
-            key={part.id}
-            part={part}
-          ></PartCard>
+          <PartCard key={part.id} part={part}></PartCard>
         ))}
       </Grid>
     </>
