@@ -30,7 +30,7 @@ export default function PartsSearchResults({}) {
   // };
 
   if (searchResults.isLoading) return <Spinner animation="border" />;
-  // if (error) return <p>error</p>;
+  if (searchResults.error) return <p>searchResults.error</p>;
 
   return (
     <>

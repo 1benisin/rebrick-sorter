@@ -12,9 +12,12 @@ import {
 import { db } from '../../../logic/firebase';
 import { fetchBricklinkURL } from '../../../lib/services/bricklink';
 const fs = require('fs');
+import { decodeHTML } from '../../../logic/utils';
 
 let PARTS = [];
+// const CATALOG_STALE_TIME = 0;
 const CATALOG_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
+// const PART_STALE_TIME = 0;
 const PART_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
 
 export const RESULTS_PER_PAGE = 30;
@@ -23,8 +26,6 @@ export const RESULTS_PER_PAGE = 30;
 export const getParts = async () => {
   // if parts already fetched, return them
   if (PARTS.length) return PARTS;
-
-  const startTime = Date.now();
 
   // fetch local JSON part catalog file
   let localPartsCatalog = { timestamp: Date.now() - (CATALOG_STALE_TIME + 100), parts: [] }; // default to stale
@@ -63,6 +64,8 @@ const updateCatalogFreshness = async () => {
   const jsonData = JSON.stringify(localPartsCatalog);
   fs.writeFileSync(process.cwd() + `/public/parts_catalog.json`, jsonData);
 
+  checkPartsFreshness(databaseParts);
+
   PARTS = databaseParts;
 };
 
@@ -75,7 +78,6 @@ const updateCatalogFreshness = async () => {
 // };
 
 export const checkPartsFreshness = async (parts) => {
-  const freshParts = parts;
   try {
     // create list of stale parts
     const staleParts = [];
@@ -84,9 +86,11 @@ export const checkPartsFreshness = async (parts) => {
       if (partNeedsUpdate) staleParts.push(part);
     });
 
+    console.log(`Updating ${staleParts.length} stale parts.`);
+
     // update stale parts
     for (let part of staleParts) {
-      doesPartNeedsUpdating(part, true);
+      console.log(`updating part ${part.id}...`);
 
       // get Bricklink part details
       let brickLinkPartDetails = {};
@@ -102,6 +106,7 @@ export const checkPartsFreshness = async (parts) => {
       let updatedPart = {
         ...part,
         ...brickLinkPartDetails,
+        name: decodeHTML(brickLinkPartDetails?.name),
         image_url: brickLinkPartDetails?.image_url
           ? `https:${brickLinkPartDetails.image_url}`
           : '/fallback.webp',
@@ -130,8 +135,8 @@ export const checkPartsFreshness = async (parts) => {
       PARTS[index] = updatedPart;
 
       // update part in local return variable freshParts
-      index = freshParts.findIndex((p) => p.id === updatedPart.id);
-      freshParts[index] = updatedPart;
+      index = parts.findIndex((p) => p.id === updatedPart.id);
+      parts[index] = updatedPart;
     }
 
     // resave parts catalog file if any parts were updated
@@ -149,64 +154,64 @@ export const checkPartsFreshness = async (parts) => {
     return { error };
   }
 
-  return freshParts;
+  return parts;
 };
 
-const doesPartNeedsUpdating = (part, log = false) => {
+const doesPartNeedsUpdating = (part) => {
   let needsUpdate = false;
 
   if (!part?.timestamp) {
-    log && console.log(part.id, 'part is missing timestamp property');
+    console.log(part.id, 'part is missing timestamp property');
     needsUpdate = true;
   }
 
   if (!part?.image_url) {
-    log && console.log(part.id, 'part is missing image_url property');
+    console.log(part.id, 'part is missing image_url property');
     needsUpdate = true;
   }
 
   if (!part?.thumbnail_url) {
-    log && console.log(part.id, 'part is missing thumbnail_url property');
+    console.log(part.id, 'part is missing thumbnail_url property');
     needsUpdate = true;
   }
 
   if (!part?.image_url?.startsWith('https:')) {
-    log && console.log(part.id, 'image_url does not start with https:');
+    console.log(part.id, 'image_url does not start with https:');
     needsUpdate = true;
   }
 
   if (!part?.thumbnail_url?.startsWith('https:')) {
-    log && console.log(part.id, 'thumbnail_url does not start with https:');
+    console.log(part.id, 'thumbnail_url does not start with https:');
     needsUpdate = true;
   }
 
   if (!!part?.partId) {
-    log && console.log(part.id, 'part has old property partId');
+    console.log(part.id, 'part has old property partId');
     needsUpdate = true;
   }
 
   if (!!part?.catName) {
-    log && console.log(part.id, 'part has old property catName');
+    console.log(part.id, 'part has old property catName');
     needsUpdate = true;
   }
 
   if (!!part?.catId) {
-    log && console.log(part.id, 'part has old property catId');
+    console.log(part.id, 'part has old property catId');
     needsUpdate = true;
   }
 
   if (!!part?.partName) {
-    log && console.log(part.id, 'part has old property partName');
+    console.log(part.id, 'part has old property partName');
     needsUpdate = true;
   }
 
   if (!!part?.no) {
-    log && console.log(part.id, 'part has old property no');
+    console.log(part.id, 'part has old property no');
     needsUpdate = true;
   }
 
   if (Date.now() / 1000 - part?.timestamp?.seconds > PART_STALE_TIME) {
-    log && console.log(part.id, 'part data is stale');
+    console.log(part.id, 'part data is stale');
     needsUpdate = true;
   }
 

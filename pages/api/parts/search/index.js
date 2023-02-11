@@ -33,7 +33,7 @@ export default async (req, res) => {
   // use fuse and searchstring to get filtered parts
   let filteredParts = fuse
     .search(searchString)
-    .map((result) => ({ ...result.item, searchScore: result.score }))
+    .map((result) => ({ ...result.item, searchScore: 1 - result.score }))
     .slice(0, RESULTS_PER_PAGE);
   console.log('filteredParts', filteredParts.slice(0, 2));
 

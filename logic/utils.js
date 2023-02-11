@@ -14,3 +14,9 @@ export function splitArrayIntoGroups(array, parts) {
   }
   return result;
 }
+
+export function decodeHTML(str) {
+  return str.replace(/&#(\d+);/g, function (match, dec) {
+    return String.fromCharCode(dec);
+  });
+}

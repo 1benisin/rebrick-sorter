@@ -21,6 +21,7 @@ export default function PartCard({ part, selected }) {
   const [open, setOpen] = useAtom(sideBarOpenAtom);
 
   const findSimilar = partStore((state) => state.findSimilar);
+  const search = partStore((state) => state.search);
 
   const handleAddClick = (e) => {
     setSideBarPartIdpart(part.id);
@@ -39,15 +40,15 @@ export default function PartCard({ part, selected }) {
         // layout="intrinsic" // you can use "responsive", "fill" or the default "intrinsic"
         objectFit="contain"
       />
-      <PartCategory>{part.category_id}</PartCategory>
-      <PartCategory>{part.searchScore.toFixed(2)}</PartCategory>
+      {/* <PartCategory>{part.category_id}</PartCategory> */}
+      <PartId selected={selected}>{part.id}</PartId>
       <PartName selected={selected}>
         {/* {JSON.stringify(part)} */}
         {part.name}
         {/* {removeCategoryFromName(name, part.category_name)} */}
       </PartName>
       <FlexDiv>
-        <PartId selected={selected}>{part.id}</PartId>
+        <MatchPercent>{`${part.searchScore?.toFixed(2) * 100}% match`}</MatchPercent>
         <AddButton pill={true} bg="success" onClick={handleAddClick}>
           +
         </AddButton>
@@ -78,9 +79,17 @@ const FlexDiv = styled.div`
 const PartId = styled(Card.Text)`
   font-size: xx-small;
   color: ${(props) => (props.selected ? 'LightGray' : 'Gray')};
-  align-self: flex-end;
-  flex: auto;
+  align-self: center;
+  // flex: auto;
   margin: 0;
+`;
+
+const MatchPercent = styled(Card.Subtitle)`
+  font-size: x-small;
+  // font-weight: bold;
+  color: green;
+  // align-self: flex-end;
+  // margin: 0px 2px;
 `;
 
 const AddButton = styled(Badge)`
