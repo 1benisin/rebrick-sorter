@@ -9,7 +9,7 @@ import {
   collection,
   getDocs,
 } from 'firebase/firestore';
-import { db } from '../../../logic/firebase';
+import { db } from '../../../lib/services/firebase';
 import { fetchBricklinkURL } from '../../../lib/services/bricklink';
 const fs = require('fs');
 import { decodeHTML } from '../../../logic/utils';

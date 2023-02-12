@@ -7,8 +7,8 @@ import {
   collection,
   getDocs,
 } from 'firebase/firestore';
-import { db } from '../logic/firebase';
-import { randomBetween, fetchBricklinkURL, sleep } from '../logic/utils';
+import { db } from '../lib/services/firebase';
+import { randomBetween, fetchBricklinkURL, sleep } from '../lib/utils';
 
 const parts = [];
 let splitPartNames = [];

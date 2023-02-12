@@ -1,6 +1,6 @@
 const OAuth = require('oauth').OAuth;
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../../logic/firebase';
+import { db } from '../../../lib/services/firebase';
 
 const colors = [];
 

@@ -1,7 +1,7 @@
 import { splitArrayIntoGroups, sleep } from '../../logic/utils';
 const fs = require('fs');
 import { writeBatch, doc, getDocs, collection } from 'firebase/firestore';
-import { db } from '../../logic/firebase';
+import { db } from '../../lib/services/firebase';
 
 export default async (req, res) => {
   // // get all parts
@@ -114,9 +114,7 @@ export default async (req, res) => {
 
   // -----------------------------
   // upload each relation in batches to DB
-  const data = fs.readFileSync(
-    process.cwd() + `/public/partNameRelationships.json`
-  );
+  const data = fs.readFileSync(process.cwd() + `/public/partNameRelationships.json`);
   const nameRelations = JSON.parse(data);
 
   const partIds = [];

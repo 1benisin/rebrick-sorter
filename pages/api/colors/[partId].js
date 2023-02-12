@@ -1,6 +1,6 @@
 const OAuth = require('oauth').OAuth;
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../../logic/firebase';
+import { db } from '../../../lib/services/firebase';
 
 const colors = [];
 
@@ -35,9 +35,7 @@ export default async (req, res) => {
       if (error) res.status(500).json(error);
       const responseObj = JSON.parse(data).data;
       const knownColorIds = responseObj.map((kc) => kc.color_id);
-      const filteredColors = colors.filter((c) =>
-        knownColorIds.includes(c.color_id)
-      );
+      const filteredColors = colors.filter((c) => knownColorIds.includes(c.color_id));
       res.status(200).json(filteredColors);
     }
   );

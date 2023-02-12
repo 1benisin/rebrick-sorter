@@ -2,7 +2,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 import { writeBatch, doc, getDocs, query, collection, limit } from 'firebase/firestore';
 import { splitArrayIntoGroups, sleep } from '../../../logic/utils';
-import { db } from '../../../logic/firebase';
+import { db } from '../../../lib/services/firebase';
 
 // UPLOADS PARTS FROM A CSV FILE WITH NO HEADERS BUT COLUMNS IN ORDER (category Id, category Name,	part Id, part Name)
 // FROM /public/bricklink_data/parts.csv TO FIRESTORE PARTS COLLECTIONS

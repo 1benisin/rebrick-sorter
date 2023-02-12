@@ -1,5 +1,5 @@
 import { collection, getDocs, query, limit } from 'firebase/firestore';
-import { db } from '../logic/firebase';
+import { db } from '../lib/services/firebase';
 import useSWR from 'swr';
 
 const fetchParts = async (partId) => {

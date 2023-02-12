@@ -1,12 +1,10 @@
 import { collection, getDocs, query, limit } from 'firebase/firestore';
-import { db } from '../logic/firebase';
+import { db } from '../lib/services/firebase';
 import useSWR from 'swr';
 
 const fetchFilteredParts = async (filterText) => {
   console.log('fetchFilteredParts', filterText);
-  const res = await fetch(
-    '/api/partSearch?' + new URLSearchParams({ filterText })
-  );
+  const res = await fetch('/api/partSearch?' + new URLSearchParams({ filterText }));
   const data = await res.json();
 
   if (res.status !== 200) {

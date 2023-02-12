@@ -5,7 +5,7 @@ import { useAtom } from 'jotai';
 import { sideBarPartNumAtom, sideBarOpenAtom } from '../logic/atoms';
 import useColors from '../fetchers/useColors';
 
-export default function AddPartSidebar() {
+export default function PartSidebar() {
   const [partNum] = useAtom(sideBarPartNumAtom);
   const [open, setOpen] = useAtom(sideBarOpenAtom);
   const { data: colors, isLoading, error } = useColors(partNum);

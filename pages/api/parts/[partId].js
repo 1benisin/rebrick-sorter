@@ -1,6 +1,6 @@
 const OAuth = require('oauth').OAuth;
 import { serverTimestamp, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../logic/firebase';
+import { db } from '../../../lib/services/firebase';
 import { fetchBricklinkURL } from '../../../logic/utils';
 import { getPart } from '../../../dataManagers/partDetails';
 
