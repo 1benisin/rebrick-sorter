@@ -3,7 +3,7 @@ import { Blob } from 'buffer';
 import { ref, uploadBytes } from 'firebase/storage';
 import { collection, getDocs, setDoc, writeBatch, doc } from 'firebase/firestore';
 import { db, storage } from '../../../lib/services/firebase';
-import { sleep, randomBetween } from '../../../logic/utils';
+import { sleep, randomBetween } from '../../../lib/utils';
 
 export default async (req, res) => {
   console.log('FETCH - rebrickable');

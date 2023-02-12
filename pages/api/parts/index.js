@@ -1,4 +1,4 @@
-import { randomBetween, sleep } from '../../../logic/utils';
+import { randomBetween, sleep } from '../../../lib/utils';
 import {
   serverTimestamp,
   doc,
@@ -12,7 +12,7 @@ import {
 import { db } from '../../../lib/services/firebase';
 import { fetchBricklinkURL } from '../../../lib/services/bricklink';
 const fs = require('fs');
-import { decodeHTML } from '../../../logic/utils';
+import { decodeHTML } from '../../../lib/utils';
 
 let PARTS = [];
 // const CATALOG_STALE_TIME = 0;

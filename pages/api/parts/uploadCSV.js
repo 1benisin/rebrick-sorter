@@ -1,7 +1,7 @@
 const fs = require('fs');
 const csv = require('csv-parser');
 import { writeBatch, doc, getDocs, query, collection, limit } from 'firebase/firestore';
-import { splitArrayIntoGroups, sleep } from '../../../logic/utils';
+import { splitArrayIntoGroups, sleep } from '../../../lib/utils';
 import { db } from '../../../lib/services/firebase';
 
 // UPLOADS PARTS FROM A CSV FILE WITH NO HEADERS BUT COLUMNS IN ORDER (category Id, category Name,	part Id, part Name)

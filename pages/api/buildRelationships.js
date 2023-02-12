@@ -1,4 +1,4 @@
-import { splitArrayIntoGroups, sleep } from '../../logic/utils';
+import { splitArrayIntoGroups, sleep } from '../../lib/utils';
 const fs = require('fs');
 import { writeBatch, doc, getDocs, collection } from 'firebase/firestore';
 import { db } from '../../lib/services/firebase';

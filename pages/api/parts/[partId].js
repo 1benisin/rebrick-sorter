@@ -1,7 +1,7 @@
 const OAuth = require('oauth').OAuth;
 import { serverTimestamp, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
-import { fetchBricklinkURL } from '../../../logic/utils';
+import { fetchBricklinkURL } from '../../../lib/utils';
 import { getPart } from '../../../dataManagers/partDetails';
 
 // const STALE_TIME = 0;

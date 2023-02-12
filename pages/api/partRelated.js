@@ -7,7 +7,7 @@ import {
   collection,
   getDocs,
 } from 'firebase/firestore';
-import { randomBetween, fetchBricklinkURL, sleep } from '../../logic/utils';
+import { randomBetween, fetchBricklinkURL, sleep } from '../../lib/utils';
 import { db } from '../../lib/services/firebase';
 import { fetchRelatedParts } from '../../dataManagers/partBasics';
 
