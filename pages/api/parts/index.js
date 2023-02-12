@@ -106,7 +106,7 @@ export const checkPartsFreshness = async (parts) => {
       let updatedPart = {
         ...part,
         ...brickLinkPartDetails,
-        name: decodeHTML(brickLinkPartDetails?.name),
+        name: part.name ? decodeHTML(part.name) : decodeHTML(brickLinkPartDetails?.name),
         image_url: brickLinkPartDetails?.image_url
           ? `https:${brickLinkPartDetails.image_url}`
           : '/fallback.webp',
@@ -148,6 +148,7 @@ export const checkPartsFreshness = async (parts) => {
         jsonData,
         (error) => error && console.error(error)
       );
+      console.log(`updated local parts catalog file`);
     }
   } catch (error) {
     console.warn(error);
@@ -161,7 +162,7 @@ const doesPartNeedsUpdating = (part) => {
   let needsUpdate = false;
 
   if (!part?.timestamp) {
-    console.log(part.id, 'part is missing timestamp property');
+    console.log(part.id, 'part is missing timestamp property', part.timestamp);
     needsUpdate = true;
   }
 

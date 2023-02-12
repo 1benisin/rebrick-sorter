@@ -25,6 +25,8 @@ export async function getPart(partId) {
     `https://api.bricklink.com/api/store/v1/items/part/${partId}`
   );
 
+  console.log('bricklink part details', partDetails);
+
   // if part missing on bricklink as well
   if (!partDetails) return ['part not on firestore DB or Bricklink API', null];
 

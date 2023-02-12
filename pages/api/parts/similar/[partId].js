@@ -4,7 +4,7 @@ let partsWithSplitNames = [];
 
 export default async (req, res) => {
   const { partId: similarToPartId } = req.query;
-  console.log('partId', similarToPartId);
+  console.log('-finding similar parts to part', similarToPartId);
 
   const PARTS = await getParts();
   if (!PARTS) res.status(500).json({ error: 'Unable to fetch parts' });
@@ -14,7 +14,7 @@ export default async (req, res) => {
     partsWithSplitNames = PARTS.filter((p) => p.name) // filter out parts without names
       .map((p) => ({ ...p, splitName: new Set(p.name.split(' ')) }));
   }
-  console.log('splitPartNames', partsWithSplitNames.slice(0, 2));
+  console.log('-splitPartNames', partsWithSplitNames.slice(0, 2));
 
   // get the part name for the similarToPartId
   const similarToPart = partsWithSplitNames.find((p) => p.id === similarToPartId);

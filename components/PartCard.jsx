@@ -4,29 +4,19 @@ import { useAtom } from 'jotai';
 import Image from './ImageWithFallback';
 import { sideBarPartNumAtom, sideBarOpenAtom } from '../logic/atoms';
 import partStore from '../lib/stores/partStore';
-
-const removeCategoryFromName = (name, category) => {
-  const categoryWords = category.split(' ');
-  let newName = name;
-  categoryWords.forEach((w) => {
-    const word = w.replace(',', '');
-    const regex = new RegExp(word, 'i');
-    newName = newName.replace(regex, '');
-  });
-  return newName.replace(/[^a-zA-Z0-9\s]/, ''); // get rid of non alpha=numberic at beginning of scentence
-};
+import applicationStore from '../lib/stores/applicationStore';
 
 export default function PartCard({ part }) {
   const [sideBarPartId, setSideBarPartId] = useAtom(sideBarPartNumAtom);
   const [open, setOpen] = useAtom(sideBarOpenAtom);
 
   const findSimilar = partStore((state) => state.findSimilar);
-  const search = partStore((state) => state.search);
   const similarToPartId = partStore((state) => state.similarToPartId);
+  const togglePartSidebar = applicationStore((state) => state.togglePartSidebar);
 
-  const handleAddClick = (e) => {
-    setSideBarPartIdpart(part.id);
-    setOpen(true);
+  const handleAddButtonClick = (e) => {
+    e.stopPropagation();
+    togglePartSidebar(part.id);
   };
 
   // if (isLoading) return <Spinner animation="border" />;
@@ -44,6 +34,7 @@ export default function PartCard({ part }) {
       />
       {/* <PartCategory>{part.category_id}</PartCategory> */}
       <PartId selected={similarToPartId == part.id}>{part.id}</PartId>
+      <PartId>{part.timestamp.seconds}</PartId>
       <PartName selected={similarToPartId == part.id}>
         {/* {JSON.stringify(part)} */}
         {part.name}
@@ -53,13 +44,24 @@ export default function PartCard({ part }) {
         {part.searchScore && (
           <MatchPercent>{`${(part.searchScore * 100).toFixed(0)}% match`}</MatchPercent>
         )}
-        <AddButton pill={true} bg="success" onClick={handleAddClick}>
+        <AddButton pill={true} bg="success" onClick={handleAddButtonClick}>
           +
         </AddButton>
       </FlexDiv>
     </Card>
   );
 }
+
+const removeCategoryFromName = (name, category) => {
+  const categoryWords = category.split(' ');
+  let newName = name;
+  categoryWords.forEach((w) => {
+    const word = w.replace(',', '');
+    const regex = new RegExp(word, 'i');
+    newName = newName.replace(regex, '');
+  });
+  return newName.replace(/[^a-zA-Z0-9\s]/, ''); // get rid of non alpha=numberic at beginning of scentence
+};
 
 const PartCategory = styled(Card.Subtitle)`
   font-size: x-small;
