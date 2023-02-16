@@ -1,4 +1,4 @@
-import { serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
 import { validatePart } from '../../../models/partModel';
 

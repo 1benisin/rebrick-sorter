@@ -29,6 +29,10 @@ export default function validateSchema(obj, schema) {
             return { error: `Field ${field} must be an array.` };
           }
           break;
+        case 'object':
+          if (typeof obj[field] !== 'object' || obj[field].constructor === Array) {
+            return { error: `Field ${field} must be an object.` };
+          }
       }
     }
   }

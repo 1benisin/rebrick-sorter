@@ -1,14 +1,6 @@
-import {
-  serverTimestamp,
-  doc,
-  updateDoc,
-  query,
-  limit,
-  collection,
-  getDocs,
-} from 'firebase/firestore';
+import { query, limit, collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/services/firebase';
-import { randomBetween, fetchBricklinkURL, sleep } from '../lib/utils';
+import { randomBetween, sleep } from '../lib/utils';
 
 const parts = [];
 let splitPartNames = [];

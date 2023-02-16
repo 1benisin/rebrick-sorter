@@ -1,16 +1,6 @@
 import { randomBetween, sleep } from '../../../lib/utils';
-import {
-  serverTimestamp,
-  doc,
-  updateDoc,
-  getDoc,
-  query,
-  limit,
-  collection,
-  getDocs,
-} from 'firebase/firestore';
+import { doc, updateDoc, getDoc, query, limit, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
-import { fetchBricklinkURL } from '../../../lib/services/bricklink';
 const fs = require('fs');
 import { decodeHTML } from '../../../lib/utils';
 import { validatePart } from '../../../models/partModel';
@@ -65,7 +55,7 @@ const updateCatalogFreshness = async () => {
   const jsonData = JSON.stringify(localPartsCatalog);
   fs.writeFileSync(process.cwd() + `/public/parts_catalog.json`, jsonData);
 
-  checkPartsFreshness(databaseParts);
+  // checkPartsFreshness(databaseParts);
 
   PARTS = databaseParts;
 };
@@ -82,55 +72,20 @@ export const checkPartsFreshness = async (parts) => {
   try {
     // create list of stale parts
     const staleParts = [];
-    parts.forEach((part) => {
-      const partNeedsUpdate = doesPartNeedsUpdating(part);
-      if (partNeedsUpdate) staleParts.push(part);
-    });
 
-    console.log(`Updating ${staleParts.length} stale parts.`);
-
-    // update stale parts
-    for (let part of staleParts) {
-      console.log(`updating part ${part.id}...`);
-
-      // get Bricklink part details
-      let brickLinkPartDetails = {};
-      brickLinkPartDetails = await fetchBricklinkPart(part.id);
-
-      let updatedPart = brickLinkPartDetails; // will be null if part not found on Bricklink
-      updatedPart = {
-        ...part,
-        name: part.name ? decodeHTML(part.name) : decodeHTML(brickLinkPartDetails?.name),
-        image_url: brickLinkPartDetails?.image_url
-          ? `https:${brickLinkPartDetails.image_url}`
-          : '/fallback.webp',
-        thumbnail_url: brickLinkPartDetails?.thumbnail_url
-          ? `https:${brickLinkPartDetails.thumbnail_url}`
-          : '/fallback.webp',
-        timestamp: serverTimestamp(),
-      };
-
-      // remove catId, catName, partName, partId properties from updatedPart
-      delete updatedPart.catId;
-      delete updatedPart.catName;
-      delete updatedPart.partName;
-      delete updatedPart.partId;
-      delete updatedPart.no;
-
-      // update DB
-      await updateDoc(doc(db, 'parts', updatedPart.id), updatedPart);
-
-      // get updated doc timestamp
-      const updatedDoc = await getDoc(doc(db, 'parts', updatedPart.id));
-      updatedPart.timestamp = updatedDoc.data().timestamp;
+    for (let [index, part] of parts.entries()) {
+      part = await validatePart(part);
+      if (part.error) {
+        console.warn(`issue validating ${part.id} - `, part.error);
+        continue;
+      }
 
       // update local
-      let index = PARTS.findIndex((p) => p.id === updatedPart.id);
-      PARTS[index] = updatedPart;
+      let k = PARTS.findIndex((p) => p.id === part.id);
+      console.log(`updating local part ${PARTS[index]} at index ${index} with `, part);
+      PARTS[k] = part;
 
-      // update part in local return variable freshParts
-      index = parts.findIndex((p) => p.id === updatedPart.id);
-      parts[index] = updatedPart;
+      parts[index] = part;
     }
 
     // resave parts catalog file if any parts were updated

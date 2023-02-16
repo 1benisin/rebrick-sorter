@@ -1,5 +1,5 @@
 const OAuth = require('oauth').OAuth;
-import { serverTimestamp, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { , doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/services/firebase';
 import { fetchBricklinkURL } from '../lib/services/bricklink';
 
@@ -17,7 +17,7 @@ export async function getPart(partId) {
   // is part stale or not have a timestamp
   const isStale =
     !partDetails?.timestamp?.seconds ||
-    Date.now() / 1000 - partDetails.timestamp.seconds > STALE_TIME;
+    Date.now() - partDetails.timestamp > STALE_TIME;
   if (!isStale) return [null, partDetails];
 
   // fetch from bricklink
@@ -37,7 +37,7 @@ export async function getPart(partId) {
     thumbnail_url: partDetails?.thumbnail_url
       ? `https:${partDetails.thumbnail_url}`
       : '/fallback.webp',
-    timestamp: serverTimestamp(),
+    timestamp: Date.now(),
   };
   await setDoc(doc(db, 'part_details', partId), partDetails);
 

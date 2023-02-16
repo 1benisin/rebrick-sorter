@@ -1,6 +1,6 @@
-import { serverTimestamp, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/services/firebase';
-import { getBricklinkPart } from './bricklinkPartModel';
+import { getBricklinkPart } from '../lib/services/bricklink';
 import validateSchema from './validateSchema';
 
 const PART_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
@@ -13,12 +13,18 @@ const partSchema = {
   catId: { type: 'number' },
   catName: { type: 'string' },
   imageUrl: { type: 'string' },
+  bricklinkPart: { type: 'object' },
 };
 
 export const validatePart = async ({ part, forceUpdate = false }) => {
   try {
     // does part need to be updated?
-    if (forceUpdate || !part.timestamp || Date.now() - part.timestamp > PART_STALE_TIME) {
+    if (
+      forceUpdate ||
+      !part?.bricklinkPart ||
+      !part?.timestamp ||
+      Date.now() - part.timestamp > PART_STALE_TIME
+    ) {
       part = await updatePart(part);
     }
 
@@ -29,7 +35,7 @@ export const validatePart = async ({ part, forceUpdate = false }) => {
 
     return part;
   } catch (error) {
-    console.error(error);
+    console.error(`validate part issue: ${error}`);
     return { error };
   }
 };
@@ -37,6 +43,7 @@ export const validatePart = async ({ part, forceUpdate = false }) => {
 const updatePart = async (part) => {
   try {
     const bricklinkPart = await getBricklinkPart(part.id);
+    console.log(`-bricklinkPart: ${JSON.stringify(bricklinkPart)}`);
     // const scrapedPart = await scrapePart(partId); // eventually
     if (bricklinkPart.error) return { error: bricklinkPart.error };
 
@@ -56,7 +63,7 @@ const updatePart = async (part) => {
 
     return updatedPart;
   } catch (error) {
-    console.error(error);
+    console.error(`updating part issue: ${error}`);
     return { error };
   }
 };

@@ -35,7 +35,7 @@ export default function PartCard({ part }) {
       />
       {/* <PartCategory>{part.category_id}</PartCategory> */}
       <PartId selected={similarToPartId == part.id}>{part.id}</PartId>
-      <PartId>{part.timestamp.seconds}</PartId>
+      {/* <PartId>{part.timestamp}</PartId> */}
       <PartName selected={similarToPartId == part.id}>
         {/* {JSON.stringify(part)} */}
         {part.name}
