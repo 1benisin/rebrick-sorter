@@ -8,6 +8,7 @@ export default async (req, res) => {
   const { searchString } = req.query;
   console.log('searchString', searchString);
 
+  // if fuse search is not initialized, create it
   if (!fuse) {
     console.log('creating fuse');
     const PARTS = await getParts();

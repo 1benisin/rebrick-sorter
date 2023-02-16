@@ -13,6 +13,7 @@ import { db } from '../../../lib/services/firebase';
 import { fetchBricklinkURL } from '../../../lib/services/bricklink';
 const fs = require('fs');
 import { decodeHTML } from '../../../lib/utils';
+import { validatePart } from '../../../models/partModel';
 
 let PARTS = [];
 // const CATALOG_STALE_TIME = 0;
@@ -94,18 +95,11 @@ export const checkPartsFreshness = async (parts) => {
 
       // get Bricklink part details
       let brickLinkPartDetails = {};
-      try {
-        brickLinkPartDetails = await fetchBricklinkURL(
-          `https://api.bricklink.com/api/store/v1/items/part/${part.id}`
-        );
-      } catch (error) {
-        console.warn(`error fetching part from Bricklink`, error);
-        continue;
-      }
+      brickLinkPartDetails = await fetchBricklinkPart(part.id);
 
-      let updatedPart = {
+      let updatedPart = brickLinkPartDetails; // will be null if part not found on Bricklink
+      updatedPart = {
         ...part,
-        ...brickLinkPartDetails,
         name: part.name ? decodeHTML(part.name) : decodeHTML(brickLinkPartDetails?.name),
         image_url: brickLinkPartDetails?.image_url
           ? `https:${brickLinkPartDetails.image_url}`

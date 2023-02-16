@@ -24,13 +24,8 @@ export default function PartsSearchResults({}) {
   const similarResults = partStore((state) => state.similarResults, shallow);
   const similarToPartId = partStore((state) => state.similarToPartId);
 
-  // const handleSelectPart = (partId) => {
-  //   setSearchFilter('');
-  //   setSelectedPartId(partId);
-  // };
-
   if (searchResults.isLoading) return <Spinner animation="border" />;
-  if (searchResults.error) return <p>searchResults.error</p>;
+  if (searchResults.error) return <p>{searchResults.error}</p>;
 
   return (
     <>

@@ -1,17 +1,56 @@
-const OAuth = require('oauth').OAuth;
-import { serverTimestamp, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
-import { fetchBricklinkURL } from '../../../lib/utils';
-import { getPart } from '../../../dataManagers/partDetails';
-
-// const STALE_TIME = 0;
-const STALE_TIME = 1000 * 60 * 60 * 24 * 30; // days old
+import { validatePart } from '../../../models/partModel';
 
 export default async (req, res) => {
   const { partId } = req.query;
+  const docRef = doc(db, 'parts', partId);
+  const partSnapshot = await getDoc(docRef);
 
-  const [error, data] = await getPart(partId);
+  switch (req.method) {
+    case 'GET':
+      try {
+        if (!partSnapshot.exists()) {
+          res.status(404).json({ message: 'Part not found' });
+          return;
+        }
 
-  error && res.status(500).json(error);
-  res.status(200).json(data);
+        // validation
+        let part = partSnapshot.data();
+        part = await validatePart({ part, forceUpdate: true });
+        if (part.error) {
+          res.status(400).json({ message: 'Validation failed', errors: part.error });
+          return;
+        }
+
+        res.status(200).json(part);
+      } catch (error) {
+        res.status(500).json({ error, message: 'Part get failed' });
+      }
+      break;
+
+    case 'POST':
+      try {
+        let part = JSON.parse(req.body);
+
+        part = { ...partSnapshot.data(), ...part };
+
+        part = await validatePart({ part });
+        if (part.error) {
+          res.status(400).json({ message: 'Validation failed', errors: part.error });
+          return;
+        }
+
+        await setDoc(docRef, part, { merge: true });
+
+        res.status(201).json({ message: 'Part updated' });
+      } catch (error) {
+        res.status(500).json({ error, message: 'Part post failed' });
+      }
+      break;
+
+    default: // Method Not Allowed
+      res.status(405).end();
+      break;
+  }
 };

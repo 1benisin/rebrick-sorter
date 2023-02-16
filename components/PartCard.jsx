@@ -16,7 +16,8 @@ export default function PartCard({ part }) {
 
   const handleAddButtonClick = (e) => {
     e.stopPropagation();
-    togglePartSidebar(part.id);
+    console.log('handleAddButtonClick', part);
+    togglePartSidebar(part);
   };
 
   // if (isLoading) return <Spinner animation="border" />;
@@ -92,10 +93,7 @@ const PartId = styled(Card.Text)`
 
 const MatchPercent = styled(Card.Subtitle)`
   font-size: x-small;
-  // font-weight: bold;
   color: green;
-  // align-self: flex-end;
-  // margin: 0px 2px;
 `;
 
 const AddButton = styled(Badge)`
