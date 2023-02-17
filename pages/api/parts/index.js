@@ -5,42 +5,52 @@ const fs = require('fs');
 import { decodeHTML } from '../../../lib/utils';
 import { validatePart } from '../../../models/partModel';
 
+//  ------------------- GLOBALS -------------------
+
 let PARTS = [];
 // const CATALOG_STALE_TIME = 0;
 const CATALOG_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
 // const PART_STALE_TIME = 0;
 const PART_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
-
 export const RESULTS_PER_PAGE = 30;
 
-// fetches parts catalog from local file first then from db if local file is stale
-export const getParts = async () => {
-  // if parts already fetched, return them
-  if (PARTS.length) return PARTS;
+// ------------------- GET PARTS -------------------
 
-  // fetch local JSON part catalog file
-  let localPartsCatalog = { timestamp: Date.now() - (CATALOG_STALE_TIME + 100), parts: [] }; // default to stale
-  if (fs.existsSync(process.cwd() + `/public/parts_catalog.json`)) {
-    const data = fs.readFileSync(process.cwd() + `/public/parts_catalog.json`);
-    localPartsCatalog = JSON.parse(data);
-    PARTS = localPartsCatalog.parts;
-  }
+export const getParts = async ({ forceUpdate = false }) => {
+  // fetch parts catalog from local file first then from db if local file is stale
+  try {
+    // if parts already fetched, return them
+    if (PARTS.length) return PARTS;
 
-  console.log(`Fetched ${PARTS.length} parts.`);
+    const localCatalogUrl = process.cwd() + `/public/parts_catalog.json`;
 
-  const fileAge = Date.now() - localPartsCatalog.timestamp;
-  console.log(`Local catalog file age:
+    // if local file doesn't exist yet, update/create it
+    if (!fs.existsSync(localCatalogUrl)) await updateCatalog();
+
+    // fetch local JSON part catalog file
+    const data = fs.readFileSync(localCatalogUrl);
+    let localCatalog = JSON.parse(data);
+    PARTS = localCatalog.parts;
+
+    console.log(`Fetched local ${PARTS.length} parts.`);
+
+    const fileAge = Date.now() - localCatalog.timestamp;
+    console.log(`Local catalog file age:
   ${Math.floor(fileAge / 1000 / 60 / 60 / 24)} days,
   ${Math.floor((fileAge / 1000 / 60 / 60) % 24)} hours,
   ${Math.floor((fileAge / 1000 / 60) % 60)} minutes,
   ${Math.floor((fileAge / 1000) % 60)} seconds old.`);
 
-  if (fileAge > CATALOG_STALE_TIME) updateCatalogFreshness();
+    if (forceUpdate || fileAge > CATALOG_STALE_TIME) await updateCatalog();
 
-  return PARTS;
+    return PARTS;
+  } catch (error) {
+    console.error(`getParts issue: ${error}`);
+    return { error };
+  }
 };
 
-const updateCatalogFreshness = async () => {
+const updateCatalog = async () => {
   console.log(`updating local catalog file from db`);
 
   const databaseParts = [];
