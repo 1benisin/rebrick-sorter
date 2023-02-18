@@ -1,23 +1,23 @@
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
-import { validatePart } from '../../../models/partModel';
+import { updateStaleParts } from './index';
 
 export default async (req, res) => {
   const { partId } = req.query;
-  const docRef = doc(db, 'parts', partId);
-  const partSnapshot = await getDoc(docRef);
 
   switch (req.method) {
     case 'GET':
       try {
+        const partSnapshot = await getDoc(doc(db, 'parts', partId));
         if (!partSnapshot.exists()) {
           res.status(404).json({ message: 'Part not found' });
           return;
         }
 
-        // validation
         let part = partSnapshot.data();
-        part = await validatePart({ part, forceUpdate: true });
+
+        // validation
+        part = await updateStaleParts([part]);
         if (part.error) {
           res.status(400).json({ message: 'Validation failed', errors: part.error });
           return;
@@ -31,11 +31,18 @@ export default async (req, res) => {
 
     case 'POST':
       try {
+        const docRef = doc(db, 'parts', partId);
+        const partSnapshot = await getDoc(docRef);
+        if (!partSnapshot.exists()) {
+          res.status(404).json({ message: 'Part not found' });
+          return;
+        }
+
         let part = JSON.parse(req.body);
 
         part = { ...partSnapshot.data(), ...part };
 
-        part = await validatePart({ part });
+        part = await validatePart(part);
         if (part.error) {
           res.status(400).json({ message: 'Validation failed', errors: part.error });
           return;

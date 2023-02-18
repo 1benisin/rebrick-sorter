@@ -1,9 +1,9 @@
 import styled from 'styled-components';
 import React, { useState } from 'react';
 
-const PartDetail = ({ field, part }) => {
+const PartDetail = ({ field, value }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [fieldValue, setFieldValue] = useState(part[field]);
+  const [fieldValue, setFieldValue] = useState(value);
 
   const handleEditClick = () => {
     setIsEditing(true);
@@ -33,7 +33,7 @@ const PartDetail = ({ field, part }) => {
   return (
     <FlexDiv>
       <b>{`${field}: `}</b>
-      <p>{part[field]}</p>
+      <p>{value}</p>
       <SaveOrEditText onClick={handleEditClick}>Edit</SaveOrEditText>
     </FlexDiv>
   );

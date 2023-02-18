@@ -1,15 +1,10 @@
 import { Card, Badge, Spinner } from 'react-bootstrap';
 import styled from 'styled-components';
-import { useAtom } from 'jotai';
 import Image from './ImageWithFallback';
-import { sideBarPartNumAtom, sideBarOpenAtom } from '../logic/atoms';
 import partStore from '../lib/stores/partStore';
 import applicationStore from '../lib/stores/applicationStore';
 
 export default function PartCard({ part }) {
-  const [sideBarPartId, setSideBarPartId] = useAtom(sideBarPartNumAtom);
-  const [open, setOpen] = useAtom(sideBarOpenAtom);
-
   const findSimilar = partStore((state) => state.findSimilar);
   const similarToPartId = partStore((state) => state.similarToPartId);
   const togglePartSidebar = applicationStore((state) => state.togglePartSidebar);
@@ -20,27 +15,19 @@ export default function PartCard({ part }) {
     togglePartSidebar(part);
   };
 
-  // if (isLoading) return <Spinner animation="border" />;
-  // if (error) return <p>error</p>;
   return (
     <Card bg={similarToPartId == part.id ? 'primary' : null} onClick={() => findSimilar(part.id)}>
       {similarToPartId}
       <Image
-        src={part.thumbnail_url}
-        alt={part.name}
+        src={part.imageUrl || '/fallback.webp'}
+        alt={part?.name}
         width={200}
         height={150}
         // layout="intrinsic" // you can use "responsive", "fill" or the default "intrinsic"
         objectFit="contain"
       />
-      {/* <PartCategory>{part.category_id}</PartCategory> */}
       <PartId selected={similarToPartId == part.id}>{part.id}</PartId>
-      {/* <PartId>{part.timestamp}</PartId> */}
-      <PartName selected={similarToPartId == part.id}>
-        {/* {JSON.stringify(part)} */}
-        {part.name}
-        {/* {removeCategoryFromName(name, part.category_name)} */}
-      </PartName>
+      <PartName selected={similarToPartId == part.id}>{part.name}</PartName>
       <FlexDiv>
         {part.searchScore && (
           <MatchPercent>{`${(part.searchScore * 100).toFixed(0)}% match`}</MatchPercent>
