@@ -16,9 +16,14 @@ export default function PartCard({ part }) {
   };
 
   return (
-    <Card bg={similarToPartId == part.id ? 'primary' : null} onClick={() => findSimilar(part.id)}>
+    <Card
+      bg={similarToPartId == part.id ? 'primary' : null}
+      onClick={() => {
+        console.log(part), findSimilar(part.id);
+      }}
+    >
       <Image
-        src={part.imageUrl || '/fallback.webp'}
+        src={part.thumbnailUrl || part.imageUrl || '/fallback.webp'}
         alt={part?.name}
         width={200}
         height={150}

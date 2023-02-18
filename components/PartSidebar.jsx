@@ -21,12 +21,13 @@ export default function PartSidebar() {
               <PartDetail field="id" value={sidebarPart.id} />
               <PartDetail field="catName" value={sidebarPart?.catName} />
               <ColorColumn>
-                {colors.map((color) => (
-                  <ColorRow key={color.color_id}>
-                    <ColorSquare code={`#${color.color_code}`} />
-                    <ColorName>{color.color_name}</ColorName>
-                  </ColorRow>
-                ))}
+                {colors &&
+                  colors.map((color) => (
+                    <ColorRow key={color.color_id}>
+                      <ColorSquare code={`#${color.color_code}`} />
+                      <ColorName>{color.color_name}</ColorName>
+                    </ColorRow>
+                  ))}
               </ColorColumn>
             </div>
           )}
