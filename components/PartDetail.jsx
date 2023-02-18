@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 import React, { useState } from 'react';
 
-const PartDetail = ({ field, value }) => {
+const PartDetail = ({ field, value, onEdit = null }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [fieldValue, setFieldValue] = useState(value);
 
@@ -34,7 +34,7 @@ const PartDetail = ({ field, value }) => {
     <FlexDiv>
       <b>{`${field}: `}</b>
       <p>{value}</p>
-      <SaveOrEditText onClick={handleEditClick}>Edit</SaveOrEditText>
+      {onEdit && <SaveOrEditText onClick={handleEditClick}>Edit</SaveOrEditText>}
     </FlexDiv>
   );
 };
@@ -43,10 +43,11 @@ export default PartDetail;
 
 const FlexDiv = styled.div`
   display: flex;
-  margin: 5px;
+  // margin: 0px;
+  // padding: 0px;
   // add margin to inner children
   & > * {
-    margin-right: 5px;
+    margin: 0px 5px 0px 0px;
   }
 `;
 

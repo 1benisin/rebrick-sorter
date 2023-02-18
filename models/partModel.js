@@ -2,102 +2,56 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/services/firebase';
 import { getBricklinkPart } from '../lib/services/bricklink';
 import validateSchema from './validateSchema';
+import { decodeHTML } from '../lib/utils';
 
 const PART_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
 
 // Define the structure of a Part by setting the data types for fields
 const partSchema = {
   id: { type: 'string', required: true },
-  timestamp: { type: 'number', required: true },
+  timestamp: {
+    type: 'number',
+    required: true,
+    conditions: [(timestamp) => Date.now() - timestamp > PART_STALE_TIME],
+  },
   name: { type: 'string', required: true },
   catId: { type: 'string' },
   catName: { type: 'string' },
   imageUrl: { type: 'string' },
-  bricklinkPart: { type: 'object' },
+  thumbnailUrl: { type: 'string' },
+  type: { type: 'string' },
+  bricklinkPart: { type: 'object', required: true },
 };
 
-export const validatePart = async (part) => {
-  const validatedPart = validateSchema(part, partSchema);
+export const validatePart = (part) => {
+  const validatedPart = validateSchema(part, partSchema, 'log');
   if (validatedPart.error) return { id: part.id, error: validatedPart.error };
   return validatedPart;
 };
 
-// const updateParts = async (parts) => {
-//   try {
-//     const bricklinkPart = await getBricklinkPart(part.id);
-//     console.log(`-bricklinkPart: ${JSON.stringify(bricklinkPart)}`);
-//     // const scrapedPart = await scrapePart(partId); // eventually
-//     if (bricklinkPart.error) return { error: bricklinkPart.error };
+export const updatePart = async (part) => {
+  console.log(`updating part ${part.id}...`);
+  try {
+    const bricklinkPart = await getBricklinkPart(part.id);
+    if (bricklinkPart.error) {
+      throw new Error(`Issue fetching bricklink part ${part.id} - ${bricklinkPart.error}`);
+    }
 
-//     const updatedPart = {
-//       ...part,
-//       bricklinkPart,
-//       name: part.name || bricklinkPart.name || null,
-//       catId: part.catId || bricklinkPart.category_id || null,
-//       catName: part.catName || null,
-//       imageUrl: bricklinkPart.image_url || null,
-//       timestamp: Date.now(),
-//     };
+    const updatedPart = {
+      ...part,
+      timestamp: Date.now(),
+      name: decodeHTML(part.name) || bricklinkPart.name || null,
+      catId: part.catId || bricklinkPart.category_id || null,
+      catName: part.catName || null,
+      imageUrl: bricklinkPart.image_url || null,
+      thumbnailUrl: bricklinkPart.thumbnail_url || null,
+      type: bricklinkPart.type || null,
+      bricklinkPart,
+    };
 
-//     // update the part in the database
-//     const partRef = doc(db, 'parts', part.id);
-//     await setDoc(partRef, updatedPart, { merge: true });
-
-//     return updatedPart;
-//   } catch (error) {
-//     console.error(`updating part issue: ${error}`);
-//     return { error };
-//   }
-// };
-
-// export const validatePart = async ({ part, forceUpdate = false }) => {
-//   try {
-//     // does part need to be updated?
-//     if (
-//       forceUpdate ||
-//       !part?.bricklinkPart ||
-//       !part?.timestamp ||
-//       Date.now() - part.timestamp > PART_STALE_TIME
-//     ) {
-//       part = await updatePart(part);
-//     }
-
-//     // validate part data
-
-//     part = validateSchema(part, partSchema);
-//     if (part.error) return { error: part.error };
-
-//     return part;
-//   } catch (error) {
-//     console.error(`validate part issue: ${error}`);
-//     return { error };
-//   }
-// };
-
-// const updatePart = async (part) => {
-//   try {
-//     const bricklinkPart = await getBricklinkPart(part.id);
-//     console.log(`-bricklinkPart: ${JSON.stringify(bricklinkPart)}`);
-//     // const scrapedPart = await scrapePart(partId); // eventually
-//     if (bricklinkPart.error) return { error: bricklinkPart.error };
-
-//     const updatedPart = {
-//       ...part,
-//       bricklinkPart,
-//       name: part.name || bricklinkPart.name || null,
-//       catId: part.catId || bricklinkPart.category_id || null,
-//       catName: part.catName || null,
-//       imageUrl: bricklinkPart.image_url || null,
-//       timestamp: Date.now(),
-//     };
-
-//     // update the part in the database
-//     const partRef = doc(db, 'parts', part.id);
-//     await setDoc(partRef, updatedPart, { merge: true });
-
-//     return updatedPart;
-//   } catch (error) {
-//     console.error(`updating part issue: ${error}`);
-//     return { error };
-//   }
-// };
+    return updatedPart;
+  } catch (error) {
+    console.warn(error);
+    return { error };
+  }
+};

@@ -1,5 +1,5 @@
 import Fuse from 'fuse.js';
-import { getParts, updateStaleParts, RESULTS_PER_PAGE } from '../index';
+import { getParts, refreshParts, RESULTS_PER_PAGE } from '../index';
 
 let fuse = null;
 
@@ -36,10 +36,10 @@ export default async (req, res) => {
       .map((result) => ({ ...result.item, searchScore: 1 - result.score }))
       .slice(0, RESULTS_PER_PAGE);
 
-    filteredParts = await updateStaleParts(filteredParts);
+    filteredParts = await refreshParts(filteredParts);
 
     if (filteredParts?.error)
-      res.status(500).json(`Unable to updateStaleParts: ${filteredParts.error}`);
+      res.status(500).json(`Unable to refreshParts: ${filteredParts.error}`);
 
     res.status(200).json(filteredParts);
   } catch (error) {

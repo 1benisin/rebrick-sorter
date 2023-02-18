@@ -1,4 +1,4 @@
-import { getParts, RESULTS_PER_PAGE, checkPartsFreshness } from '../index';
+import { getParts, RESULTS_PER_PAGE, refreshParts } from '../index';
 
 let partsWithSplitNames = [];
 
@@ -46,7 +46,10 @@ export default async (req, res) => {
       return p;
     });
 
-  mostSimilarParts = await checkPartsFreshness(mostSimilarParts);
+  mostSimilarParts = await refreshParts(mostSimilarParts);
+
+  if (mostSimilarParts?.error)
+    res.status(500).json(`Unable to refreshParts: ${mostSimilarParts.error}`);
 
   if (mostSimilarParts?.error) res.status(500).json({ error: mostSimilarParts.error });
 

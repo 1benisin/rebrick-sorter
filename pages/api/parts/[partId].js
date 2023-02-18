@@ -1,6 +1,6 @@
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
-import { updateStaleParts } from './index';
+import { refreshParts } from './index';
 
 export default async (req, res) => {
   const { partId } = req.query;
@@ -17,7 +17,7 @@ export default async (req, res) => {
         let part = partSnapshot.data();
 
         // validation
-        part = await updateStaleParts([part]);
+        part = await refreshParts([part]);
         if (part.error) {
           res.status(400).json({ message: 'Validation failed', errors: part.error });
           return;

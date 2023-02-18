@@ -2,7 +2,7 @@ import { delay, decodeHTML } from '../../../lib/utils';
 import { doc, collection, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
 const fs = require('fs');
-import { validatePart } from '../../../models/partModel';
+import { validatePart, updatePart } from '../../../models/partModel';
 import { getBricklinkPart } from '../../../lib/services/bricklink';
 
 //  ------------------- GLOBALS -------------------
@@ -24,7 +24,7 @@ export const getParts = async () => {
     if (PARTS) return PARTS;
 
     // if local file doesn't exist yet, update/create it
-    if (!fs.existsSync(LOCAL_CATALOG_URL)) await updateStaleCatalog();
+    if (!fs.existsSync(LOCAL_CATALOG_URL)) await refreshCatalog();
 
     // fetch local JSON part catalog file
     const data = fs.readFileSync(LOCAL_CATALOG_URL);
@@ -42,7 +42,7 @@ export const getParts = async () => {
       )} seconds old.`
     );
 
-    if (fileAge > CATALOG_STALE_TIME) await updateStaleCatalog();
+    if (fileAge > CATALOG_STALE_TIME) await refreshCatalog();
 
     return PARTS;
   } catch (error) {
@@ -51,7 +51,7 @@ export const getParts = async () => {
   }
 };
 
-const updateStaleCatalog = async () => {
+const refreshCatalog = async () => {
   console.log(`updating local catalog file...`);
 
   PARTS = [];
@@ -61,78 +61,41 @@ const updateStaleCatalog = async () => {
     PARTS.push(doc.data());
   });
 
-  // save parts to local JSON file
-  const localPartsCatalog = { timestamp: Date.now(), parts: PARTS };
-  const jsonData = JSON.stringify(localPartsCatalog);
-  fs.writeFileSync(LOCAL_CATALOG_URL, jsonData);
-
-  console.log('updated local catalog file.');
+  saveCatalogFile(PARTS);
 };
 
-export const updateStaleParts = async (parts) => {
+const filterPartsToUpdate = (parts) => {
+  // filter out parts that don't need updating
+  const partsToUpdate = parts.filter((part) => {
+    const validatedPart = validatePart(part);
+    if (validatedPart.error) return true;
+    return false;
+  });
+  return partsToUpdate;
+};
+
+const saveCatalogFile = (parts) => {
   try {
-    // create Map of parts that need updating
-    const partsToUpdate = [];
-    parts.forEach((part) => {
-      if (!part?.bricklinkPart || !part?.timestamp || Date.now() - part.timestamp > PART_STALE_TIME)
-        partsToUpdate.push(part);
+    const localPartsCatalog = { timestamp: Date.now(), parts: parts };
+    const jsonData = JSON.stringify(localPartsCatalog);
+    fs.writeFile(LOCAL_CATALOG_URL, jsonData, (err) => {
+      if (err) console.error(`error wrtiting local parts catalog file - `, err);
+      else console.log(`Successfully updated local parts catalog file.`);
     });
+  } catch (error) {
+    console.error(`error writing local catalog file - ${error}`);
+  }
+};
 
-    // if no parts need updating, return
-    if (!partsToUpdate.length) return parts;
-
-    // get updated part data from Bricklink
-    const updatedParts = [];
-    for (const part of partsToUpdate) {
-      const bricklinkPart = await getBricklinkPart(part.id);
-      // if issue fetching part, skip it
-      if (bricklinkPart.error) {
-        console.warn(`issue fetching bricklink part ${part.id} - `, bricklinkPart.error);
-        continue;
-      }
-
-      const updatedPart = {
-        ...part,
-        bricklinkPart,
-        name: decodeHTML(part.name) || bricklinkPart.name || null,
-        catId: part.catId || bricklinkPart.category_id || null,
-        catName: part.catName || null,
-        imageUrl: bricklinkPart.image_url || null,
-        timestamp: Date.now(),
-      };
-
-      // validate part
-      const validatedPart = await validatePart(updatedPart);
-      if (validatedPart.error) {
-        console.warn(`issue validating ${part.id} - `, validatedPart.error);
-        continue;
-      }
-
-      // add to updated parts Map
-      updatedParts.push(updatedPart);
-    }
-
-    // update local parts catalog file and global PARTS variable
-    if (updatedParts.length) {
-      PARTS = PARTS.map((part) => {
-        const updatedPart = updatedParts.find((updatedPart) => updatedPart.id === part.id);
-        if (updatedPart) return updatedPart;
-        return part;
-      });
-
-      const localPartsCatalog = { timestamp: Date.now(), parts: PARTS };
-      const jsonData = JSON.stringify(localPartsCatalog);
-      fs.writeFile(LOCAL_CATALOG_URL, jsonData, (err) => {
-        if (err) console.error(`error wrtiting local parts catalog file - `, err);
-      });
-    }
-
-    // update db with updated parts in batches of 200
-    let batch = writeBatch(db);
+const updateDatabase = async (updatedParts) => {
+  try {
+    const batch = writeBatch(db);
     let batchSize = 0;
+
     for (const part of updatedParts) {
       batch.set(doc(db, 'parts', part.id), part, { merge: true });
       batchSize++;
+
       if (batchSize >= 200) {
         await batch.commit();
         await delay(1000);
@@ -140,6 +103,53 @@ export const updateStaleParts = async (parts) => {
         batchSize = 0;
       }
     }
+
+    console.log('Successfully updated database with new part data.');
+  } catch (error) {
+    console.error('Error updating database with new part data:', error);
+  }
+};
+
+const updateCatalogWithParts = async (updatedParts) => {
+  // --- update local variable & catalog file, & db ---
+
+  if (updatedParts.length) {
+    // update global PARTS array
+    PARTS = PARTS.map((part) => {
+      const updatedPart = updatedParts.find((updatedPart) => updatedPart.id === part.id);
+      if (updatedPart) return updatedPart;
+      return part;
+    });
+
+    saveCatalogFile(PARTS); //  should not wait to finish
+
+    updateDatabase(updatedParts);
+  }
+};
+
+export const refreshParts = async (parts) => {
+  try {
+    // --- filter parts that need updating ---
+    const partsToUpdate = filterPartsToUpdate(parts);
+    console.log(`partsToUpdate: ${partsToUpdate.length} / ${parts.length} parts`);
+    // if no parts need updating, return original parts
+    if (!partsToUpdate.length) return parts;
+
+    // --- update parts ---
+    const updatedParts = [];
+    for (const part of partsToUpdate) {
+      const updatedPart = await updatePart(part);
+      // if issue fetching part, skip it
+      if (updatedPart.error) {
+        console.warn(`issue fetching bricklink data ${part.id} - `, updatedPart.error);
+        continue;
+      }
+      // add to updated parts Map
+      updatedParts.push(updatedPart);
+    }
+
+    // --- update local variable, catalog file, & db ---
+    updateCatalogWithParts(updatedParts);
 
     // update parts with updated parts and return it
     return parts.map((part) => {

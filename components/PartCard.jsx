@@ -17,7 +17,6 @@ export default function PartCard({ part }) {
 
   return (
     <Card bg={similarToPartId == part.id ? 'primary' : null} onClick={() => findSimilar(part.id)}>
-      {similarToPartId}
       <Image
         src={part.imageUrl || '/fallback.webp'}
         alt={part?.name}

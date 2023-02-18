@@ -13,23 +13,22 @@ export default function PartSidebar() {
   return (
     <div>
       <Offcanvas show={partSidebarOpen} placement="end" onHide={() => togglePartSidebar()}>
-        <Offcanvas.Header>{`Known Colors for part ${sidebarPart?.id}`}</Offcanvas.Header>
+        {/* <Offcanvas.Header>{`Part Details ${sidebarPart?.id}`}</Offcanvas.Header> */}
         <Offcanvas.Body>
           {sidebarPart && (
             <div>
-              <h2>Part Details</h2>
               <PartDetail field="name" value={sidebarPart.name} />
               <PartDetail field="id" value={sidebarPart.id} />
               <PartDetail field="catName" value={sidebarPart?.catName} />
+              <ColorColumn>
+                {colors.map((color) => (
+                  <ColorRow key={color.color_id}>
+                    <ColorSquare code={`#${color.color_code}`} />
+                    <ColorName>{color.color_name}</ColorName>
+                  </ColorRow>
+                ))}
+              </ColorColumn>
             </div>
-            // <ColorColumn>
-            //   {colors.map((color) => (
-            //     <ColorRow key={color.color_id}>
-            //       <ColorSquare code={`#${color.color_code}`} />
-            //       <ColorName>{color.color_name}</ColorName>
-            //     </ColorRow>
-            //   ))}
-            // </ColorColumn>
           )}
         </Offcanvas.Body>
       </Offcanvas>
