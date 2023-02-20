@@ -23,26 +23,9 @@ export const getParts = async () => {
     // if parts already fetched, return them
     if (PARTS) return PARTS;
 
-    // if local file doesn't exist yet, update/create it
-    if (!fs.existsSync(LOCAL_CATALOG_URL)) await refreshCatalog();
-
-    // fetch local JSON part catalog file
-    const data = fs.readFileSync(LOCAL_CATALOG_URL);
-    let localCatalog = JSON.parse(data);
-    PARTS = localCatalog.parts;
+    PARTS = await loadCatalogFile();
 
     console.log(`Fetched local ${PARTS.length} parts.`);
-
-    const fileAge = Date.now() - localCatalog.timestamp;
-    console.log(
-      `Local catalog file age: ${Math.floor(fileAge / 1000 / 60 / 60 / 24)} days, ${Math.floor(
-        (fileAge / 1000 / 60 / 60) % 24
-      )} hours, ${Math.floor((fileAge / 1000 / 60) % 60)} minutes, ${Math.floor(
-        (fileAge / 1000) % 60
-      )} seconds old.`
-    );
-
-    if (fileAge > CATALOG_STALE_TIME) await refreshCatalog();
 
     return PARTS;
   } catch (error) {
@@ -51,8 +34,35 @@ export const getParts = async () => {
   }
 };
 
+const loadCatalogFile = async () => {
+  console.log(`loading local catalog file...`);
+  try {
+    const data = fs.readFileSync(LOCAL_CATALOG_URL);
+    const catalogData = JSON.parse(data);
+
+    const catalogAge = Date.now() - catalogData.timestamp;
+    console.log(
+      `Catalog age: ${Math.floor(catalogAge / 1000 / 60 / 60 / 24)} d, ${Math.floor(
+        (catalogAge / 1000 / 60 / 60) % 24
+      )} h, ${Math.floor((catalogAge / 1000 / 60) % 60)} m old.`
+    );
+
+    if (catalogAge > CATALOG_STALE_TIME) await refreshCatalog();
+
+    return catalogData.parts;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      console.log('Error: Local catalog file is invalid JSON.');
+      await refreshCatalog();
+      await loadCatalogFile();
+    } else {
+      console.log(`Error: ${error.message}`);
+    }
+  }
+};
+
 const refreshCatalog = async () => {
-  console.log(`updating local catalog file...`);
+  console.log(`refreshing catalog...`);
 
   PARTS = [];
   // fetch all parts from db
@@ -75,6 +85,7 @@ const filterPartsToUpdate = (parts) => {
 };
 
 const saveCatalogFile = (parts) => {
+  console.log(`saving catalog file...`);
   try {
     const localPartsCatalog = { timestamp: Date.now(), parts: parts };
     const jsonData = JSON.stringify(localPartsCatalog);

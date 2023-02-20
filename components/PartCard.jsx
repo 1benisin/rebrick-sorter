@@ -23,7 +23,7 @@ export default function PartCard({ part }) {
       }}
     >
       <Image
-        src={part.thumbnailUrl || part.imageUrl || '/fallback.webp'}
+        src={part.imageUrl || part.thumbnailUrl || '/fallback.webp'}
         alt={part?.name}
         width={200}
         height={150}

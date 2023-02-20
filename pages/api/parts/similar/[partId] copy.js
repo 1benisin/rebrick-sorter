@@ -1,6 +1,6 @@
 import { getParts, RESULTS_PER_PAGE, refreshParts } from '../index';
 
-let partsPhrases = new Map();
+let partsPhrases = [];
 
 export default async (req, res) => {
   try {
@@ -10,38 +10,36 @@ export default async (req, res) => {
     const PARTS = await getParts();
     if (!PARTS) res.status(500).json({ error: 'Unable to fetch parts' });
 
-    // create a map of part phrases
-    if (!partsPhrases.size) {
-      PARTS.filter((p) => p.name) // filter out parts without names
-        .forEach((p) => {
+    // create an array of all part names split into phrases
+    if (!partsPhrases.length) {
+      partsPhrases = PARTS.filter((p) => p.name) // filter out parts without names
+        .map((p) => {
           const words = p.name.split(' ');
           const phrases = words.flatMap((_, i) =>
             Array.from({ length: words.length - i }, (_, j) => words.slice(j, j + i + 1).join(' '))
           );
-          partsPhrases.set(p.id, { phrases: new Set(phrases) });
+          return { id: p.id, phrases: new Set(phrases) };
         });
     }
 
     // get the part phrases for the similarToPartId
-    const similarToPart = partsPhrases.get(similarToPartId);
+    const similarToPart = partsPhrases.find((p) => p.id === similarToPartId);
     if (!similarToPart) res.status(500).json({ error: 'unable to find part or part has no name' });
 
     const partsWithPhraseSimilarity = [];
 
     // for every part in catalog
-    for (const [comparePartId, comparePart] of partsPhrases) {
-      if (comparePartId === similarToPartId) continue; // skip the similarToPart
-
+    for (const comparePart of partsPhrases) {
       // find strength of phrases relationship
       let phraseOverlapStrength = 0;
       for (const phrase of similarToPart.phrases) {
         if (comparePart.phrases.has(phrase)) phraseOverlapStrength++;
       }
 
-      // if phrase overlap strength is greater than 1
+      // if phrase overlap strength is greater than 1 & partId is not the same as otherPartId
       phraseOverlapStrength > 1 &&
         partsWithPhraseSimilarity.push({
-          id: comparePartId,
+          id: comparePart.id,
           similarity: phraseOverlapStrength,
         });
     }

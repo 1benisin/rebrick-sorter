@@ -50,7 +50,7 @@ export default function validateSchema(obj, schema, log = false) {
       // check field conditions
       if (schema[field]?.conditions) {
         for (const condition of schema[field].conditions) {
-          if (condition(obj[field])) {
+          if (!condition(obj)) {
             const error = `Field ${field} does not meet the required condition.`;
             if (log) console.error(`[${obj.id}] ${error}`);
             return { error };

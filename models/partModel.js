@@ -12,7 +12,7 @@ const partSchema = {
   timestamp: {
     type: 'number',
     required: true,
-    conditions: [(timestamp) => Date.now() - timestamp > PART_STALE_TIME],
+    conditions: [(p) => Date.now() - p.timestamp < PART_STALE_TIME],
   },
   name: { type: 'string', required: true },
   catId: { type: 'string' },
@@ -24,7 +24,7 @@ const partSchema = {
 };
 
 export const validatePart = (part) => {
-  const validatedPart = validateSchema(part, partSchema, 'log');
+  const validatedPart = validateSchema(part, partSchema);
   if (validatedPart.error) return { id: part.id, error: validatedPart.error };
   return validatedPart;
 };
