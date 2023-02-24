@@ -1,5 +1,5 @@
 import Fuse from 'fuse.js';
-import { getParts, refreshParts, RESULTS_PER_PAGE } from '../index';
+import { getFuseSearch, refreshParts, RESULTS_PER_PAGE } from '../index';
 
 let fuse = null;
 
@@ -8,34 +8,7 @@ export default async (req, res) => {
     let { searchString, includePrints } = req.query;
     // converts "true" to true
     includePrints = includePrints === 'true';
-
-    console.log('searchString', searchString);
-    console.log('includePrints', includePrints);
-
-    // if fuse search is not initialized, create it
-    if (!fuse) {
-      console.log('creating fuse');
-      const PARTS = await getParts();
-
-      fuse = new Fuse(PARTS, {
-        keys: ['name', 'id', 'catName'],
-        // isCaseSensitive: false,
-        includeScore: true,
-        shouldSort: true,
-        // includeMatches: false,
-        findAllMatches: true,
-        // location: 0,
-        // threshold: 0.6,
-        // distance: 100,
-        useExtendedSearch: true,
-        ignoreLocation: true,
-        // ignoreFieldNorm: false,
-        // fieldNormWeight: 1,
-      });
-    }
-
-    // console.log('fuse', Object.keys(fuse));
-    // console.log('fuse', fuse._docs);
+    const fuse = await getFuseSearch();
 
     // concate "!pat" to search string to exclude prints
     searchString = includePrints ? `pat ${searchString}` : `!pat ${searchString}`;

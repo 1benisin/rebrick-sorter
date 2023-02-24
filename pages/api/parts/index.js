@@ -1,13 +1,13 @@
-import { delay, decodeHTML } from '../../../lib/utils';
 import { doc, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { db } from '../../../lib/services/firebase';
+import Fuse from 'fuse.js';
 const fs = require('fs');
+import { delay, decodeHTML } from '../../../lib/utils';
+import { db } from '../../../lib/services/firebase';
 import { validatePart, updatePart } from '../../../models/partModel';
 import { getBricklinkPart } from '../../../lib/services/bricklink';
 
 //  ------------------- GLOBALS -------------------
-
-let PARTS = null;
+let FUSESEARCH = null;
 // const CATALOG_STALE_TIME = 0;
 const CATALOG_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
 // const PART_STALE_TIME = 0;
@@ -17,17 +17,52 @@ const LOCAL_CATALOG_URL = process.cwd() + `/public/parts_catalog.json`;
 
 // ------------------- GET PARTS -------------------
 
-export const getParts = async () => {
+export const getFuseSearch = async () => {
+  await initializeFuse();
+  if (FUSESEARCH) return FUSESEARCH;
+};
+
+const initializeFuse = async () => {
   // fetch parts catalog from local file first then from db if local file is stale
   try {
     // if parts already fetched, return them
-    if (PARTS) return PARTS;
+    if (FUSESEARCH) return;
 
-    PARTS = await loadCatalogFile();
+    // if fuse search is not initialized, create it
+    console.log('creating fuse');
 
-    console.log(`Fetched local ${PARTS.length} parts.`);
+    const allParts = await loadCatalogFile();
+    console.log(`Fetched local ${allParts.length} parts.`);
 
-    return PARTS;
+    FUSESEARCH = new Fuse(allParts, {
+      keys: ['name', 'id', 'catName'],
+      // isCaseSensitive: false,
+      includeScore: true,
+      shouldSort: true,
+      // includeMatches: false,
+      findAllMatches: true,
+      // location: 0,
+      // threshold: 0.6,
+      // distance: 100,
+      useExtendedSearch: true,
+      ignoreLocation: true,
+      // ignoreFieldNorm: false,
+      // fieldNormWeight: 1,
+    });
+
+    return;
+  } catch (error) {
+    console.error(`initializeFuse issue: ${error}`);
+    return { error };
+  }
+};
+
+export const getParts = async () => {
+  // fetch parts catalog from local file first then from db if local file is stale
+  try {
+    await initializeFuse();
+    // if parts already fetched, return them
+    if (FUSESEARCH) return FUSESEARCH._docs;
   } catch (error) {
     console.error(`getParts issue: ${error}`);
     return { error };
@@ -64,14 +99,14 @@ const loadCatalogFile = async () => {
 const refreshCatalog = async () => {
   console.log(`refreshing catalog...`);
 
-  PARTS = [];
+  const refreshedCatalog = [];
   // fetch all parts from db
   const querySnapshot = await getDocs(collection(db, 'parts'));
   querySnapshot.forEach((doc) => {
-    PARTS.push(doc.data());
+    refreshedCatalog.push(doc.data());
   });
 
-  saveCatalogFile(PARTS);
+  saveCatalogFile(refreshedCatalog);
 };
 
 const filterPartsToUpdate = (parts) => {
@@ -122,17 +157,18 @@ const updateDatabase = async (updatedParts) => {
 };
 
 const updateCatalogWithParts = async (updatedParts) => {
-  // --- update local variable & catalog file, & db ---
+  // --- update fuse search variable & catalog file, & db ---
 
   if (updatedParts.length) {
     // update global PARTS array
-    PARTS = PARTS.map((part) => {
+    const updatedPartsCatalog = FUSESEARCH._docs.map((part) => {
       const updatedPart = updatedParts.find((updatedPart) => updatedPart.id === part.id);
       if (updatedPart) return updatedPart;
       return part;
     });
+    FUSESEARCH.setCollection(updatedPartsCatalog);
 
-    saveCatalogFile(PARTS); //  should not wait to finish
+    saveCatalogFile(updatedPartsCatalog); //  should not wait to finish
 
     updateDatabase(updatedParts);
   }
