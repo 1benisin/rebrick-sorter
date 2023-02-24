@@ -12,7 +12,7 @@ let PARTS = null;
 const CATALOG_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
 // const PART_STALE_TIME = 0;
 const PART_STALE_TIME = 1000 * 60 * 60 * 24 * 7; // days old
-export const RESULTS_PER_PAGE = 30;
+export const RESULTS_PER_PAGE = 20;
 const LOCAL_CATALOG_URL = process.cwd() + `/public/parts_catalog.json`;
 
 // ------------------- GET PARTS -------------------

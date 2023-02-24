@@ -24,7 +24,7 @@ const partSchema = {
 };
 
 export const validatePart = (part) => {
-  const validatedPart = validateSchema(part, partSchema);
+  const validatedPart = validateSchema(part, partSchema, 'log');
   if (validatedPart.error) return { id: part.id, error: validatedPart.error };
   return validatedPart;
 };

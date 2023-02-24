@@ -1,47 +1,53 @@
 import { getParts, RESULTS_PER_PAGE, refreshParts } from '../index';
 
-let partsPhrases = new Map();
+let allPartsPhrases = new Map();
 
+// ------------------- GET SIMILAR PARTS -------------------
 export default async (req, res) => {
   try {
-    const { partId: similarToPartId } = req.query;
-    console.log('-finding similar parts to part', similarToPartId);
+    const { partId: targetPartId } = req.query;
+    console.log('-finding similar parts to part', targetPartId);
 
     const PARTS = await getParts();
     if (!PARTS) res.status(500).json({ error: 'Unable to fetch parts' });
 
     // create a map of part phrases
-    if (!partsPhrases.size) {
+    if (!allPartsPhrases.size) {
+      console.log('creating part phrases map');
       PARTS.filter((p) => p.name) // filter out parts without names
         .forEach((p) => {
           const words = p.name.split(' ');
           const phrases = words.flatMap((_, i) =>
             Array.from({ length: words.length - i }, (_, j) => words.slice(j, j + i + 1).join(' '))
           );
-          partsPhrases.set(p.id, { phrases: new Set(phrases) });
+          allPartsPhrases.set(p.id, new Set(phrases));
         });
     }
 
-    // get the part phrases for the similarToPartId
-    const similarToPart = partsPhrases.get(similarToPartId);
-    if (!similarToPart) res.status(500).json({ error: 'unable to find part or part has no name' });
+    // get the part phrases for the targetPartId
+    const targetPhrases = allPartsPhrases.get(targetPartId);
+    if (!targetPhrases) res.status(500).json({ error: 'unable to find part or part has no name' });
 
     const partsWithPhraseSimilarity = [];
 
     // for every part in catalog
-    for (const [comparePartId, comparePart] of partsPhrases) {
-      if (comparePartId === similarToPartId) continue; // skip the similarToPart
+    for (const [compareId, comparePhrases] of allPartsPhrases) {
+      if (compareId === targetPartId) continue; // skip the targetPhrases
 
-      // find strength of phrases relationship
+      // find positive strength of phrase relationship
       let phraseOverlapStrength = 0;
-      for (const phrase of similarToPart.phrases) {
-        if (comparePart.phrases.has(phrase)) phraseOverlapStrength++;
+      for (const phrase of targetPhrases) {
+        if (comparePhrases.has(phrase)) phraseOverlapStrength += 2;
+      }
+      // find negative strength of phrase relationship
+      for (const phrase of comparePhrases) {
+        if (!targetPhrases.has(phrase)) phraseOverlapStrength--;
       }
 
       // if phrase overlap strength is greater than 1
       phraseOverlapStrength > 1 &&
         partsWithPhraseSimilarity.push({
-          id: comparePartId,
+          id: compareId,
           similarity: phraseOverlapStrength,
         });
     }

@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import { Form } from 'react-bootstrap';
+import styled from 'styled-components';
 import partStore from '../lib/stores/partStore';
 
 export default function PartsSearchInput() {
   const search = partStore((state) => state.search);
   const searchString = partStore((state) => state.searchString);
   const setSearchString = partStore((state) => state.setSearchString);
+  const setIncludePrints = partStore((state) => state.setIncludePrints);
   const inputRef = useRef(null);
 
   const onSearchSubmit = async (e) => {
@@ -17,13 +19,27 @@ export default function PartsSearchInput() {
   };
 
   return (
-    <Form onKeyDown={onSearchSubmit}>
+    <StyledForm onKeyDown={onSearchSubmit}>
       <Form.Control
         value={searchString}
         onChange={(e) => setSearchString(e.target.value)}
         placeholder="Search"
         ref={inputRef}
       />
-    </Form>
+      <Form.Check
+        inline
+        label="prints"
+        type={'checkbox'}
+        onChange={(e) => setIncludePrints(e.target.checked)}
+      />
+    </StyledForm>
   );
 }
+
+const StyledForm = styled(Form)`
+  display: flex;
+  & > * {
+    margin: auto;
+    margin-right: 5px;
+  }
+`;
