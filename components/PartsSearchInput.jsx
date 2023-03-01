@@ -13,7 +13,7 @@ export default function PartsSearchInput() {
   const onSearchSubmit = async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      search();
+      search(searchString);
       inputRef.current.select();
     }
   };

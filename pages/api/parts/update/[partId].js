@@ -2,7 +2,7 @@ const fs = require('fs');
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../../../lib/services/firebase';
 const LOCAL_CATALOG_URL = process.cwd() + `/public/parts_catalog.json`;
-import { validatePart } from '../../../../models/partModel';
+import { updatePart } from '../../../../models/partModel';
 
 // ------------------- UPDATE PART  -------------------
 export default async (req, res) => {
@@ -10,22 +10,7 @@ export default async (req, res) => {
     const { partId } = req.query;
     let part = JSON.parse(req.body);
 
-    // get part data from db
-    const doc = await getDoc(doc(db, 'parts', partId));
-    if (!doc.exists()) {
-      res.status(404).json({ message: 'Part not found' });
-      return;
-    }
-
-    // merge part data from db with part data from request
-    part = { ...doc.data(), ...part };
-
-    // validate part
-    const validatedPart = await validatePart(part);
-    if (validatedPart.error) {
-      res.status(400).json({ message: 'Validation failed', errors: validatedPart.error });
-      return;
-    }
+    const validatedPart = updatePart(part);
 
     // update part in db
     await setDoc(docRef, validatedPart, { merge: true });

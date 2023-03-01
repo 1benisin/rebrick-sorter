@@ -24,14 +24,14 @@ export default function PartsSearchResults({}) {
   const similarResults = partStore((state) => state.similarResults, shallow);
   const similarToPartId = partStore((state) => state.similarToPartId);
 
-  if (searchResults.isLoading)
-    return (
-      <FlexDiv>
-        <Spinner animation="border" />
-        <p>Searching & Updating Parts...</p>
-      </FlexDiv>
-    );
-  if (searchResults.error) return <p>{searchResults.error}</p>;
+  // if (searchResults.isLoading)
+  //   return (
+  //     <FlexDiv>
+  //       <Spinner animation="border" />
+  //       <p>Searching & Updating Parts...</p>
+  //     </FlexDiv>
+  //   );
+  // if (searchResults.error) return <p>{searchResults.error}</p>;
 
   return (
     <>
@@ -48,7 +48,7 @@ export default function PartsSearchResults({}) {
         </Grid>
       )}
       <Grid>
-        {searchResults.data.map((part) => (
+        {searchResults.map((part) => (
           <PartCard key={part.id} part={part}></PartCard>
         ))}
       </Grid>

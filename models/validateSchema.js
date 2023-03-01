@@ -60,10 +60,10 @@ export default function validateSchema(obj, schema, log = false) {
     }
   }
 
-  // remove any properties that are not in the schema
+  // remove any properties that are not in the schema or are null or undefined
   const result = {};
   for (const key in obj) {
-    if (key in schema) result[key] = obj[key];
+    if (key in schema && obj[key] !== null && obj[key] !== undefined) result[key] = obj[key];
   }
   return result;
 }

@@ -1,13 +1,13 @@
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/services/firebase';
 import { refreshParts } from './index';
+import { updatePart } from '../../../models/partModel';
 
 export default async (req, res) => {
-  const { partId } = req.query;
-
   switch (req.method) {
     case 'GET':
       try {
+        const { partId } = req.query;
         const partSnapshot = await getDoc(doc(db, 'parts', partId));
         if (!partSnapshot.exists()) {
           res.status(404).json({ message: 'Part not found' });
@@ -16,12 +16,12 @@ export default async (req, res) => {
 
         let part = partSnapshot.data();
 
-        // validation
-        part = await refreshParts([part]);
-        if (part.error) {
-          res.status(400).json({ message: 'Validation failed', errors: part.error });
-          return;
-        }
+        // // validation
+        // part = await refreshParts([part]);
+        // if (part.error) {
+        //   res.status(400).json({ message: 'Validation failed', errors: part.error });
+        //   return;
+        // }
 
         res.status(200).json(part);
       } catch (error) {
@@ -31,26 +31,14 @@ export default async (req, res) => {
 
     case 'POST':
       try {
-        const docRef = doc(db, 'parts', partId);
-        const partSnapshot = await getDoc(docRef);
-        if (!partSnapshot.exists()) {
-          res.status(404).json({ message: 'Part not found' });
-          return;
-        }
+        let part = req?.body && JSON.parse(req.body);
+        const { partId } = req.query;
 
-        let part = JSON.parse(req.body);
-
-        part = { ...partSnapshot.data(), ...part };
-
-        part = await validatePart(part);
-        if (part.error) {
-          res.status(400).json({ message: 'Validation failed', errors: part.error });
-          return;
-        }
+        const updatedPart = updatePart(partId, part);
 
         await setDoc(docRef, part, { merge: true });
 
-        res.status(201).json({ message: 'Part updated' });
+        res.status(201).json({ message: 'Part updated', part });
       } catch (error) {
         res.status(500).json({ error, message: 'Part post failed' });
       }
