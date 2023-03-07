@@ -7,21 +7,24 @@ import applicationStore from '../lib/stores/applicationStore';
 export default function PartCard({ part }) {
   const findSimilar = partStore((state) => state.findSimilar);
   const similarToPartId = partStore((state) => state.similarToPartId);
+  const setSearchString = partStore((state) => state.setSearchString);
+  const setFocusedPartId = partStore((state) => state.setFocusedPartId);
   const togglePartSidebar = applicationStore((state) => state.togglePartSidebar);
 
   const handleAddButtonClick = (e) => {
     e.stopPropagation();
     console.log('handleAddButtonClick', part);
-    togglePartSidebar(part);
+    setFocusedPartId(part.id);
+    togglePartSidebar();
+  };
+  const handleCardClick = (e) => {
+    console.log(part);
+    setSearchString(part.name);
+    findSimilar(part.id);
   };
 
   return (
-    <Card
-      bg={similarToPartId == part.id ? 'primary' : null}
-      onClick={() => {
-        console.log(part), findSimilar(part.id);
-      }}
-    >
+    <Card bg={similarToPartId == part.id ? 'primary' : null} onClick={handleCardClick}>
       <Image
         src={part.imageUrl || part.thumbnailUrl || '/fallback.webp'}
         alt={part?.name}
