@@ -3,6 +3,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import PartsSearchInput from '../components/PartsSearchInput';
 import PartsSearchResults from '../components/PartsSearchResults';
 import PartSidebar from '../components/PartSidebar';
+import ImageSearchButton from '../components/ImageSearchButton';
 // import '../logic/scrapeBLRelationships';
 
 export default function Catalog() {
@@ -13,6 +14,7 @@ export default function Catalog() {
       </Head>
 
       <ProtectedRoute>
+        <ImageSearchButton />
         <PartSidebar />
         <PartsSearchInput />
         <PartsSearchResults />
