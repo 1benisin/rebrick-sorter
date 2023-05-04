@@ -138,11 +138,11 @@ export default function OptomizeBinGridButton(props) {
     let { sorter1BinCounts, sorter0BinCounts } = data.data();
 
     // convert sorter1BinCounts to an array of abjects containing there index and value
-    let sorter0 = sorter1BinCounts.map((value, index) => {
+    let sortCounts = sorter1BinCounts.map((value, index) => {
       return { index: index + 1, value };
     });
 
-    let sortedValues = sorter0.sort((a, b) => a.value - b.value);
+    let sortedValues = sortCounts.sort((a, b) => a.value - b.value);
 
     const result = printSpiral(binGrid, sortedValues);
     console.log('result', result);

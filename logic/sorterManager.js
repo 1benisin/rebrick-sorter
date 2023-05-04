@@ -1,4 +1,4 @@
-import { sleep } from './utils';
+import { sleep } from '../lib/utils';
 import { emitTest } from './socketManager';
 
 const detecting = false;

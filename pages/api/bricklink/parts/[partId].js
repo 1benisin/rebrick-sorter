@@ -1,6 +1,4 @@
 const OAuth = require('oauth').OAuth;
-import { writeBatch, doc } from 'firebase/firestore';
-import { db } from '../../../../lib/services/firebase';
 
 const colors = null;
 
