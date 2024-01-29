@@ -1,10 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
   images: {
-    domains: ['img.bricklink.com'],
+    domains: [
+      "googleusercontent.com",
+      "oaidalleapiprodscus.blob.core.windows.net",
+      "cdn.openai.com"
+    ]
   },
-};
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
