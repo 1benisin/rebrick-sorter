@@ -1,5 +1,6 @@
+// Camera.tsx:
+
 import React, { useEffect, useState, useRef } from "react";
-import Camera, { CameraDevice } from "@/lib/camera";
 import {
   Select,
   SelectContent,
@@ -9,54 +10,68 @@ import {
 } from "@/components/ui/select";
 
 const CameraComponent = () => {
-  const videoRef = useRef(null);
-  const [cameras, setCameras] = useState<CameraDevice[]>([]);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>(
+    []
+  );
   const [selectedCamera, setSelectedCamera] = useState("");
-  const cameraInstance = useRef<Camera | null>(null);
 
   useEffect(() => {
-    const setupCameras = async () => {
-      if (videoRef.current) {
-        cameraInstance.current = new Camera(videoRef.current);
-        const availableCameras = await cameraInstance.current.getCameras();
-        setCameras(availableCameras);
-        if (availableCameras.length > 0) {
-          setSelectedCamera(availableCameras[0].deviceId);
-          cameraInstance.current.selectCamera(availableCameras[0].deviceId);
+    const getCameras = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(
+          (device) => device.kind === "videoinput"
+        );
+        setCameras(
+          videoDevices.map((device) => ({
+            deviceId: device.deviceId,
+            label: device.label,
+          }))
+        );
+        if (videoDevices.length > 0 && !selectedCamera) {
+          setSelectedCamera(videoDevices[0].deviceId);
+          selectCamera(videoDevices[0].deviceId);
         }
+      } catch (error) {
+        console.error("Error accessing media devices:", error);
       }
     };
 
-    setupCameras();
+    getCameras();
+  }, [selectedCamera]);
 
-    // Cleanup function
-    return () => {
-      if (cameraInstance.current) {
-        cameraInstance.current.stopCamera();
+  const selectCamera = async (cameraId: string) => {
+    if (videoRef.current) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: cameraId },
+        });
+        videoRef.current.srcObject = stream;
+      } catch (error) {
+        console.error("Error accessing the selected camera:", error);
       }
-    };
-  }, []);
-
-  const handleCameraChange = async (
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const cameraId = e.target.value;
-    setSelectedCamera(cameraId);
-
-    if (cameraInstance.current) {
-      await cameraInstance.current.selectCamera(cameraId);
-    } else {
-      console.error("Camera instance is not initialized");
     }
+  };
+
+  const handleCameraChange = async (cameraId: string) => {
+    setSelectedCamera(cameraId);
+    await selectCamera(cameraId);
   };
 
   return (
     <div className="flex flex-col max-w-md mx-auto text-xs">
-      <video ref={videoRef} autoPlay playsInline className="mb-4"></video>
+      <video
+        ref={videoRef}
+        id="video1"
+        autoPlay
+        playsInline
+        className="mb-4"
+      ></video>
 
       <div className="flex w-full items-center ">
         <label htmlFor="cameraSelect">Select Camera:</label>
-        <Select value={selectedCamera} onValueChange={setSelectedCamera}>
+        <Select value={selectedCamera} onValueChange={handleCameraChange}>
           <SelectTrigger className="text-xs">
             <SelectValue />
           </SelectTrigger>

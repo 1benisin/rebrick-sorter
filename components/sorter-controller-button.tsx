@@ -1,17 +1,20 @@
 // sorter-controller-button.jsx
+"use client";
+
 import React, { useEffect, useState } from "react";
 import SorterController, { SorterEvent } from "@/lib/sorter-controller";
 import { Button } from "@/components/ui/button";
 
 const SorterControllerButton = () => {
-  const sorterController = SorterController.getInstance();
-  const [isSorting, setIsSorting] = useState(
-    sorterController.isProcessRunning()
-  );
+  const [sorterController, setSorterController] =
+    useState<SorterController | null>(null);
+  const [isSorting, setIsSorting] = useState(false);
 
   useEffect(() => {
+    const controller = SorterController.getInstance();
+    setSorterController(controller);
     // Sync the state when the component mounts in case the SorterController is already running
-    setIsSorting(sorterController.isProcessRunning());
+    setIsSorting(controller.isProcessRunning());
 
     const handleStop = () => {
       setIsSorting(false);
@@ -22,17 +25,20 @@ const SorterControllerButton = () => {
       console.log("SorterControllerButton: Sorter started");
     };
 
-    sorterController.subscribe(SorterEvent.START, handleStart);
-    sorterController.subscribe(SorterEvent.STOP, handleStop);
+    controller.subscribe(SorterEvent.START, handleStart);
+    controller.subscribe(SorterEvent.STOP, handleStop);
 
     // Cleanup function
     return () => {
-      sorterController.unsubscribe(SorterEvent.START, handleStart);
-      sorterController.unsubscribe(SorterEvent.STOP, handleStop);
+      controller.unsubscribe(SorterEvent.START, handleStart);
+      controller.unsubscribe(SorterEvent.STOP, handleStop);
     };
   }, []);
 
   const handleStartStop = () => {
+    if (!sorterController) {
+      return;
+    }
     if (isSorting) {
       sorterController.stop();
     } else {
