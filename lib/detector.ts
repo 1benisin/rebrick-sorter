@@ -1,7 +1,7 @@
 // detection-model.ts
 
 import * as automl from "@tensorflow/tfjs-automl";
-import * as tf from "@tensorflow/tfjs";
+import "@tensorflow/tfjs-backend-webgl";
 import { sortProcessStore } from "@/stores/sortProcessStore";
 import { ImageCapture } from "./videoCapture";
 import { CLASSIFICATION_DIMENSIONS } from "./classifier";
@@ -11,7 +11,7 @@ const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
 const MAX_DETECTION_DIMENSION = 300;
 
 export type Detection = {
-  canvasEl: HTMLCanvasElement;
+  imageURI: string;
   timestamp: number;
   centroid: [number, number];
   box: {
@@ -30,8 +30,6 @@ export default class Detector {
   // Method to load the model
   async loadModel(): Promise<void> {
     try {
-      await tf.setBackend("webgl");
-      await tf.ready(); // Wait for the backend to be ready
       this.model = await automl.loadObjectDetection(DETECTION_MODEL_URL);
       console.log("Model loaded successfully");
     } catch (error) {
@@ -70,7 +68,7 @@ export default class Detector {
         const croppedCanvasEl = this.cropDetections(imageCapture, prediction);
 
         const detection = {
-          canvasEl: croppedCanvasEl,
+          imageURI: croppedCanvasEl.toDataURL(),
           timestamp: imageCapture.timestamp,
           centroid: [
             prediction.box.left + prediction.box.width / 2,

@@ -34,6 +34,9 @@ export default class SortProcessController {
       // Detect objects in the image
       const detections = await this.detector.detect(imageCapture);
       console.log("Detections:", detections);
+      for (const detection of detections) {
+        sortProcessStore.getState().addDetectionImageURI(detection.imageURI);
+      }
     } catch (error) {
       console.error("Error during process:", error);
       sortProcessStore
@@ -42,11 +45,10 @@ export default class SortProcessController {
       this.stop();
     }
 
-    // Simulate some work with a delay
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-
     // Check if we should continue running after the delay
     if (sortProcessStore.getState().isRunning) {
+      // Simulate some work with a delay
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       this.runProcess();
     }
   }
