@@ -8,14 +8,13 @@ export type ImageCapture = {
 };
 
 export default class VideoCapture {
-  private videoElement: HTMLVideoElement;
   private canvasElement: HTMLCanvasElement;
   public videoId: string;
 
   constructor(videoId: string) {
     this.videoId = videoId;
-    this.videoElement = document.getElementById(videoId) as HTMLVideoElement;
-    if (!this.videoElement) {
+    const videoElement = document.getElementById(videoId) as HTMLVideoElement;
+    if (!videoElement) {
       const error = "Video element not found: " + videoId;
       sortProcessStore.getState().addError(error);
       throw new Error(error);
@@ -24,13 +23,17 @@ export default class VideoCapture {
   }
 
   captureImage(): ImageCapture {
-    if (this.videoElement.srcObject) {
-      this.canvasElement.width = this.videoElement.videoWidth;
-      this.canvasElement.height = this.videoElement.videoHeight;
+    const videoElement = document.getElementById(
+      this.videoId
+    ) as HTMLVideoElement;
+    // Check if the video element is in a state ready to be captured:  2 = HAVE_CURRENT_DATA
+    if (videoElement.readyState >= 2) {
+      this.canvasElement.width = videoElement.videoWidth;
+      this.canvasElement.height = videoElement.videoHeight;
       const context = this.canvasElement.getContext("2d");
       if (context) {
         context.drawImage(
-          this.videoElement,
+          videoElement,
           0,
           0,
           this.canvasElement.width,

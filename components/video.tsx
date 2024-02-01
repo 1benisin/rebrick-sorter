@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+const TEST_VIDEO_PATH = "/test-videos/normal.mp4";
 
 const Video = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -43,13 +44,19 @@ const Video = () => {
 
   const selectCamera = async (cameraId: string) => {
     if (videoRef.current) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: cameraId },
-        });
-        videoRef.current.srcObject = stream;
-      } catch (error) {
-        console.error("Error accessing the selected camera:", error);
+      if (cameraId === "test-video") {
+        videoRef.current.srcObject = null;
+        videoRef.current.src = TEST_VIDEO_PATH; // Adjust the path to your test video
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: cameraId },
+          });
+          videoRef.current.src = "";
+          videoRef.current.srcObject = stream;
+        } catch (error) {
+          console.error("Error accessing the selected camera:", error);
+        }
       }
     }
   };
@@ -65,6 +72,7 @@ const Video = () => {
         ref={videoRef}
         id="video1"
         autoPlay
+        loop
         playsInline
         className="mb-4"
       ></video>
@@ -85,6 +93,13 @@ const Video = () => {
                 {camera.label || `Camera ${camera.deviceId}`}
               </SelectItem>
             ))}
+            <SelectItem
+              key={"test-video"}
+              value={"test-video"}
+              className="text-xs"
+            >
+              Test Video
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>

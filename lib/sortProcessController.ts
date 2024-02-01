@@ -2,6 +2,7 @@
 import VideoCapture, { ImageCapture } from "./videoCapture"; // Adjust the import path as needed
 import Detector from "./detector"; // Adjust the import path as needed
 import { sortProcessStore } from "@/stores/sortProcessStore";
+const MIN_PROCESS_LOOP_TIME = 1000;
 
 export default class SortProcessController {
   private static instance: SortProcessController;
@@ -26,6 +27,7 @@ export default class SortProcessController {
   }
 
   private async runProcess() {
+    const startTime = Date.now();
     console.log("Process running...");
     try {
       // Capture an image from the camera
@@ -47,8 +49,13 @@ export default class SortProcessController {
 
     // Check if we should continue running after the delay
     if (sortProcessStore.getState().isRunning) {
-      // Simulate some work with a delay
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Ensure the process loop takes at least MIN_PROCESS_LOOP_TIME
+      if (Date.now() - startTime < MIN_PROCESS_LOOP_TIME) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, MIN_PROCESS_LOOP_TIME - (Date.now() - startTime))
+        );
+      }
+      // Continue looping the process
       this.runProcess();
     }
   }

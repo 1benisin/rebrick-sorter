@@ -31,6 +31,19 @@ export default class Detector {
   async loadModel(): Promise<void> {
     try {
       this.model = await automl.loadObjectDetection(DETECTION_MODEL_URL);
+
+      // prime model for faster first detection
+      const img = new Image();
+      img.width = 299;
+      img.height = 299;
+      img.src = "/prime_model_image.jpg";
+      const primeCanvas = document.createElement("canvas");
+      primeCanvas.width = 299;
+      primeCanvas.height = 299;
+      const ctx = primeCanvas.getContext("2d") as CanvasRenderingContext2D;
+      ctx.drawImage(img, 0, 0, primeCanvas.width, primeCanvas.height);
+      await await this.model.detect(primeCanvas, DETECTION_OPTIONS);
+
       console.log("Model loaded successfully");
     } catch (error) {
       const message = "Error loading model: " + error;
@@ -58,6 +71,19 @@ export default class Detector {
         scaledCanvas,
         DETECTION_OPTIONS
       );
+
+      // log canvass sizes
+      console.log(
+        "Original canvas size: ",
+        imageCapture.canvas.width,
+        imageCapture.canvas.height
+      );
+      console.log(
+        "Scaled canvas size: ",
+        scaledCanvas.width,
+        scaledCanvas.height
+      );
+      console.log("Scalar: ", scalar);
 
       // scale up predictions to original image size
       const scaledPredictions = this.scaleUpPredictions(predictions, scalar);
@@ -111,12 +137,17 @@ export default class Detector {
     predictions: automl.PredictedObject[],
     scalar: number
   ): automl.PredictedObject[] {
+    // scalar is .33 and i want to scall up prediction box
     return predictions.map((p) => {
-      p.box.left *= scalar;
-      p.box.top *= scalar;
-      p.box.width *= scalar;
-      p.box.height *= scalar;
-      return p;
+      return {
+        ...p,
+        box: {
+          left: p.box.left / scalar,
+          top: p.box.top / scalar,
+          width: p.box.width / scalar,
+          height: p.box.height / scalar,
+        },
+      };
     });
   }
 
