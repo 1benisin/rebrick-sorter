@@ -2,7 +2,7 @@
 
 import Camera from "@/components/video";
 import SorterControllerButton from "@/components/sorterControllerButton";
-import ErrorDisplay from "@/components/errorDisplay";
+import ErrorDisplay from "@/components/ErrorDisplay";
 import DetectionImageRow from "@/components/DetectionImageRow";
 
 const SortPage = () => {

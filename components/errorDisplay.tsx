@@ -31,7 +31,7 @@ const ErrorDisplay = () => {
               </div>
               <Button
                 onClick={() => clearError(index)}
-                variant="plain"
+                variant="ghost"
                 size="sm"
                 title="Clear error"
               >

@@ -5,22 +5,11 @@ import "@tensorflow/tfjs-backend-webgl";
 import { sortProcessStore } from "@/stores/sortProcessStore";
 import { ImageCapture } from "./videoCapture";
 import { CLASSIFICATION_DIMENSIONS } from "./classifier";
+import { Detection } from "@/types/sortTypes";
 
 const DETECTION_MODEL_URL = "/detection-model/model.json";
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
 const MAX_DETECTION_DIMENSION = 300;
-
-export type Detection = {
-  imageURI: string;
-  timestamp: number;
-  centroid: [number, number];
-  box: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  };
-};
 
 export default class Detector {
   private model: automl.ObjectDetectionModel | null = null;
@@ -71,19 +60,6 @@ export default class Detector {
         scaledCanvas,
         DETECTION_OPTIONS
       );
-
-      // log canvass sizes
-      console.log(
-        "Original canvas size: ",
-        imageCapture.canvas.width,
-        imageCapture.canvas.height
-      );
-      console.log(
-        "Scaled canvas size: ",
-        scaledCanvas.width,
-        scaledCanvas.height
-      );
-      console.log("Scalar: ", scalar);
 
       // scale up predictions to original image size
       const scaledPredictions = this.scaleUpPredictions(predictions, scalar);

@@ -1,7 +1,9 @@
 // sortProcessController.ts
-import VideoCapture, { ImageCapture } from "./videoCapture"; // Adjust the import path as needed
+import VideoCapture from "./videoCapture"; // Adjust the import path as needed
 import Detector from "./detector"; // Adjust the import path as needed
 import { sortProcessStore } from "@/stores/sortProcessStore";
+import Classifier from "./classifier";
+
 const MIN_PROCESS_LOOP_TIME = 1000;
 
 export default class SortProcessController {
@@ -36,8 +38,13 @@ export default class SortProcessController {
       // Detect objects in the image
       const detections = await this.detector.detect(imageCapture);
       console.log("Detections:", detections);
+
       for (const detection of detections) {
+        // Add the detection to the store for display
         sortProcessStore.getState().addDetectionImageURI(detection.imageURI);
+        // add classification to the store
+        const classification = await Classifier.classify(detection.imageURI);
+        console.log("Classification:", classification);
       }
     } catch (error) {
       console.error("Error during process:", error);
