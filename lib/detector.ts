@@ -5,7 +5,7 @@ import "@tensorflow/tfjs-backend-webgl";
 import { sortProcessStore } from "@/stores/sortProcessStore";
 import { ImageCapture } from "./videoCapture";
 import { CLASSIFICATION_DIMENSIONS } from "./classifier";
-import { Detection } from "@/types/sortTypes";
+import { Detection } from "@/types";
 
 const DETECTION_MODEL_URL = "/detection-model/model.json";
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
