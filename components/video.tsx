@@ -70,7 +70,7 @@ const Video = () => {
     <div className="flex flex-col max-w-md mx-auto text-xs">
       <video
         ref={videoRef}
-        id="video1"
+        id="video"
         autoPlay
         loop
         playsInline

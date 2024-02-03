@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import NavBar from "@/components/navbar";
+import AlertDisplay from "@/components/AlertDisplay";
 
 import "./globals.css";
 
@@ -20,6 +21,7 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={font.className}>
         <NavBar />
+        <AlertDisplay />
         {children}
       </body>
     </html>

@@ -2,28 +2,28 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import SorterController from "@/lib/sortProcessController";
+import SortProcessCtrl from "@/lib/sortProcessCtrl";
 import { Button } from "@/components/ui/button";
 import { sortProcessStore } from "@/stores/sortProcessStore";
 
-const SorterControllerButton = () => {
-  const [sorterController, setSorterController] =
-    useState<SorterController | null>(null);
+const SortProcessCtrlButton = () => {
+  const [localSortProcessCtrl, setLocalSortProcessCtrl] =
+    useState<SortProcessCtrl | null>(null);
   const { isRunning } = sortProcessStore();
 
   useEffect(() => {
-    const controller = SorterController.getInstance();
-    setSorterController(controller);
+    const controller = SortProcessCtrl.getInstance();
+    setLocalSortProcessCtrl(controller);
   }, []);
 
   const handleStartStop = () => {
-    if (!sorterController) {
+    if (!localSortProcessCtrl) {
       return;
     }
     if (isRunning) {
-      sorterController.stop();
+      localSortProcessCtrl.stop();
     } else {
-      sorterController.start();
+      localSortProcessCtrl.start();
     }
   };
 
@@ -42,4 +42,4 @@ const SorterControllerButton = () => {
   );
 };
 
-export default SorterControllerButton;
+export default SortProcessCtrlButton;

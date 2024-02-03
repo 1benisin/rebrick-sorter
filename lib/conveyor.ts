@@ -1,5 +1,5 @@
 // Conveyor.ts
-import { Detection } from "./sortProcessController";
+import { Detection } from "./sortProcessCtrl";
 
 export class Conveyor {
   private detections: Detection[] = [];

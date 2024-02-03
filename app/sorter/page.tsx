@@ -1,8 +1,7 @@
 "use client";
 
-import Camera from "@/components/video";
+import Video from "@/components/Video";
 import SorterControllerButton from "@/components/sorterControllerButton";
-import ErrorDisplay from "@/components/ErrorDisplay";
 import DetectionImageRow from "@/components/DetectionImageRow";
 
 const SortPage = () => {
@@ -10,8 +9,7 @@ const SortPage = () => {
     <div>
       <h1>Sorter</h1>
       <div className="px-4 lg:px-8">
-        <ErrorDisplay />
-        <Camera />
+        <Video />
         <div className="flex justify-center mt-4">
           <SorterControllerButton />
         </div>

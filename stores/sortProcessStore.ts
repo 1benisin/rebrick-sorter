@@ -7,11 +7,6 @@ interface SortProcessState {
   isRunning: boolean;
   setIsRunning: (isRunning: boolean) => void;
   // ---
-  errors: string[];
-  addError: (error: string) => void;
-  clearErrors: () => void;
-  clearError: (index: number) => void;
-  // ---
   detectionImageURIs: string[];
   addDetectionImageURI: (url: string) => void;
 }
@@ -19,15 +14,6 @@ interface SortProcessState {
 export const sortProcessStore = create<SortProcessState>((set) => ({
   isRunning: false,
   setIsRunning: (isRunning: boolean) => set({ isRunning }),
-  // ---
-  errors: [],
-  addError: (error: string) =>
-    set((state) => ({ errors: [...state.errors, error] })),
-  clearErrors: () => set({ errors: [] }),
-  clearError: (index: number) =>
-    set((state) => ({
-      errors: state.errors.filter((_, i) => i !== index),
-    })),
   // ---
   detectionImageURIs: [],
   addDetectionImageURI: (url: string) =>

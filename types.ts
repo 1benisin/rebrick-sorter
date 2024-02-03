@@ -13,14 +13,16 @@ export const sorterSchema = z.object({
 export type Sorter = z.infer<typeof sorterSchema>;
 
 // Define Zod schema for the settings document
+// sorters can be an array of sorterSchema or empty
 export const settingsSchema = z.object({
-  conveyorVelocity: z.number(),
-  sorters: z.array(sorterSchema),
+  conveyorSpeed: z.number(),
+  detectDistanceThreshold: z.number(),
+  sorters: z.array(sorterSchema).optional(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
 export type Detection = {
-  imageURI: string;
+  imageURI?: string;
   timestamp: number;
   centroid: [number, number];
   box: {
@@ -29,4 +31,11 @@ export type Detection = {
     width: number;
     height: number;
   };
+};
+
+export type Alert = {
+  type: "error" | "update";
+  message: string;
+  timestamp: number;
+  title?: string;
 };

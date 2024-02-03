@@ -7,27 +7,45 @@ import SorterSettings from "@/components/SorterSettings";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import Video from "@/components/Video";
+import Detector from "@/lib/detector";
+import { alertStore } from "@/stores/alertStore";
 
 const SettingsPage = () => {
   const {
-    conveyorVelocity,
-    setConveyorVelocity,
+    conveyorSpeed,
+    setConveyorSpeed,
+    detectDistanceThreshold,
+    setDetectDistanceThreshold,
     sorters,
     addSorterAtIndex,
     removeSorterAtIndex,
     saveSettings,
     loaded,
+    saved,
   } = settingsStore();
+  const addAlert = alertStore((state) => state.addAlert);
 
-  // Local state for form elements to avoid direct store manipulation on each keystroke
-  const [localConveyorVelocity, setLocalConveyorVelocity] =
-    useState(conveyorVelocity);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCalibrating, setIsCalibrating] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [localDetector, setLocalDetector] = useState<Detector | null>(null);
 
   useEffect(() => {
-    setLocalConveyorVelocity(conveyorVelocity);
-  }, [conveyorVelocity]);
+    const detector = Detector.getInstance();
+    setLocalDetector(detector);
+  }, []);
+
+  const handleCalibrate = () => {
+    if (!localDetector) {
+      return;
+    }
+    setIsCalibrating(true);
+    localDetector.calibrateConveyorSpeed().then((result) => {
+      console.log("Calibration result:", result);
+      setIsCalibrating(false);
+    });
+  };
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
@@ -50,18 +68,41 @@ const SettingsPage = () => {
       <p className={`${loaded ? "text-green-500" : "text-red-500"}`}>
         {loaded ? "Settings loaded" : "Loading settings..."}
       </p>
+      <Video />
+      <div className="flex items-center">
+        <div>
+          <Label htmlFor="conveyorSpeed" className="block mb-2">
+            Conveyor Velocity (pixels/second):
+          </Label>
+          <Input
+            id="conveyorSpeed"
+            type="number"
+            className="border px-2 py-1"
+            value={conveyorSpeed}
+            onChange={(e) => setConveyorSpeed(Number(e.target.value))}
+          />
+        </div>
+
+        <Button
+          className="ml-4 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+          variant={isCalibrating ? "outline" : "default"}
+          onClick={handleCalibrate}
+          disabled={isCalibrating}
+        >
+          {isCalibrating ? "Calibrating..." : "Calibrate"}
+        </Button>
+      </div>
 
       <div>
-        <Label htmlFor="conveyorVelocity" className="block mb-2">
-          Conveyor Velocity (pixels/second):
+        <Label htmlFor="detectDistanceThreshold" className="block mb-2">
+          Detection Distance Threshhold (pixels):
         </Label>
         <Input
-          id="conveyorVelocity"
+          id="detectDistanceThreshold"
           type="number"
           className="border px-2 py-1"
-          value={localConveyorVelocity}
-          onChange={(e) => setLocalConveyorVelocity(Number(e.target.value))}
-          onBlur={() => setConveyorVelocity(localConveyorVelocity)} // Update store on input blur
+          value={detectDistanceThreshold}
+          onChange={(e) => setDetectDistanceThreshold(Number(e.target.value))}
         />
       </div>
 
@@ -87,13 +128,38 @@ const SettingsPage = () => {
             className="ml-4 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
             variant={isSaving ? "outline" : "default"}
             onClick={handleSaveSettings}
-            disabled={isSaving}
+            disabled={isSaving || saved}
           >
             {isSaving ? "Saving..." : "Save Settings"}
           </Button>
           {successMessage && (
             <span className="ml-4 text-green-500">{successMessage}</span>
           )}
+
+          <Button
+            onClick={() => {
+              console.log("test alert");
+              addAlert({
+                type: "update",
+                message: "test alert",
+                timestamp: Date.now(),
+              });
+            }}
+          >
+            test
+          </Button>
+          <Button
+            onClick={() => {
+              console.log("test alert");
+              addAlert({
+                type: "error",
+                message: "test alert",
+                timestamp: Date.now(),
+              });
+            }}
+          >
+            test
+          </Button>
         </div>
       </div>
     </div>
