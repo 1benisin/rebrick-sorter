@@ -2,22 +2,44 @@
 
 import * as automl from "@tensorflow/tfjs-automl";
 import "@tensorflow/tfjs-backend-webgl";
-import { sortProcessStore } from "@/stores/sortProcessStore";
-import { ImageCapture } from "./videoCapture";
+import { alertStore } from "@/stores/alertStore";
+import { settingsStore } from "@/stores/settingsStore";
 import { CLASSIFICATION_DIMENSIONS } from "./classifier";
 import { Detection } from "@/types";
+import VideoCapture from "./videoCapture";
 
 const DETECTION_MODEL_URL = "/detection-model/model.json";
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
 const MAX_DETECTION_DIMENSION = 300;
+const CALIBRATION_SAMPLE_COUNT = 10;
 
 export default class Detector {
+  private static instance: Detector;
   private model: automl.ObjectDetectionModel | null = null;
+  private videoCapture: VideoCapture | null = null;
+  // videoId default value is "video"
+  private constructor(videoId = "video") {
+    this.loadModel();
+    this.loadVideoCapture(videoId);
+  }
 
-  constructor() {}
+  public static getInstance(): Detector {
+    if (!Detector.instance) {
+      Detector.instance = new Detector();
+    }
+    return Detector.instance;
+  }
+
+  // Methode to load VideoCapture
+  public loadVideoCapture(videoId: string): void {
+    this.videoCapture = new VideoCapture(videoId);
+  }
 
   // Method to load the model
   async loadModel(): Promise<void> {
+    if (this.model) {
+      return;
+    }
     try {
       this.model = await automl.loadObjectDetection(DETECTION_MODEL_URL);
 
@@ -31,30 +53,91 @@ export default class Detector {
       primeCanvas.height = 299;
       const ctx = primeCanvas.getContext("2d") as CanvasRenderingContext2D;
       ctx.drawImage(img, 0, 0, primeCanvas.width, primeCanvas.height);
-      await await this.model.detect(primeCanvas, DETECTION_OPTIONS);
+      await this.model.detect(primeCanvas, DETECTION_OPTIONS);
 
       console.log("Model loaded successfully");
     } catch (error) {
       const message = "Error loading model: " + error;
-      sortProcessStore.getState().addError(message);
+      alertStore
+        .getState()
+        .addAlert({ type: "error", message, timestamp: Date.now() });
+      throw new Error(message);
+    }
+  }
+
+  // Method to calibrate conveyor velocity
+  public async calibrateConveyorSpeed(): Promise<void> {
+    try {
+      if (!this.model) {
+        const error = "Model not loaded. Call loadModel() first.";
+        alertStore
+          .getState()
+          .addAlert({ type: "error", message: error, timestamp: Date.now() });
+        throw new Error(error);
+      }
+
+      // loop until we have enough distance samples
+      let distances = [];
+      let lastPosition = null;
+      while (distances.length < CALIBRATION_SAMPLE_COUNT) {
+        const detections = await this.detect();
+        if (detections.length === 0) continue;
+        // get the dection with the dentroid furthest to the right
+        const nextDetection = detections.reduce((acc, detection) => {
+          return acc.centroid[0] > detection.centroid[0] ? acc : detection;
+        });
+        // if first detection or nextDetection is to the left of the last detection
+        if (
+          lastPosition === null ||
+          nextDetection.centroid[0] < lastPosition[0]
+        ) {
+          lastPosition = detections[0].centroid;
+        } else {
+          // add the distance between the last detection and the next detection
+          distances.push(nextDetection.centroid[0] - lastPosition[0]);
+          lastPosition = nextDetection.centroid;
+        }
+      }
+      // return median distance
+      distances.sort((a, b) => a - b);
+      const conveyorSpeed = distances[Math.floor(distances.length / 2)];
+      settingsStore.getState().setConveyorSpeed(conveyorSpeed);
+    } catch (error) {
+      const message = "Error during calibration: " + error;
+      console.error(message);
+      alertStore
+        .getState()
+        .addAlert({ type: "error", message, timestamp: Date.now() });
       throw new Error(message);
     }
   }
 
   // Method to detect objects in an image
-  async detect(imageCapture: ImageCapture): Promise<Detection[]> {
+  public async detect(): Promise<Detection[]> {
+    // Check if videoCapture is loaded
+    if (!this.videoCapture) {
+      const error = "VideoCapture not loaded. Call loadVideoCapture() first.";
+      alertStore
+        .getState()
+        .addAlert({ type: "error", message: error, timestamp: Date.now() });
+      throw new Error(error);
+    }
     // Check if model is loaded
     if (!this.model) {
       const error = "Model not loaded. Call loadModel() first.";
-      sortProcessStore.getState().addError(error);
+      alertStore
+        .getState()
+        .addAlert({ type: "error", message: error, timestamp: Date.now() });
       throw new Error(error);
     }
 
     try {
+      // Capture an image from the camera
+      const imageCapture = this.videoCapture.captureImage();
+
       // scale down original image to speed up detection
-      const { canvas: scaledCanvas, scalar } = this.scaleDownCanvas(
-        imageCapture.canvas
-      );
+      const scalar = Detector.getCanvasScalar(imageCapture.canvas);
+      const scaledCanvas = this.scaleDownCanvas(imageCapture.canvas, scalar);
 
       const predictions = await this.model.detect(
         scaledCanvas,
@@ -66,11 +149,17 @@ export default class Detector {
 
       // crop detections from original image
       // and create Detection objects
+      // create a canvas once to crop the detection
+      const cropCanvas = document.createElement("canvas");
       const detections = scaledPredictions.map((prediction) => {
-        const croppedCanvasEl = this.cropDetections(imageCapture, prediction);
+        const detectionImageURI = this.getCroppedImageURI(
+          imageCapture.canvas,
+          cropCanvas,
+          prediction
+        );
 
         const detection = {
-          imageURI: croppedCanvasEl.toDataURL(),
+          imageURI: detectionImageURI,
           timestamp: imageCapture.timestamp,
           centroid: [
             prediction.box.left + prediction.box.width / 2,
@@ -85,28 +174,36 @@ export default class Detector {
     } catch (error) {
       const message = "Error during detection: " + error;
       console.error(message);
-      sortProcessStore.getState().addError(message);
-      return [];
+      alertStore
+        .getState()
+        .addAlert({ type: "error", message, timestamp: Date.now() });
+      throw new Error(message);
     }
   }
 
-  private scaleDownCanvas(canvas: HTMLCanvasElement): {
-    canvas: HTMLCanvasElement;
-    scalar: number;
-  } {
-    // scale down image if it is too large
+  public static getCanvasScalar(canvas: HTMLCanvasElement): number {
     const { width, height } = canvas;
     const scalar = Math.min(
       1,
       MAX_DETECTION_DIMENSION / Math.max(width, height)
     );
 
+    return scalar;
+  }
+
+  private scaleDownCanvas(
+    canvas: HTMLCanvasElement,
+    scalar: number
+  ): HTMLCanvasElement {
+    // scale down image if it is too large
+    const { width, height } = canvas;
+
     const scaledCanvas = document.createElement("canvas");
     scaledCanvas.width = width * scalar;
     scaledCanvas.height = height * scalar;
     const ctx = scaledCanvas.getContext("2d") as CanvasRenderingContext2D;
     ctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-    return { canvas: scaledCanvas, scalar };
+    return scaledCanvas;
   }
 
   private scaleUpPredictions(
@@ -128,10 +225,11 @@ export default class Detector {
   }
 
   // Method to crop square detection images from an image
-  private cropDetections(
-    imageCapture: ImageCapture,
+  private getCroppedImageURI(
+    canvas: HTMLCanvasElement,
+    cropCanvas: HTMLCanvasElement,
     detection: automl.PredictedObject
-  ): HTMLCanvasElement {
+  ): string {
     // get centroid at detection size
     let { left, top, width, height } = detection.box;
     const centroid = [left + width / 2, top + height / 2];
@@ -142,12 +240,11 @@ export default class Detector {
         : [left - (height - width) / 2, top, height, height];
 
     // create cropped imgUrl
-    const cropCanvas = document.createElement("canvas");
     cropCanvas.width = CLASSIFICATION_DIMENSIONS.width;
     cropCanvas.height = CLASSIFICATION_DIMENSIONS.height;
     const ctx = cropCanvas.getContext("2d") as CanvasRenderingContext2D;
     ctx.drawImage(
-      imageCapture.canvas,
+      canvas,
       left,
       top,
       width,
@@ -158,6 +255,6 @@ export default class Detector {
       cropCanvas.height
     );
 
-    return cropCanvas;
+    return cropCanvas.toDataURL("image/jpeg");
   }
 }
