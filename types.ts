@@ -22,15 +22,16 @@ export const settingsSchema = z.object({
 export type Settings = z.infer<typeof settingsSchema>;
 
 export type Detection = {
-  imageURI?: string;
+  view: "top" | "side";
   timestamp: number;
-  centroid: [number, number];
+  centroid: { x: number; y: number };
   box: {
     left: number;
     top: number;
     width: number;
     height: number;
   };
+  imageURI?: string;
 };
 
 export type Alert = {

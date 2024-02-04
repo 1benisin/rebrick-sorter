@@ -31,7 +31,7 @@ export default class Detector {
   }
 
   // Methode to load VideoCapture
-  public loadVideoCapture(videoId: string): void {
+  public loadVideoCapture(videoId = "video"): void {
     this.videoCapture = new VideoCapture(videoId);
   }
 
@@ -84,17 +84,17 @@ export default class Detector {
         if (detections.length === 0) continue;
         // get the dection with the dentroid furthest to the right
         const nextDetection = detections.reduce((acc, detection) => {
-          return acc.centroid[0] > detection.centroid[0] ? acc : detection;
+          return acc.centroid.x > detection.centroid.x ? acc : detection;
         });
         // if first detection or nextDetection is to the left of the last detection
         if (
           lastPosition === null ||
-          nextDetection.centroid[0] < lastPosition[0]
+          nextDetection.centroid.x < lastPosition.x
         ) {
           lastPosition = detections[0].centroid;
         } else {
           // add the distance between the last detection and the next detection
-          distances.push(nextDetection.centroid[0] - lastPosition[0]);
+          distances.push(nextDetection.centroid.x - lastPosition.x);
           lastPosition = nextDetection.centroid;
         }
       }
@@ -159,12 +159,13 @@ export default class Detector {
         );
 
         const detection = {
+          view: "top",
           imageURI: detectionImageURI,
           timestamp: imageCapture.timestamp,
-          centroid: [
-            prediction.box.left + prediction.box.width / 2,
-            prediction.box.top + prediction.box.height / 2,
-          ],
+          centroid: {
+            x: prediction.box.left + prediction.box.width / 2,
+            y: prediction.box.top + prediction.box.height / 2,
+          },
           box: prediction.box,
         } as Detection;
         return detection;

@@ -5,13 +5,7 @@ import { Sorter } from "@/types";
 import { db } from "@/services/firestore";
 import { settingsSchema } from "@/types";
 import { alertStore } from "./alertStore";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  deleteField,
-} from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 interface SettingsState {
   // Conveyor settings
