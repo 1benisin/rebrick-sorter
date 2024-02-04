@@ -1,6 +1,6 @@
 // AlertStore.ts
-import { create } from "zustand";
-import { Alert } from "@/types";
+import { create } from 'zustand';
+import { Alert } from '@/types';
 
 interface AlertState {
   alertList: Alert[];
@@ -16,22 +16,19 @@ export const alertStore = create<AlertState>((set, get) => ({
   addAlert: (alert) => {
     set((state) => {
       // set a timeout to clear the alert after 5 seconds if it's not an error
-      if (alert.type !== "error") {
+      if (alert.type !== 'error') {
         setTimeout(() => {
           get().clearAlertAtTimestamp(alert.timestamp);
         }, CLEAR_ALERT_UPDATE_TIMEOUT);
       }
       const newAlertList = [...state.alertList, alert];
-      console.log("newAlertList", newAlertList);
       return { alertList: newAlertList };
     });
   },
   clearAlertList: () => set({ alertList: [] }),
   clearAlertAtTimestamp: (timestamp) => {
     set((state) => {
-      const newAlertList = state.alertList.filter(
-        (alert) => alert.timestamp !== timestamp
-      );
+      const newAlertList = state.alertList.filter((alert) => alert.timestamp !== timestamp);
       return { alertList: newAlertList };
     });
   },

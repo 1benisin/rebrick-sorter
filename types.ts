@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Define Zod schema for sorter
 export const sorterSchema = z.object({
@@ -15,14 +15,14 @@ export type Sorter = z.infer<typeof sorterSchema>;
 // Define Zod schema for the settings document
 // sorters can be an array of sorterSchema or empty
 export const settingsSchema = z.object({
-  conveyorSpeed: z.number(),
+  conveyorSpeed_PPS: z.number(),
   detectDistanceThreshold: z.number(),
   sorters: z.array(sorterSchema).optional(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
 export type Detection = {
-  view: "top" | "side";
+  view: 'top' | 'side';
   timestamp: number;
   centroid: { x: number; y: number };
   box: {
@@ -35,7 +35,7 @@ export type Detection = {
 };
 
 export type Alert = {
-  type: "error" | "update";
+  type: 'error' | 'update';
   message: string;
   timestamp: number;
   title?: string;

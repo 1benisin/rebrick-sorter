@@ -1,6 +1,6 @@
 // sortProcessStore.ts
-import { create } from "zustand";
-import { Detection } from "@/types";
+import { create } from 'zustand';
+import { Detection } from '@/types';
 
 const MAX_DETECTION_IMAGES = 20;
 
@@ -14,12 +14,9 @@ interface SortProcessState {
   // ---
   topViewDetectGroups: Detection[][];
   sideViewDetectGroups: Detection[][];
-  newDetectGroup: (group: "top" | "side", detectionGroup: Detection[]) => void;
-  addDetectionGroup: (
-    group: "top" | "side",
-    index: number,
-    detection: Detection
-  ) => void;
+  newDetectGroup: (group: 'top' | 'side', detectionGroup: Detection[]) => void;
+  addDetectionGroup: (group: 'top' | 'side', index: number, detection: Detection) => void;
+  clearDetectionGroups: () => void;
 }
 
 export const sortProcessStore = create<SortProcessState>((set) => ({
@@ -29,30 +26,24 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   detectionImageURIs: [],
   addDetectionImageURI: (url: string) =>
     set((state) => ({
-      detectionImageURIs: [
-        ...state.detectionImageURIs.slice(-MAX_DETECTION_IMAGES + 1),
-        url,
-      ],
+      detectionImageURIs: [...state.detectionImageURIs.slice(-MAX_DETECTION_IMAGES + 1), url],
     })),
 
   // --- Detection Groups
   topViewDetectGroups: [],
   sideViewDetectGroups: [],
-  newDetectGroup: (group: "top" | "side", detectionGroup: Detection[]) =>
+  newDetectGroup: (group: 'top' | 'side', detectionGroup: Detection[]) =>
     set((state) => {
       const key = `${group}ViewDetectGroups` as keyof SortProcessState; // Assert that the key is a valid key of SortProcessState
       const groups = state[key] as Detection[][]; // Assert the type of the state property
       return { ...state, [key]: [...groups, detectionGroup] };
     }),
-  addDetectionGroup: (
-    group: "top" | "side",
-    index: number,
-    detection: Detection
-  ) =>
+  addDetectionGroup: (group: 'top' | 'side', index: number, detection: Detection) =>
     set((state) => {
       const key = `${group}ViewDetectGroups` as keyof SortProcessState;
       const groups = state[key] as Detection[][];
       groups[index].push(detection);
       return { ...state, [key]: [...groups] };
     }),
+  clearDetectionGroups: () => set({ topViewDetectGroups: [], sideViewDetectGroups: [] }),
 }));

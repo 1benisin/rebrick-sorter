@@ -1,41 +1,31 @@
 // video.tsx:
 
-import React, { useEffect, useState, useRef } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-const TEST_VIDEO_PATH = "/test-videos/normal.mp4";
+import React, { useEffect, useState, useRef } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+const TEST_VIDEO_PATH = '/test-videos/normal.mp4';
 
 const Video = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>(
-    []
-  );
-  const [selectedCamera, setSelectedCamera] = useState("");
+  const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState('');
 
   useEffect(() => {
     const getCameras = async () => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(
-          (device) => device.kind === "videoinput"
-        );
+        const videoDevices = devices.filter((device) => device.kind === 'videoinput');
         setCameras(
           videoDevices.map((device) => ({
             deviceId: device.deviceId,
             label: device.label,
-          }))
+          })),
         );
         if (videoDevices.length > 0 && !selectedCamera) {
           setSelectedCamera(videoDevices[0].deviceId);
           selectCamera(videoDevices[0].deviceId);
         }
       } catch (error) {
-        console.error("Error accessing media devices:", error);
+        console.error('Error accessing media devices:', error);
       }
     };
 
@@ -44,18 +34,19 @@ const Video = () => {
 
   const selectCamera = async (cameraId: string) => {
     if (videoRef.current) {
-      if (cameraId === "test-video") {
+      if (cameraId === 'test-video') {
         videoRef.current.srcObject = null;
         videoRef.current.src = TEST_VIDEO_PATH; // Adjust the path to your test video
+        videoRef.current.playbackRate = 0.5; // Play video at half speed
       } else {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: { deviceId: cameraId },
           });
-          videoRef.current.src = "";
+          videoRef.current.src = '';
           videoRef.current.srcObject = stream;
         } catch (error) {
-          console.error("Error accessing the selected camera:", error);
+          console.error('Error accessing the selected camera:', error);
         }
       }
     }
@@ -68,14 +59,7 @@ const Video = () => {
 
   return (
     <div className="flex flex-col max-w-md mx-auto text-xs">
-      <video
-        ref={videoRef}
-        id="video"
-        autoPlay
-        loop
-        playsInline
-        className="mb-4"
-      ></video>
+      <video ref={videoRef} id="video" autoPlay loop playsInline className="mb-4"></video>
 
       <div className="flex w-full items-center ">
         <label htmlFor="cameraSelect">Select Camera:</label>
@@ -85,19 +69,11 @@ const Video = () => {
           </SelectTrigger>
           <SelectContent>
             {cameras.map((camera) => (
-              <SelectItem
-                key={camera.deviceId}
-                value={camera.deviceId}
-                className="text-xs"
-              >
+              <SelectItem key={camera.deviceId} value={camera.deviceId} className="text-xs">
                 {camera.label || `Camera ${camera.deviceId}`}
               </SelectItem>
             ))}
-            <SelectItem
-              key={"test-video"}
-              value={"test-video"}
-              className="text-xs"
-            >
+            <SelectItem key={'test-video'} value={'test-video'} className="text-xs">
               Test Video
             </SelectItem>
           </SelectContent>

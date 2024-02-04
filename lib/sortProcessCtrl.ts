@@ -29,21 +29,36 @@ export default class SortProcessCtrl {
 
     // loop through detections
     for (const unmatchedDetection of detections) {
+      console.log('------------------------------');
       // find the index of the detection group whose last detection centroid is closest unmatchedDetection centroid
       let closestDistance = detectDistanceThreshold;
       let closestDetectionGroupIndex = -1;
       const topViewDetectionGroups = sortProcessStore.getState().topViewDetectGroups;
-      for (let i = 0; i < topViewDetectionGroups.length; i++) {
+
+      // start form the end of the array to get the last detection and loop through the last 3 detections
+      for (let i = topViewDetectionGroups.length - 1; i >= 0; i--) {
+        if (i < topViewDetectionGroups.length - 3) {
+          break;
+        }
+        // find the predicted centroid of the last detection in the detection group
         const lastDetection = topViewDetectionGroups[i][topViewDetectionGroups[i].length - 1];
-        const distance = Math.sqrt(
-          Math.pow(lastDetection.centroid.x - unmatchedDetection.centroid.x, 2) +
-            Math.pow(lastDetection.centroid.y - unmatchedDetection.centroid.y, 2),
-        );
-        if (distance < closestDistance) {
-          closestDistance = distance;
+        if (!lastDetection) {
+          continue;
+        }
+        const conveyorSpeed_PPS = settingsStore.getState().conveyorSpeed_PPS;
+
+        const distanceTravelled = ((unmatchedDetection.timestamp - lastDetection.timestamp) / 1000) * conveyorSpeed_PPS;
+        console.log('distanceTravelled', distanceTravelled);
+        const predictedX = lastDetection.centroid.x + distanceTravelled;
+        const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
+        // console.log('distance', distance, 'detectDistanceThreshold', detectDistanceThreshold);
+
+        if (distanceBetweenDetections < closestDistance) {
+          closestDistance = distanceBetweenDetections;
           closestDetectionGroupIndex = i;
         }
       }
+      console.log('closesDistance', closestDistance, 'closestDetectionGroupIndex', closestDetectionGroupIndex);
       // if closestDetectionGroup is found, add unmatchedDetection to closestDetectionGroup
       // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionGroups
       if (closestDetectionGroupIndex > -1) {
@@ -60,9 +75,9 @@ export default class SortProcessCtrl {
     try {
       // Get detections
       const detections = await this.detector.detect();
-
+      console.log('detections', detections);
       // match detections to proper DetectionGroups
-      this.matchDetectionsToGroups(detections);
+      if (detections.length > 0) this.matchDetectionsToGroups(detections);
     } catch (error) {
       const message = 'Error during sort process: ' + error;
       console.error(message);
@@ -73,9 +88,9 @@ export default class SortProcessCtrl {
     // Check if we should continue running after the delay
     if (sortProcessStore.getState().isRunning) {
       // Ensure the process loop takes at least MIN_PROCESS_LOOP_TIME
-      if (Date.now() - startTime < MIN_PROCESS_LOOP_TIME) {
-        await new Promise((resolve) => setTimeout(resolve, MIN_PROCESS_LOOP_TIME - (Date.now() - startTime)));
-      }
+      // if (Date.now() - startTime < MIN_PROCESS_LOOP_TIME) {
+      //   await new Promise((resolve) => setTimeout(resolve, MIN_PROCESS_LOOP_TIME - (Date.now() - startTime)));
+      // }
       // Continue looping the process
       this.runProcess();
     }

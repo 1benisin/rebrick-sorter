@@ -1,16 +1,16 @@
 // settingsStore.ts
 
-import { create } from "zustand";
-import { Sorter } from "@/types";
-import { db } from "@/services/firestore";
-import { settingsSchema } from "@/types";
-import { alertStore } from "./alertStore";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { create } from 'zustand';
+import { Sorter } from '@/types';
+import { db } from '@/services/firestore';
+import { settingsSchema } from '@/types';
+import { alertStore } from './alertStore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface SettingsState {
   // Conveyor settings
-  conveyorSpeed: number; // pixels per second
-  setConveyorSpeed: (conveyorSpeed: number) => void;
+  conveyorSpeed_PPS: number; // pixels per second
+  setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => void;
   detectDistanceThreshold: number; // pixels
   setDetectDistanceThreshold: (detectDistanceThreshold: number) => void;
 
@@ -29,12 +29,10 @@ interface SettingsState {
 
 export const settingsStore = create<SettingsState>((set, get) => ({
   // Conveyor settings
-  conveyorSpeed: 0,
-  setConveyorSpeed: (conveyorSpeed: number) =>
-    set({ conveyorSpeed, saved: false }),
+  conveyorSpeed_PPS: 0,
+  setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => set({ conveyorSpeed_PPS, saved: false }),
   detectDistanceThreshold: 0,
-  setDetectDistanceThreshold: (detectDistanceThreshold: number) =>
-    set({ detectDistanceThreshold, saved: false }),
+  setDetectDistanceThreshold: (detectDistanceThreshold: number) => set({ detectDistanceThreshold, saved: false }),
 
   // Sorter settings
   sorters: [],
@@ -71,11 +69,7 @@ export const settingsStore = create<SettingsState>((set, get) => ({
     if (get().loaded) return; // If already loaded, do nothing
 
     try {
-      const docRef = doc(
-        db,
-        "settings",
-        process.env.NEXT_PUBLIC_USER as string
-      );
+      const docRef = doc(db, 'settings', process.env.NEXT_PUBLIC_USER as string);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
@@ -83,47 +77,42 @@ export const settingsStore = create<SettingsState>((set, get) => ({
         // validate the data
         const result = settingsSchema.safeParse(data);
         if (!result.success) {
-          console.error("Error parsing settings data from DB:", result.error);
+          console.error('Error parsing settings data from DB:', result.error);
           return;
         }
-
         set({
           ...result.data,
           loaded: true,
         });
       } else {
-        console.log("No settings document in DB!");
+        console.log('No settings document in DB!');
       }
     } catch (error) {
-      console.error("Error fetching settings:", error);
+      console.error('Error fetching settings:', error);
     }
   },
   saved: true,
   saveSettings: async () => {
-    // just get conveyorSpeed, sorters, detectDistanceThreshold from state and save to DB
+    // just get conveyorSpeed_PPS, sorters, detectDistanceThreshold from state and save to DB
     const state = get();
     const result = settingsSchema.safeParse(state);
 
     if (!result.success) {
-      console.error("Error parsing settings data on Save:", result.error);
+      console.error('Error parsing settings data on Save:', result.error);
       return;
     }
 
     try {
-      const docRef = doc(
-        db,
-        "settings",
-        process.env.NEXT_PUBLIC_USER as string
-      );
+      const docRef = doc(db, 'settings', process.env.NEXT_PUBLIC_USER as string);
       await setDoc(docRef, result.data, { merge: true });
       set({ saved: true });
       alertStore.getState().addAlert({
-        type: "update",
-        message: "Settings saved successfully",
+        type: 'update',
+        message: 'Settings saved successfully',
         timestamp: Date.now(),
       });
     } catch (error) {
-      console.error("Error saving settings:", error);
+      console.error('Error saving settings:', error);
     }
   },
 }));

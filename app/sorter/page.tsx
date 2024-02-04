@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import Video from "@/components/Video";
-import SorterControllerButton from "@/components/sorterControllerButton";
-import DetectionImageRow from "@/components/DetectionImageRow";
+import Video from '@/components/Video';
+import SorterControllerButton from '@/components/sorterControllerButton';
+import DetectionDisplay from '@/components/DetectionDisplay';
 
 const SortPage = () => {
   return (
@@ -14,7 +14,7 @@ const SortPage = () => {
           <SorterControllerButton />
         </div>
 
-        <DetectionImageRow />
+        <DetectionDisplay />
       </div>
     </div>
   );
