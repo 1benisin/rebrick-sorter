@@ -1,13 +1,6 @@
 {
-  "extends": "next/core-web-vitals",
+  "extends": ["next/core-web-vitals", "plugin:prettier/recommended"],
   "rules": {
-    // format string to single quotes
-    "quotes": ["error", "single"],
-    // format semi-colon to always
-    "semi": ["error", "always"],
-    // format comma to always
-    "comma-dangle": ["error", "always"],
-    // format line length to 200
-    "max-len": ["error", { "code": 200 }]
+    // Additional, per-project rules...
   }
 }
