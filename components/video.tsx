@@ -4,9 +4,9 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 
-const TEST_VIDEO_PATH = '/test-videos/normal.mp4';
-// const TEST_VIDEO_PATH = '/test-videos/too-close.mp4';
-const VIDEO_PLAYBACK_RATE = 0.5;
+const TEST_VIDEOS = ['normal', 'too-close'];
+const TEST_VIDEO_PATH = '/test-videos/';
+const VIDEO_PLAYBACK_RATE = 1;
 
 const Video = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -22,13 +22,9 @@ const Video = () => {
         setCameras(
           videoDevices.map((device) => ({
             deviceId: device.deviceId,
-            label: device.label,
+            label: device.label || `Camera ${device.deviceId}`,
           })),
         );
-        if (videoDevices.length > 0 && !selectedCamera) {
-          setSelectedCamera(videoDevices[0].deviceId);
-          selectCamera(videoDevices[0].deviceId);
-        }
       } catch (error) {
         console.error('Error accessing media devices:', error);
       }
@@ -40,9 +36,9 @@ const Video = () => {
   const selectCamera = async (cameraId: string) => {
     if (videoRef.current) {
       setVideoStreamId(cameraId);
-      if (cameraId === 'test-video') {
+      if (cameraId.slice(0, 4) === 'test') {
         videoRef.current.srcObject = null;
-        videoRef.current.src = TEST_VIDEO_PATH; // Adjust the path to your test video
+        videoRef.current.src = `${TEST_VIDEO_PATH}${cameraId.slice(5)}.mp4`;
         videoRef.current.playbackRate = VIDEO_PLAYBACK_RATE;
       } else {
         try {
@@ -74,14 +70,19 @@ const Video = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem key="placeholder" value="" className="text-xs">
+              Choose Video Source
+            </SelectItem>
             {cameras.map((camera) => (
               <SelectItem key={camera.deviceId} value={camera.deviceId} className="text-xs">
                 {camera.label || `Camera ${camera.deviceId}`}
               </SelectItem>
             ))}
-            <SelectItem key={'test-video'} value={'test-video'} className="text-xs">
-              Test Video
-            </SelectItem>
+            {TEST_VIDEOS.map((video) => (
+              <SelectItem key={video} value={`test-${video}`} className="text-xs">
+                Test - {video}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

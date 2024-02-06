@@ -85,9 +85,9 @@ export default class Detector {
           lastTimestamp = nextDetection.timestamp;
         } else {
           // add speed in pixels per sec to speeds
-          console.log('distance', nextDetection.centroid.x - lastPosition.x, 'time', nextDetection.timestamp - lastTimestamp);
+
           const speed = (nextDetection.centroid.x - lastPosition.x) / ((nextDetection.timestamp - lastTimestamp) / 1000);
-          console.log('speed', speed);
+
           speeds.push(speed);
         }
       }

@@ -31,15 +31,16 @@ class VideoCapture {
   private async setupImageCaptureTrack(): Promise<void> {
     try {
       const videoStreamId = sortProcessStore.getState().videoStreamId;
+
       this.videoStreamId = videoStreamId;
-      if (videoStreamId === 'test-video') {
+      if (videoStreamId.slice(0, 4) === 'test') {
+        // if videoStreamId is a test stream, use the video element to capture the stream
         const videoElement = document.getElementById('video') as HTMLVideoElement_extended;
         if (!videoElement) {
           const error = 'Video element not found: video';
           alertStore.getState().addAlert({ type: 'error', message: error, timestamp: Date.now() });
           throw new Error(error);
         }
-        console.log('videoElement tracks:', videoElement.videoTracks);
 
         const mediaStream = videoElement.captureStream();
         const videoTracks = mediaStream.getVideoTracks();
@@ -50,7 +51,7 @@ class VideoCapture {
         }
         this.imageCapture = new ImageCapture(videoTracks[0]);
       } else {
-        // get media stream with videoStreamId
+        // else use webcam to capture the stream
         const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: videoStreamId } });
         const videoTracks = mediaStream.getVideoTracks();
         if (videoTracks.length === 0) {
@@ -62,6 +63,7 @@ class VideoCapture {
       }
       // setup VideoCaptureDimensions
       const imageBitmap = await this.imageCapture.grabFrame();
+
       sortProcessStore.getState().setVideoCaptureDimensions(imageBitmap.width, imageBitmap.height);
     } catch (error) {
       console.error('Error initializing ImageCapture:', error);
@@ -72,7 +74,7 @@ class VideoCapture {
     // make sure it matches videostreamId in case it was changed
     const videoStreamId = sortProcessStore.getState().videoStreamId;
     if (!this.imageCapture || this.videoStreamId !== videoStreamId) {
-      this.setupImageCaptureTrack();
+      await this.setupImageCaptureTrack();
     }
   }
 

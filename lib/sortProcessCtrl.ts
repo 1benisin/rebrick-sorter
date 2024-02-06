@@ -72,18 +72,11 @@ export default class SortProcessCtrl {
       const topViewDetectGroups = sortProcessStore.getState().topViewDetectGroups;
       // filter out groups that are already classified
       const unclassifiedGroups = topViewDetectGroups.filter((group) => !group.classification);
-      console.log('unclassifiedGroups dif: ', topViewDetectGroups.length, unclassifiedGroups.length);
 
       const videoCaptureDimensions = sortProcessStore.getState().videoCaptureDimensions;
       for (const group of unclassifiedGroups) {
         const lastDetection = group.detections[group.detections.length - 1];
         if (lastDetection.centroid.x > videoCaptureDimensions.width / 2) {
-          // console log the x and the width of the videoCaptureDimensions on new lines of the console log
-          console.log(
-            ` classifying:
-            detetion x: ${lastDetection.centroid.x},
-            screen width: ${videoCaptureDimensions.width}`,
-          );
           // classify the detection
           const classification = await Classifier.classify(lastDetection.imageURI);
           const indexUsedToClassify = group.detections.length - 1; // index of the detection used to classify
