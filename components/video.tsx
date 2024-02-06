@@ -2,12 +2,16 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { sortProcessStore } from '@/stores/sortProcessStore';
+
 const TEST_VIDEO_PATH = '/test-videos/normal.mp4';
+const VIDEO_PLAYBACK_RATE = 0.5;
 
 const Video = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>([]);
   const [selectedCamera, setSelectedCamera] = useState('');
+  const setVideoStreamId = sortProcessStore((state) => state.setVideoStreamId);
 
   useEffect(() => {
     const getCameras = async () => {
@@ -34,10 +38,11 @@ const Video = () => {
 
   const selectCamera = async (cameraId: string) => {
     if (videoRef.current) {
+      setVideoStreamId(cameraId);
       if (cameraId === 'test-video') {
         videoRef.current.srcObject = null;
         videoRef.current.src = TEST_VIDEO_PATH; // Adjust the path to your test video
-        videoRef.current.playbackRate = 0.5; // Play video at half speed
+        videoRef.current.playbackRate = VIDEO_PLAYBACK_RATE;
       } else {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({

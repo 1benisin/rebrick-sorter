@@ -9,7 +9,7 @@ interface AlertState {
   clearAlertAtTimestamp: (index: number) => void;
 }
 
-const CLEAR_ALERT_UPDATE_TIMEOUT = 10000;
+const CLEAR_ALERT_UPDATE_TIMEOUT = 4000;
 
 export const alertStore = create<AlertState>((set, get) => ({
   alertList: [],

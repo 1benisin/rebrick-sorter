@@ -16,11 +16,12 @@ const CALIBRATION_SAMPLE_COUNT = 20;
 export default class Detector {
   private static instance: Detector;
   private model: automl.ObjectDetectionModel | null = null;
-  private videoCapture: VideoCapture | null = null;
+  private videoCapture: VideoCapture;
+
   // videoId default value is "video"
   private constructor(videoId = 'video') {
     this.loadModel();
-    this.loadVideoCapture(videoId);
+    this.videoCapture = new VideoCapture();
   }
 
   public static getInstance(): Detector {
@@ -28,11 +29,6 @@ export default class Detector {
       Detector.instance = new Detector();
     }
     return Detector.instance;
-  }
-
-  // Methode to load VideoCapture
-  public loadVideoCapture(videoId = 'video'): void {
-    this.videoCapture = new VideoCapture(videoId);
   }
 
   // Method to load the model
@@ -111,7 +107,7 @@ export default class Detector {
   public async detect(): Promise<Detection[]> {
     // Check if videoCapture is loaded
     if (!this.videoCapture) {
-      const error = 'VideoCapture not loaded. Call loadVideoCapture() first.';
+      const error = 'VideoCapture for Detector not loaded.';
       alertStore.getState().addAlert({ type: 'error', message: error, timestamp: Date.now() });
       throw new Error(error);
     }
@@ -124,11 +120,15 @@ export default class Detector {
 
     try {
       // Capture an image from the camera
-      const imageCapture = this.videoCapture.captureImage();
+      const imageCapture = await this.videoCapture.captureImage();
+      if (!imageCapture) {
+        console.error('No image captured');
+        return [];
+      }
 
       // scale down original image to speed up detection
-      const scalar = Detector.getCanvasScalar(imageCapture.canvas);
-      const scaledCanvas = this.scaleDownCanvas(imageCapture.canvas, scalar);
+      const scalar = Detector.getImageScalar(imageCapture.imageBitmap);
+      const scaledCanvas = this.scaleDownImage(imageCapture.imageBitmap, scalar);
 
       const predictions = await this.model.detect(scaledCanvas, DETECTION_OPTIONS);
 
@@ -140,7 +140,7 @@ export default class Detector {
       // create a canvas once to crop the detection
       const cropCanvas = document.createElement('canvas');
       const detections = scaledPredictions.map((prediction) => {
-        const detectionImageURI = this.getCroppedImageURI(imageCapture.canvas, cropCanvas, prediction);
+        const detectionImageURI = this.getCroppedImageURI(imageCapture.imageBitmap, cropCanvas, prediction);
 
         const detection = {
           view: 'top',
@@ -164,22 +164,22 @@ export default class Detector {
     }
   }
 
-  public static getCanvasScalar(canvas: HTMLCanvasElement): number {
-    const { width, height } = canvas;
+  public static getImageScalar(imageBitmap: ImageBitmap): number {
+    const { width, height } = imageBitmap;
     const scalar = Math.min(1, MAX_DETECTION_DIMENSION / Math.max(width, height));
 
     return scalar;
   }
 
-  private scaleDownCanvas(canvas: HTMLCanvasElement, scalar: number): HTMLCanvasElement {
+  private scaleDownImage(imageBitmap: ImageBitmap, scalar: number): HTMLCanvasElement {
     // scale down image if it is too large
-    const { width, height } = canvas;
+    const { width, height } = imageBitmap;
 
     const scaledCanvas = document.createElement('canvas');
     scaledCanvas.width = width * scalar;
     scaledCanvas.height = height * scalar;
     const ctx = scaledCanvas.getContext('2d') as CanvasRenderingContext2D;
-    ctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+    ctx.drawImage(imageBitmap, 0, 0, scaledCanvas.width, scaledCanvas.height);
     return scaledCanvas;
   }
 
@@ -199,7 +199,7 @@ export default class Detector {
   }
 
   // Method to crop square detection images from an image
-  private getCroppedImageURI(canvas: HTMLCanvasElement, cropCanvas: HTMLCanvasElement, detection: automl.PredictedObject): string {
+  private getCroppedImageURI(imageBitmap: ImageBitmap, cropCanvas: HTMLCanvasElement, detection: automl.PredictedObject): string {
     // get centroid at detection size
     let { left, top, width, height } = detection.box;
     const centroid = [left + width / 2, top + height / 2];
@@ -211,7 +211,7 @@ export default class Detector {
     cropCanvas.width = CLASSIFICATION_DIMENSIONS.width;
     cropCanvas.height = CLASSIFICATION_DIMENSIONS.height;
     const ctx = cropCanvas.getContext('2d') as CanvasRenderingContext2D;
-    ctx.drawImage(canvas, left, top, width, height, 0, 0, cropCanvas.width, cropCanvas.height);
+    ctx.drawImage(imageBitmap, left, top, width, height, 0, 0, cropCanvas.width, cropCanvas.height);
 
     return cropCanvas.toDataURL('image/jpeg');
   }
