@@ -49,8 +49,8 @@ const DetectionRow = ({ group }: { group: DetectionGroup }) => {
   };
 
   return (
-    <div className="flex flex-col" onClick={() => findAverageDistanceBetweenDetections(group)}>
-      <div className="mb-1 p-1 border border-gray-200 rounded-lg">
+    <div className={`flex flex-cel`} onClick={() => findAverageDistanceBetweenDetections(group)}>
+      <div className={`mb-1 p-1 border border-gray-200 rounded-lg ${group.offScreen == true ? 'border-2 border-red-500 text-gray-400' : ''}`}>
         <div className="flex items-center space-x-2">
           {/* Display detections */}
           <div className="flex flex-row">

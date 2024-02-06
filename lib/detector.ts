@@ -123,7 +123,7 @@ export default class Detector {
       const imageCapture = await this.videoCapture.captureImage();
       if (!imageCapture) {
         console.error('No image captured');
-        return [];
+        throw new Error('No image captured');
       }
 
       // scale down original image to speed up detection

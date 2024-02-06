@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { sortProcessStore } from '@/stores/sortProcessStore';
 
 const TEST_VIDEO_PATH = '/test-videos/normal.mp4';
+// const TEST_VIDEO_PATH = '/test-videos/too-close.mp4';
 const VIDEO_PLAYBACK_RATE = 0.5;
 
 const Video = () => {
@@ -64,7 +65,7 @@ const Video = () => {
 
   return (
     <div className="flex flex-col max-w-md mx-auto text-xs">
-      <video ref={videoRef} id="video" autoPlay loop playsInline className="mb-4"></video>
+      <video ref={videoRef} id="video" autoPlay loop playsInline muted className="mb-4"></video>
 
       <div className="flex w-full items-center ">
         <label htmlFor="cameraSelect">Select Camera:</label>
