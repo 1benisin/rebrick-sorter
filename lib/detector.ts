@@ -10,7 +10,8 @@ import VideoCapture from './videoCapture';
 
 const DETECTION_MODEL_URL = '/detection-model/model.json';
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
-const MAX_DETECTION_DIMENSION = 300;
+const MAX_DETECTION_DIMENSION = 300; // max width or height of image to be used for detection
+const MIN_DETECTION_CLOSENESS = 0.1; // min percentage of detection image width two detections can be from each other
 const CALIBRATION_SAMPLE_COUNT = 20;
 
 export default class Detector {
@@ -128,21 +129,50 @@ export default class Detector {
 
       // scale down original image to speed up detection
       const scalar = Detector.getImageScalar(imageCapture.imageBitmap);
-      const scaledCanvas = this.scaleDownImage(imageCapture.imageBitmap, scalar);
+      const scaledDetectionCanvas = this.scaleDownImage(imageCapture.imageBitmap, scalar);
 
-      const predictions = await this.model.detect(scaledCanvas, DETECTION_OPTIONS);
+      const predictions = await this.model.detect(scaledDetectionCanvas, DETECTION_OPTIONS);
 
       // scale up predictions to original image size
       const scaledPredictions = this.scaleUpPredictions(predictions, scalar);
 
-      // crop detections from original image
-      // and create Detection objects
-      // create a canvas once to crop the detection
+      // filter out predictons that have any box edge less than MIN_DETECTION_CLOSENESS of scaledCanvas
+      // or a box edge that touches the edge of the canvas
+      // or two boxes that overlap on the x-axis
+      const filteredPredictions = scaledPredictions.filter((p, index, originalPs) => {
+        const box = p.box;
+        const rightEdge = box.left + box.width;
+
+        // Check if this box is too close to any other box
+        const isTooClose = originalPs.some((otherP, otherIndex) => {
+          const otherBox = otherP.box;
+          if (index === otherIndex) return false; // Don't compare a box with itself
+
+          const otherRightEdge = otherBox.left + otherBox.width;
+
+          // Check for overlap
+          const isOverlapping = box.left < otherRightEdge && rightEdge > otherBox.left;
+
+          // Check closeness between box's left edge and other box's edges
+          const isLeftClose =
+            Math.abs(box.left - otherBox.left) < MIN_DETECTION_CLOSENESS || Math.abs(box.left - otherRightEdge) < MIN_DETECTION_CLOSENESS;
+          // Check closeness between box's right edge and other box's edges
+          const isRightClose =
+            Math.abs(rightEdge - otherBox.left) < MIN_DETECTION_CLOSENESS || Math.abs(rightEdge - otherRightEdge) < MIN_DETECTION_CLOSENESS;
+
+          return isOverlapping || isLeftClose || isRightClose;
+        });
+
+        // Include this box if it's not too close to any other box
+        return !isTooClose;
+      });
+
+      // create square crop detections from original image
       const cropCanvas = document.createElement('canvas');
-      const detections = scaledPredictions.map((prediction) => {
+      const croppedDetections = filteredPredictions.map((prediction) => {
         const detectionImageURI = this.getCroppedImageURI(imageCapture.imageBitmap, cropCanvas, prediction);
 
-        const detection = {
+        const detection: Detection = {
           view: 'top',
           imageURI: detectionImageURI,
           timestamp: imageCapture.timestamp,
@@ -151,11 +181,11 @@ export default class Detector {
             y: prediction.box.top + prediction.box.height / 2,
           },
           box: prediction.box,
-        } as Detection;
+        };
         return detection;
       });
 
-      return detections;
+      return croppedDetections;
     } catch (error) {
       const message = 'Error during detection: ' + error;
       console.error(message);
@@ -200,9 +230,7 @@ export default class Detector {
 
   // Method to crop square detection images from an image
   private getCroppedImageURI(imageBitmap: ImageBitmap, cropCanvas: HTMLCanvasElement, detection: automl.PredictedObject): string {
-    // get centroid at detection size
     let { left, top, width, height } = detection.box;
-    const centroid = [left + width / 2, top + height / 2];
     // turn detection box into a square
     [left, top, width, height] =
       width > height ? [left, top - (width - height) / 2, width, width] : [left - (height - width) / 2, top, height, height];

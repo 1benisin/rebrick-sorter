@@ -61,7 +61,10 @@ const Video = () => {
 
   return (
     <div className="flex flex-col max-w-md mx-auto text-xs">
-      <video ref={videoRef} id="video" autoPlay loop playsInline muted className="mb-4"></video>
+      {/* Video container with Tailwind classes to clip to bottom half */}
+      <div className="relative overflow-hidden h-48 w-full">
+        <video ref={videoRef} id="video" autoPlay loop playsInline muted className="mb-4 h-96 w-full absolute -translate-y-1/2 top-1/2"></video>
+      </div>
 
       <div className="flex w-full items-center ">
         <label htmlFor="cameraSelect">Select Camera:</label>
