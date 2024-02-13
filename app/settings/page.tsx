@@ -7,8 +7,8 @@ import SorterSettings from '@/components/SorterSettings';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import Video from '@/components/Video';
-import CalibrationButton from '@/components/CalibrationButton';
+// import CalibrationButton from '@/components/CalibrationButton';
+import DualVideo from '@/components/DualVideo';
 
 const SettingsPage = () => {
   const {
@@ -47,7 +47,7 @@ const SettingsPage = () => {
     <div className="p-4">
       <h1 className="text-xl font-bold mb-4">Settings</h1>
       <p className={`${loaded ? 'text-green-500' : 'text-red-500'}`}>{loaded ? 'Settings loaded' : 'Loading settings...'}</p>
-      <Video cameraName="video" />
+      <DualVideo />
       <div className="flex items-center">
         <div>
           <Label htmlFor="conveyorSpeed_PPS" className="block mb-2">

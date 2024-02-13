@@ -1,7 +1,6 @@
 'use client';
 
 import SorterControllerButton from '@/components/SortProcessCtrlButton';
-import DetectionDisplay from '@/components/DetectionDisplay';
 import DualVideo from '@/components/DualVideo';
 import DetectionPairDisplay from '@/components/DetectionPairDisplay';
 

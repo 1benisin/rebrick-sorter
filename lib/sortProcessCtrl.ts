@@ -28,46 +28,6 @@ export default class SortProcessCtrl {
     return SortProcessCtrl.instance;
   }
 
-  // a function that matches detections to proper DetectionGroups
-  private matchDetectionsToGroups(detections: Detection[]): void {
-    const detectDistanceThreshold = settingsStore.getState().detectDistanceThreshold;
-
-    // loop through detections
-    for (const unmatchedDetection of detections) {
-      // find the index of the detection group whose last detection centroid is closest unmatchedDetection centroid
-      let closestDistance = detectDistanceThreshold;
-      let closestDetectionGroup = null;
-      const topViewDetectionPairGroups = sortProcessStore.getState().topViewDetectGroups;
-
-      // start form the end of the array to get the last detection and loop through the last 3 detections
-      for (let i = topViewDetectionPairGroups.length - 1; i >= 0; i--) {
-        // find the predicted centroid of the last detection in the detection group
-        const lastDetection = topViewDetectionPairGroups[i].detections[topViewDetectionPairGroups[i].detections.length - 1];
-        if (!lastDetection) {
-          continue;
-        }
-        const conveyorSpeed_PPS = settingsStore.getState().conveyorSpeed_PPS;
-
-        const distanceTravelled = ((unmatchedDetection.timestamp - lastDetection.timestamp) / 1000) * conveyorSpeed_PPS;
-        const predictedX = lastDetection.centroid.x + distanceTravelled;
-        const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
-        // console.log('distance', distance, 'detectDistanceThreshold', detectDistanceThreshold);
-
-        if (distanceBetweenDetections < closestDistance) {
-          closestDistance = distanceBetweenDetections;
-          closestDetectionGroup = topViewDetectionPairGroups[i];
-        }
-      }
-      // if closestDetectionGroup is found, add unmatchedDetection to closestDetectionGroup
-      // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionPairGroups
-      if (closestDetectionGroup !== null) {
-        sortProcessStore.getState().addDetectionToGroup('top', closestDetectionGroup.id, unmatchedDetection);
-      } else {
-        sortProcessStore.getState().newDetectGroup('top', { id: uuid(), detections: [unmatchedDetection] });
-      }
-    }
-  }
-
   // a function that matches detection pairs to proper DetectionPairGroups
   private matchDetectionsPairsToGroups(detectionPairs: [Detection, Detection][]): void {
     const detectDistanceThreshold = settingsStore.getState().detectDistanceThreshold;
