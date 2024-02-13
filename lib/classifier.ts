@@ -1,7 +1,7 @@
 // Classifier.ts
 
 import axios, { AxiosResponse } from 'axios';
-import { brickognizeResponseSchema, BrickognizeResponse } from '@/types';
+import { brickognizeResponseSchema, BrickognizeResponse } from '@/types/types';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,

@@ -1,16 +1,21 @@
 // sortProcessController.ts
-import Detector from './detector'; // Adjust the import path as needed
+// import Detector from './detector';
+import Detector from '@/lib/dualDetector';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import { settingsStore } from '@/stores/settingsStore';
 import { alertStore } from '@/stores/alertStore';
-import { Detection } from '@/types';
+import { Detection } from '@/types/types';
 import Classifier from './classifier';
+import { DetectionPairGroup, ClassificationItem } from '@/types/detectionPairs.type';
+import { BrickognizeResponse } from '@/types/types';
+import { v4 as uuid } from 'uuid';
 
-const MIN_PROCESS_LOOP_TIME = 1200;
+const MIN_PROCESS_LOOP_TIME = 1000;
 
 export default class SortProcessCtrl {
   private static instance: SortProcessCtrl;
   private detector: Detector;
+  private detectionPairGroups: DetectionPairGroup[] = [];
 
   private constructor() {
     this.detector = Detector.getInstance();
@@ -24,7 +29,6 @@ export default class SortProcessCtrl {
   }
 
   // a function that matches detections to proper DetectionGroups
-  // and adds the detections to the detectionGroups
   private matchDetectionsToGroups(detections: Detection[]): void {
     const detectDistanceThreshold = settingsStore.getState().detectDistanceThreshold;
 
@@ -33,12 +37,12 @@ export default class SortProcessCtrl {
       // find the index of the detection group whose last detection centroid is closest unmatchedDetection centroid
       let closestDistance = detectDistanceThreshold;
       let closestDetectionGroup = null;
-      const topViewDetectionGroups = sortProcessStore.getState().topViewDetectGroups;
+      const topViewDetectionPairGroups = sortProcessStore.getState().topViewDetectGroups;
 
       // start form the end of the array to get the last detection and loop through the last 3 detections
-      for (let i = topViewDetectionGroups.length - 1; i >= 0; i--) {
+      for (let i = topViewDetectionPairGroups.length - 1; i >= 0; i--) {
         // find the predicted centroid of the last detection in the detection group
-        const lastDetection = topViewDetectionGroups[i].detections[topViewDetectionGroups[i].detections.length - 1];
+        const lastDetection = topViewDetectionPairGroups[i].detections[topViewDetectionPairGroups[i].detections.length - 1];
         if (!lastDetection) {
           continue;
         }
@@ -51,39 +55,86 @@ export default class SortProcessCtrl {
 
         if (distanceBetweenDetections < closestDistance) {
           closestDistance = distanceBetweenDetections;
-          closestDetectionGroup = topViewDetectionGroups[i];
+          closestDetectionGroup = topViewDetectionPairGroups[i];
         }
       }
       // if closestDetectionGroup is found, add unmatchedDetection to closestDetectionGroup
-      // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionGroups
+      // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionPairGroups
       if (closestDetectionGroup !== null) {
         sortProcessStore.getState().addDetectionToGroup('top', closestDetectionGroup.id, unmatchedDetection);
       } else {
-        sortProcessStore.getState().newDetectGroup('top', { id: Date.now().toString(), detections: [unmatchedDetection] });
+        sortProcessStore.getState().newDetectGroup('top', { id: uuid(), detections: [unmatchedDetection] });
       }
     }
   }
 
-  // function that checks if there are detections to classify
+  // a function that matches detection pairs to proper DetectionPairGroups
+  private matchDetectionsPairsToGroups(detectionPairs: [Detection, Detection][]): void {
+    const detectDistanceThreshold = settingsStore.getState().detectDistanceThreshold;
+
+    // loop through detectionPairs
+    for (const detectionPair of detectionPairs) {
+      const unmatchedDetection = detectionPair[0];
+      // find the index of the detection group whose last detection centroid is closest unmatchedDetection centroid
+      let closestDistance = detectDistanceThreshold;
+      let closestGroupIndex = null;
+
+      // start form the end of the array to get the last detection
+      for (let i = this.detectionPairGroups.length - 1; i >= 0; i--) {
+        // find the predicted centroid of the last detection in the detection group
+        const [lastDetection, _] = this.detectionPairGroups[i].detectionPairs[this.detectionPairGroups[i].detectionPairs.length - 1];
+        if (!lastDetection) {
+          continue;
+        }
+        const conveyorSpeed_PPS = settingsStore.getState().conveyorSpeed_PPS;
+
+        const distanceTravelled = ((unmatchedDetection.timestamp - lastDetection.timestamp) / 1000) * conveyorSpeed_PPS;
+        const predictedX = lastDetection.centroid.x + distanceTravelled;
+        const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
+        // console.log('distance', distance, 'detectDistanceThreshold', detectDistanceThreshold);
+
+        if (distanceBetweenDetections < closestDistance) {
+          closestDistance = distanceBetweenDetections;
+          closestGroupIndex = i;
+        }
+      }
+      if (closestGroupIndex !== null) {
+        // if closestDetectionGroup is found, add unmatchedDetection to closestDetectionGroup
+        this.detectionPairGroups[closestGroupIndex].detectionPairs.push(detectionPair);
+        sortProcessStore.getState().addDetectionPairToGroup(this.detectionPairGroups[closestGroupIndex].id, detectionPair);
+      } else {
+        // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionPairGroups
+        const newGroup = { id: uuid(), detectionPairs: [detectionPair] };
+        this.detectionPairGroups.unshift(newGroup);
+        sortProcessStore.getState().addDetectionPairGroup(newGroup);
+      }
+    }
+  }
+
+  // function that classifies detections past screen 1/3
   private async classifyDetections(): Promise<void> {
     try {
-      // classify detections past screen center
-      // for each detection group
-      const topViewDetectGroups = sortProcessStore.getState().topViewDetectGroups;
-      // filter out groups that are already classified
-      const unclassifiedGroups = topViewDetectGroups.filter((group) => !group.classification);
-
       const videoCaptureDimensions = sortProcessStore.getState().videoCaptureDimensions;
-      for (const group of unclassifiedGroups) {
-        const lastDetection = group.detections[group.detections.length - 1];
-        if (lastDetection.centroid.x > videoCaptureDimensions.width / 2) {
+
+      // loop through detectionPairGroups
+      for (let i = 0; i < this.detectionPairGroups.length; i++) {
+        const group = this.detectionPairGroups[i];
+        const lastDetectionPair = group.detectionPairs[group.detectionPairs.length - 1];
+
+        if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.33 && !group.classifications) {
           // classify the detection
-          const classification = await Classifier.classify(lastDetection.imageURI);
-          const indexUsedToClassify = group.detections.length - 1; // index of the detection used to classify
-          sortProcessStore.getState().addClassificationToGroup('top', group.id, classification, indexUsedToClassify);
-          // if classified, set isClassified to true
+          const topViewClassification = await Classifier.classify(lastDetectionPair[0].imageURI);
+          const sideViewClassification = await Classifier.classify(lastDetectionPair[1].imageURI);
+
+          // update index of the detection used to classify
+          const indexUsedToClassify = group.detectionPairs.length - 1;
+          // add classifications to group
+          group.classifications = [topViewClassification, sideViewClassification];
+          group.indexUsedToClassify = indexUsedToClassify;
+
+          // update detectionPairGroups
+          this.detectionPairGroups[i] = group;
         }
-        // if last detection is past screen center and not classified
       }
     } catch (error) {
       const message = 'Error during classification: ' + error;
@@ -93,15 +144,60 @@ export default class SortProcessCtrl {
   }
 
   private markOffscreenDetections(): void {
-    const topViewDetectionGroups = sortProcessStore.getState().topViewDetectGroups;
-    for (const group of topViewDetectionGroups) {
-      const lastDetection = group.detections[group.detections.length - 1];
+    for (const group of this.detectionPairGroups) {
+      const lastPair = group.detectionPairs[group.detectionPairs.length - 1];
       // find the predicted centroid of the last detection in the detection group
       const conveyorSpeed_PPS = settingsStore.getState().conveyorSpeed_PPS;
-      const distanceTravelled = ((Date.now() - lastDetection.timestamp) / 1000) * conveyorSpeed_PPS;
-      const predictedX = lastDetection.centroid.x + distanceTravelled;
+      const distanceTravelled = ((Date.now() - lastPair[0].timestamp) / 1000) * conveyorSpeed_PPS;
+      const predictedX = lastPair[0].centroid.x + distanceTravelled;
       if (predictedX > sortProcessStore.getState().videoCaptureDimensions.width) {
         group.offScreen = true;
+      }
+
+      // update detectionPairGroups
+      this.detectionPairGroups[this.detectionPairGroups.indexOf(group)] = group;
+    }
+  }
+
+  private combineBrickognizeResponses(response1: BrickognizeResponse, response2: BrickognizeResponse): ClassificationItem[] {
+    const allItems = [...response1.items, ...response2.items];
+    const itemsById: Record<string, any[]> = {};
+
+    // Group items by ID
+    allItems.forEach((item) => {
+      if (!itemsById[item.id]) {
+        itemsById[item.id] = [];
+      }
+      itemsById[item.id].push(item);
+    });
+
+    // Calculate a combined score for each item, boosting items that appear in both responses
+    const combinedItems = Object.values(itemsById).map((group) => {
+      if (group.length > 1) {
+        // Found in both responses, calculate average score and add a boost
+        const averageScore = group.reduce((acc, item) => acc + item.score, 0) / group.length;
+        const boostedScore = averageScore + 0.1; // Example boost, adjust as needed
+        return { ...group[0], score: boostedScore }; // Ensure score does not exceed 1
+      }
+      return group[0]; // Single occurrence, no boost needed
+    });
+
+    // Sort combined items by score, descending
+    combinedItems.sort((a, b) => b.score - a.score);
+
+    // Assuming you want the single best result
+    return combinedItems;
+  }
+
+  private combineClassificationResults(): void {
+    // loop through detectionPairGroups
+    for (let i = 0; i < this.detectionPairGroups.length; i++) {
+      const group = this.detectionPairGroups[i];
+      if (group.classifications && !group.combineclassification) {
+        const combinedResults = this.combineBrickognizeResponses(group.classifications[0], group.classifications[1]);
+        group.combineclassification = combinedResults;
+        // update detectionPairGroups
+        this.detectionPairGroups[i] = group;
       }
     }
   }
@@ -111,11 +207,16 @@ export default class SortProcessCtrl {
     console.log('----------- Process Start ');
     try {
       // Get detections
-      const detections = await this.detector.detect();
+      const detectionPairs = await this.detector.detect();
       // match detections to proper DetectionGroups
-      this.matchDetectionsToGroups(detections);
+      this.matchDetectionsPairsToGroups(detectionPairs);
+
       // classify detections past screen center
       await this.classifyDetections();
+
+      // combine classification results
+      await this.combineClassificationResults();
+
       // mark offscreen detections
       this.markOffscreenDetections();
     } catch (error) {

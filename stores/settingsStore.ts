@@ -1,13 +1,19 @@
 // settingsStore.ts
 
 import { create } from 'zustand';
-import { Sorter } from '@/types';
+import { Sorter } from '@/types/types';
 import { db } from '@/services/firestore';
-import { settingsSchema } from '@/types';
+import { settingsSchema } from '@/types/types';
 import { alertStore } from './alertStore';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface SettingsState {
+  // Video settings
+  camera1VerticalPositionPercentage: number; // pixels
+  camera2VerticalPositionPercentage: number; // pixels
+  setCamera1VerticalPositionPercentage: (camera1VerticalPositionPercentage: number) => void;
+  setCamera2VerticalPositionPercentage: (camera2VerticalPositionPercentage: number) => void;
+
   // Conveyor settings
   conveyorSpeed_PPS: number; // pixels per second
   setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => void;
@@ -28,6 +34,12 @@ interface SettingsState {
 }
 
 export const settingsStore = create<SettingsState>((set, get) => ({
+  // Video settings
+  camera1VerticalPositionPercentage: 0, // 25,
+  camera2VerticalPositionPercentage: -35,
+  setCamera1VerticalPositionPercentage: (camera1VerticalPositionPercentage: number) => set({ camera1VerticalPositionPercentage, saved: false }),
+  setCamera2VerticalPositionPercentage: (camera2VerticalPositionPercentage: number) => set({ camera2VerticalPositionPercentage, saved: false }),
+
   // Conveyor settings
   conveyorSpeed_PPS: 0,
   setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => set({ conveyorSpeed_PPS, saved: false }),

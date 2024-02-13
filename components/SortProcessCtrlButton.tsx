@@ -1,14 +1,13 @@
 // sorterControllerButton.jsx
-"use client";
+'use client';
 
-import React, { useEffect, useState } from "react";
-import SortProcessCtrl from "@/lib/sortProcessCtrl";
-import { Button } from "@/components/ui/button";
-import { sortProcessStore } from "@/stores/sortProcessStore";
+import React, { useEffect, useState } from 'react';
+import SortProcessCtrl from '@/lib/sortProcessCtrl';
+import { Button } from '@/components/ui/button';
+import { sortProcessStore } from '@/stores/sortProcessStore';
 
 const SortProcessCtrlButton = () => {
-  const [localSortProcessCtrl, setLocalSortProcessCtrl] =
-    useState<SortProcessCtrl | null>(null);
+  const [localSortProcessCtrl, setLocalSortProcessCtrl] = useState<SortProcessCtrl | null>(null);
   const { isRunning } = sortProcessStore();
 
   useEffect(() => {
@@ -31,13 +30,9 @@ const SortProcessCtrlButton = () => {
     <Button
       onClick={handleStartStop}
       className={`px-4 py-2 font-bold text-white rounded 
-      ${
-        isRunning
-          ? "bg-red-500 hover:bg-red-700"
-          : "bg-green-500 hover:bg-green-700"
-      }`}
+      ${isRunning ? 'bg-red-500 hover:bg-red-700' : 'bg-green-500 hover:bg-green-700'}`}
     >
-      {isRunning ? "Stop" : "Start"}
+      {isRunning ? 'Stop' : 'Start'}
     </Button>
   );
 };

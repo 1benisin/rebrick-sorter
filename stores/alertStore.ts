@@ -1,6 +1,6 @@
 // AlertStore.ts
 import { create } from 'zustand';
-import { Alert } from '@/types';
+import { Alert } from '@/types/types';
 
 interface AlertState {
   alertList: Alert[];

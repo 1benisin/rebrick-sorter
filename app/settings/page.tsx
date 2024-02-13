@@ -1,14 +1,14 @@
 // settings/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { settingsStore } from '@/stores/settingsStore';
 import SorterSettings from '@/components/SorterSettings';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import Video from '@/components/Video';
-import Detector from '@/lib/detector';
+import CalibrationButton from '@/components/CalibrationButton';
 
 const SettingsPage = () => {
   const {
@@ -26,24 +26,7 @@ const SettingsPage = () => {
   } = settingsStore();
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isCalibrating, setIsCalibrating] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  const [localDetector, setLocalDetector] = useState<Detector | null>(null);
-
-  useEffect(() => {
-    const detector = Detector.getInstance();
-    setLocalDetector(detector);
-  }, []);
-
-  const handleCalibrate = () => {
-    if (!localDetector) {
-      return;
-    }
-    setIsCalibrating(true);
-    localDetector.calibrateConveyorSpeed().then((result) => {
-      setIsCalibrating(false);
-    });
-  };
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
@@ -64,7 +47,7 @@ const SettingsPage = () => {
     <div className="p-4">
       <h1 className="text-xl font-bold mb-4">Settings</h1>
       <p className={`${loaded ? 'text-green-500' : 'text-red-500'}`}>{loaded ? 'Settings loaded' : 'Loading settings...'}</p>
-      <Video />
+      <Video cameraName="video" />
       <div className="flex items-center">
         <div>
           <Label htmlFor="conveyorSpeed_PPS" className="block mb-2">
@@ -78,15 +61,7 @@ const SettingsPage = () => {
             onChange={(e) => setConveyorSpeed_PPS(Number(e.target.value))}
           />
         </div>
-
-        <Button
-          className="ml-4 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-          variant={isCalibrating ? 'outline' : 'default'}
-          onClick={handleCalibrate}
-          disabled={isCalibrating}
-        >
-          {isCalibrating ? 'Calibrating...' : 'Calibrate'}
-        </Button>
+        {/* <CalibrationButton /> */}
       </div>
 
       <div>

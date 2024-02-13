@@ -1,20 +1,29 @@
 'use client';
 
-import Video from '@/components/Video';
-import SorterControllerButton from '@/components/sorterControllerButton';
+import SorterControllerButton from '@/components/SortProcessCtrlButton';
 import DetectionDisplay from '@/components/DetectionDisplay';
+import DualVideo from '@/components/DualVideo';
+import DetectionPairDisplay from '@/components/DetectionPairDisplay';
 
 const SortPage = () => {
   return (
     <div>
       <h1>Sorter</h1>
-      <div className="px-4 lg:px-8">
-        <Video />
-        <div className="flex justify-center mt-4">
-          <SorterControllerButton />
+      <SorterControllerButton />
+      <div className="px-4 flex">
+        {/* <Video cameraName="video" /> */}
+        {/* <div className="flex"> */}
+        <div className="w-full">
+          <DetectionPairDisplay />
+        </div>
+        <div className="w-full">
+          <DualVideo />
         </div>
 
-        <DetectionDisplay />
+        <div id="video-capture-container">{/* I want to inject detection images here */}</div>
+        {/* </div> */}
+
+        {/* <DetectionDisplay /> */}
       </div>
     </div>
   );

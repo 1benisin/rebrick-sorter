@@ -1,24 +1,17 @@
 // sortProcessStore.ts
 import { create } from 'zustand';
-import { Detection, DetectionGroup, BrickognizeResponse } from '@/types';
+import { Detection, DetectionGroup, BrickognizeResponse } from '@/types/types';
+import { DetectionPairGroup, DetectionPair } from '@/types/detectionPairs.type';
 
-const MAX_DETECTION_IMAGES = 20;
 const MAX_DETECTION_GROUPS = 10;
 
 interface SortProcessState {
   isRunning: boolean;
   setIsRunning: (isRunning: boolean) => void;
   // ---
-  detectionImageURIs: string[];
-  addDetectionImageURI: (url: string) => void;
-
-  // ---
-  topViewDetectGroups: DetectionGroup[];
-  sideViewDetectGroups: DetectionGroup[];
-  newDetectGroup: (group: 'top' | 'side', detectionGroup: DetectionGroup) => void;
-  clearDetectionGroups: () => void;
-  addDetectionToGroup: (group: 'top' | 'side', index: string, detection: Detection) => void;
-  addClassificationToGroup: (group: 'top' | 'side', index: string, classification: BrickognizeResponse, indexUsedToClassify: number) => void;
+  detectionPairGroups: DetectionPairGroup[];
+  addDetectionPairGroup: (detectionPairGroup: DetectionPairGroup) => void;
+  addDetectionPairToGroup: (groupId: string, detectionPair: DetectionPair) => void;
 
   // ---
   videoCaptureDimensions: { width: number; height: number };
@@ -31,44 +24,18 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   isRunning: false,
   setIsRunning: (isRunning: boolean) => set({ isRunning }),
   // ---
-  detectionImageURIs: [],
-  addDetectionImageURI: (url: string) =>
-    set((state) => ({
-      detectionImageURIs: [...state.detectionImageURIs.slice(-MAX_DETECTION_IMAGES + 1), url],
-    })),
-
-  // --- Detection Groups
-  topViewDetectGroups: [],
-  sideViewDetectGroups: [],
-  newDetectGroup: (group: 'top' | 'side', detectionGroup: DetectionGroup) =>
+  detectionPairGroups: [],
+  addDetectionPairGroup: (detectionPairGroup: DetectionPairGroup) =>
+    set((state) => ({ detectionPairGroups: [detectionPairGroup, ...state.detectionPairGroups].slice(0, MAX_DETECTION_GROUPS) })),
+  addDetectionPairToGroup: (groupId: string, detectionPair: DetectionPair) =>
     set((state) => {
-      const key = `${group}ViewDetectGroups` as keyof SortProcessState; // Assert that the key is a valid key of SortProcessState
-      const groups = state[key] as DetectionGroup[]; // Assert the type of the state property
-      return { [key]: [detectionGroup, ...groups].slice(0, MAX_DETECTION_GROUPS) };
-    }),
-  clearDetectionGroups: () => set({ topViewDetectGroups: [], sideViewDetectGroups: [] }),
-  addDetectionToGroup: (group: 'top' | 'side', groupId: string, detection: Detection) =>
-    set((state) => {
-      const key = `${group}ViewDetectGroups` as keyof SortProcessState;
-      const groups = state[key] as DetectionGroup[];
+      const groups = state.detectionPairGroups;
       // find the group with the given id
       const matchingGroup = groups.find((g) => g.id === groupId);
       if (matchingGroup) {
-        matchingGroup.detections.push(detection);
+        matchingGroup.detectionPairs.push(detectionPair);
       }
-      return { [key]: [...groups] };
-    }),
-  addClassificationToGroup: (group: 'top' | 'side', groupId: string, classification: BrickognizeResponse, indexUsedToClassify: number) =>
-    set((state) => {
-      const key = `${group}ViewDetectGroups` as keyof SortProcessState;
-      const groups = state[key] as DetectionGroup[];
-      // find the group with the given id
-      const matchingGroup = groups.find((g) => g.id === groupId);
-      if (matchingGroup) {
-        matchingGroup.classification = classification;
-        matchingGroup.indexUsedToClassify = indexUsedToClassify;
-      }
-      return { [key]: [...groups] };
+      return { detectionPairGroups: [...groups] };
     }),
 
   // ---

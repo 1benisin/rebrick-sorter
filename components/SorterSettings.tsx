@@ -1,11 +1,11 @@
 // SorterSettings.tsx
 
-import React, { useState } from "react";
-import { settingsStore } from "@/stores/settingsStore";
-import { Sorter } from "@/types";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { Label } from "./ui/label";
+import React, { useState } from 'react';
+import { settingsStore } from '@/stores/settingsStore';
+import { Sorter } from '@/types/types';
+import { Input } from './ui/input';
+import { Button } from './ui/button';
+import { Label } from './ui/label';
 
 type SorterSettingsProps = {
   sorter: Sorter;
@@ -13,11 +13,7 @@ type SorterSettingsProps = {
   deleteSorter: (index: number) => void;
 };
 
-const SorterSettings: React.FC<SorterSettingsProps> = ({
-  sorter,
-  index,
-  deleteSorter,
-}) => {
+const SorterSettings: React.FC<SorterSettingsProps> = ({ sorter, index, deleteSorter }) => {
   const { updateSorter } = settingsStore();
   const [localSorter, setLocalSorter] = useState<Sorter>(sorter);
 
@@ -32,12 +28,7 @@ const SorterSettings: React.FC<SorterSettingsProps> = ({
       <div className="flex items-end space-x-4">
         <Label className="block">
           Name:
-          <Input
-            type="text"
-            value={localSorter.name}
-            onChange={(e) => handleUpdate({ name: e.target.value })}
-            className="border px-2 py-1 w-full"
-          />
+          <Input type="text" value={localSorter.name} onChange={(e) => handleUpdate({ name: e.target.value })} className="border px-2 py-1 w-full" />
         </Label>
 
         <Label className="block">
@@ -79,9 +70,7 @@ const SorterSettings: React.FC<SorterSettingsProps> = ({
           <Input
             type="number"
             value={localSorter.airJetPosition}
-            onChange={(e) =>
-              handleUpdate({ airJetPosition: parseInt(e.target.value, 10) })
-            }
+            onChange={(e) => handleUpdate({ airJetPosition: parseInt(e.target.value, 10) })}
             className="border px-2 py-1 w-full"
           />
         </Label>
@@ -91,16 +80,14 @@ const SorterSettings: React.FC<SorterSettingsProps> = ({
           <Input
             type="number"
             value={localSorter.maxPartDimension}
-            onChange={(e) =>
-              handleUpdate({ maxPartDimension: parseInt(e.target.value, 10) })
-            }
+            onChange={(e) => handleUpdate({ maxPartDimension: parseInt(e.target.value, 10) })}
             className="border px-2 py-1 w-full"
           />
         </Label>
 
         <Button
           onClick={() => deleteSorter(index)}
-          variant={"destructive"}
+          variant={'destructive'}
           // className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-700 transition-colors"
         >
           Delete Sorter
