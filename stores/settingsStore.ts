@@ -8,6 +8,10 @@ import { alertStore } from './alertStore';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface SettingsState {
+  // Classification settings
+  validClassificationScore: number; // goes form 0 to above 1 - minimum score for a classification to be considered valid
+  setValidClassificationScore: (validClassificationScore: number) => void;
+
   // Video settings
   camera1VerticalPositionPercentage: number; // pixels
   camera2VerticalPositionPercentage: number; // pixels
@@ -34,6 +38,10 @@ interface SettingsState {
 }
 
 export const settingsStore = create<SettingsState>((set, get) => ({
+  // Classification settings
+  validClassificationScore: 1,
+  setValidClassificationScore: (validClassificationScore: number) => set({ validClassificationScore, saved: false }),
+
   // Video settings
   camera1VerticalPositionPercentage: 0, // 25,
   camera2VerticalPositionPercentage: -35,

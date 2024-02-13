@@ -11,19 +11,14 @@ const SortPage = () => {
       <h1>Sorter</h1>
       <SorterControllerButton />
       <div className="px-4 flex">
-        {/* <Video cameraName="video" /> */}
-        {/* <div className="flex"> */}
-        <div className="w-full">
-          <DetectionPairDisplay />
-        </div>
         <div className="w-full">
           <DualVideo />
         </div>
 
         <div id="video-capture-container">{/* I want to inject detection images here */}</div>
-        {/* </div> */}
-
-        {/* <DetectionDisplay /> */}
+      </div>
+      <div className="w-full">
+        <DetectionPairDisplay />
       </div>
     </div>
   );
