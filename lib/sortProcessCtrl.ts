@@ -6,7 +6,7 @@ import { settingsStore } from '@/stores/settingsStore';
 import { alertStore } from '@/stores/alertStore';
 import { Detection } from '@/types/types';
 import Classifier from './classifier';
-import { DetectionPairGroup, ClassificationItem } from '@/types/detectionPairs.type';
+import { DetectionPairGroup, ClassificationItem } from '@/types/detectionPairs';
 import { BrickognizeResponse } from '@/types/types';
 import { v4 as uuid } from 'uuid';
 

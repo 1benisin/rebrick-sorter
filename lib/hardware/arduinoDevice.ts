@@ -71,6 +71,19 @@ export default class ArduinoDevice {
     });
   }
 
+  // Method to disconnect from the Arduino
+  disconnect() {
+    if (!this.port) {
+      console.error('No port connected');
+      return;
+    }
+    this.port.close((err) => {
+      if (err) {
+        console.error(`Error closing ${this.port?.path}:`, err.message);
+      }
+    });
+  }
+
   // Function to construct message to send to arduino
   static constructMessage(msg: string) {
     const START_MARKER = '<';
@@ -105,15 +118,16 @@ export default class ArduinoDevice {
   }
 
   // Method to send a command to the Arduino
-  sendCommand(command: string) {
+  sendCommand(command: string, data?: number) {
     if (!this.port) {
       console.error('No port to handle data from');
       return;
     }
-    const formattedCommand = ArduinoDevice.constructMessage(command);
-    this.port.write(formattedCommand + '\n', (err) => {
+    const message = data ? `${command},${data}` : command;
+    const formattedMessage = ArduinoDevice.constructMessage(message);
+    this.port.write(formattedMessage + '\n', (err) => {
       if (err) {
-        console.error(`Error sending command to ${this.port?.path}:`, err.message);
+        console.error(`Error sending message: ${message} - to portPath: ${this.port?.path}: `, err.message);
       }
     });
   }

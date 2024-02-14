@@ -2,7 +2,7 @@
 
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import { alertStore } from '@/stores/alertStore';
-import { ImageCaptureType } from '@/types/imageCapture.type';
+import { ImageCaptureType } from '@/types/imageCapture';
 
 class DualVideoCapture {
   private imageCapture1: ImageCapture | null = null;

@@ -2,25 +2,32 @@
 
 import { NextResponse } from 'next/server';
 import SerialPortManager from '@/lib/hardware/serialPortManager';
-
-enum ArduinoCommands {
-  SETUP = 'setup',
-}
+import { ArduinoDeviceCommand, ArduinoCommands } from '@/types/arduinoCommands.d';
+import { validateOrReject } from 'class-validator';
 
 export async function POST(req: Request) {
   try {
-    console.log(' conveyor API called');
     // get the body of the request
-    // const { command } = await req.json();
-    // console.log('command', command);
+    const arduinoDeviceCommand: ArduinoDeviceCommand = await req.json();
+    // validate the request body
+    await validateOrReject(arduinoDeviceCommand);
+    // get the singleton instance of the SerialPortManager
+    const serialPortManager = SerialPortManager.getInstance();
 
-    const results = await SerialPortManager.init();
+    // if commad is SETUP, initialize the serial ports
+    if (arduinoDeviceCommand.command === ArduinoCommands.SETUP) {
+      const ports = await serialPortManager.init();
+      if (ports.some((p) => p.status === 'fail')) {
+        // retrun fail response with results
+        return new NextResponse('SETUP failed: ' + JSON.stringify(ports), { status: 500 });
+      }
+      return new NextResponse('SETUP success', { status: 200 });
+    }
 
-    console.log('serial port status:', SerialPortManager.getAllDeviceStatus());
+    // any other arduion command send to the arduino
+    serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
 
-    // console.log('serial port status:', SerialPortManager.portStatuses);
-
-    return new NextResponse('success', { status: 200 });
+    return new NextResponse(`Command: ${arduinoDeviceCommand.command} - send to: ${arduinoDeviceCommand.arduinoPath}`, { status: 200 });
   } catch (error) {
     console.error(error);
     return new NextResponse('Internal Error' + JSON.stringify(error), { status: 500 });

@@ -1,18 +1,23 @@
 // test/page.tsx
 'use client';
+import { ArduinoCommands } from '@/types/arduinoCommands.d';
 
 import { Button } from '@/components/ui/button';
 import axios from 'axios';
 
 const TestPage = () => {
   const handleTest = async () => {
-    const res = await axios.post('/api/arduino', {
-      test: Date.now(),
-    });
-    console.log(res.data); // Handle response data
-
-    console.log(res.data);
-    console.log(Date.now() - res.data.test);
+    // const res = await axios.post('/api/arduino', {
+    //   command: ArduinoCommands.SETUP,
+    //   arduinoPath: 'test',
+    //   data: 'test',
+    // });
+    try {
+      const res = await axios.post('/api/hardware/init');
+      console.log(res.data); // Handle response data
+    } catch (error) {
+      console.error(error); // Handle error
+    }
   };
 
   return (

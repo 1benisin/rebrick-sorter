@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { sortProcessStore } from '@/stores/sortProcessStore';
-import { DetectionPairGroup } from '@/types/detectionPairs.type';
+import { DetectionPairGroup } from '@/types/detectionPairs';
 import { v4 as uuid } from 'uuid';
 import { Badge } from '@/components/ui/badge';
 import { settingsStore } from '@/stores/settingsStore';

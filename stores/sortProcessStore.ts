@@ -1,7 +1,7 @@
 // sortProcessStore.ts
 import { create } from 'zustand';
 import { Detection, DetectionGroup, BrickognizeResponse } from '@/types/types';
-import { DetectionPairGroup, DetectionPair } from '@/types/detectionPairs.type';
+import { DetectionPairGroup, DetectionPair } from '@/types/detectionPairs';
 
 const MAX_DETECTION_GROUPS = 10;
 

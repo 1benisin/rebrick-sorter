@@ -1,5 +1,6 @@
 import ArduinoDevice from './arduinoDevice';
 import { SerialPort } from 'serialport';
+import { ArduinoDeviceCommand } from '@/types/arduinoCommands.d';
 
 enum PortPaths {
   sorter_A = '/dev/cu.usbmodem1101',
@@ -7,7 +8,7 @@ enum PortPaths {
   feeder = '/dev/cu.usbmodem1301',
   conveyor = '/dev/cu.usbmodem1401',
 }
-class SerialPortManager {
+export default class SerialPortManager {
   private static instance: SerialPortManager;
   private devices: Record<string, ArduinoDevice> = {};
 
@@ -15,7 +16,7 @@ class SerialPortManager {
   private constructor() {}
 
   // Method to get the singleton instance
-  public static getInstance(): SerialPortManager {
+  static getInstance(): SerialPortManager {
     if (!SerialPortManager.instance) {
       SerialPortManager.instance = new SerialPortManager();
     }
@@ -71,16 +72,24 @@ class SerialPortManager {
       this.devices[portName] = device;
     } catch (error) {
       console.error(`Error adding device for port ${portName}:`, error);
+      throw error;
     }
   }
 
-  sendCommandToDevice(portName: string, command: string) {
+  removeDevice(portName: string) {
     if (this.devices[portName]) {
-      this.devices[portName].sendCommand(command);
+      this.devices[portName].disconnect();
+      delete this.devices[portName];
     } else {
       console.log(`Device ${portName} not found`);
     }
   }
-}
 
-export default SerialPortManager.getInstance();
+  sendCommandToDevice(arduinoDeviceCommand: ArduinoDeviceCommand) {
+    if (this.devices[arduinoDeviceCommand.arduinoPath]) {
+      this.devices[arduinoDeviceCommand.arduinoPath].sendCommand(arduinoDeviceCommand.command, arduinoDeviceCommand.data);
+    } else {
+      console.log(`Device ${arduinoDeviceCommand.arduinoPath} not found`);
+    }
+  }
+}
