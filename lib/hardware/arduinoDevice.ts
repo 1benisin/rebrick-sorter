@@ -1,51 +1,119 @@
-import { SerialPort, ReadlineParser } from 'serialport';
-// const { SerialPort, ReadlineParser } = require('serialport');
-
-console.log('serial port binding:', SerialPort.binding);
+import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
 
 export default class ArduinoDevice {
-  private port: SerialPort;
+  private port: SerialPort | SerialPortMock | null = null;
+  path: string = '';
 
-  constructor(portName: string) {
-    // Initialize SerialPort with the given port name and baud rate
-    this.port = new SerialPort({
-      path: portName,
-      baudRate: 9600,
+  constructor() {}
+
+  // Static factory method
+  async connect(portName: string): Promise<void> {
+    // Wait for the port to be opened
+    return await new Promise((resolve, reject) => {
+      this.port = new SerialPort(
+        {
+          path: portName,
+          baudRate: 9600,
+        },
+        (err) => {
+          if (err) {
+            reject(err.message);
+          }
+        },
+      );
+
+      // Set up the parser to process incoming data
+      const parser = this.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+      parser.on('data', (data) => this.handleData(data));
+
+      this.port.on('open', () => {
+        console.log(`${portName} opened`);
+        this.path = portName;
+        resolve();
+      });
+
+      this.port.on('error', (err) => {
+        console.error(`Error on ${portName}:`, err.message);
+      });
     });
+  }
 
-    console.log('serial port:', this.port);
+  // Mock factory method
+  async connectMock(portName: string): Promise<void> {
+    // Wait for the port to be opened
+    return await new Promise((resolve, reject) => {
+      SerialPortMock.binding.createPort(portName);
 
-    // Set up the parser to process incoming data
-    const parser = this.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+      this.port = new SerialPortMock(
+        {
+          path: portName,
+          baudRate: 9600,
+        },
+        (err) => {
+          if (err) {
+            reject(err.message);
+          }
+        },
+      );
 
-    // Event listener for data received from the Arduino
-    parser.on('data', (data) => {
-      this.handleData(data);
+      // Set up the parser to process incoming data
+      const parser = this.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+      parser.on('data', (data) => this.handleData(data));
+
+      this.port.on('open', () => {
+        console.log(`${portName} opened`);
+        resolve();
+      });
+
+      this.port.on('error', (err) => {
+        console.error(`Error on ${portName}:`, err.message);
+      });
     });
+  }
 
-    // Handle open event
-    this.port.on('open', () => {
-      console.log(`${portName} opened successfully`);
-    });
+  // Function to construct message to send to arduino
+  static constructMessage(msg: string) {
+    const START_MARKER = '<';
+    const END_MARKER = '>';
+    // Explanation of checksum:
+    // checksum is the sum of all the ASCII values of the characters in the message, modulo 100
+    let checksum = 0;
+    for (let i = 0; i < msg.length; i++) {
+      checksum += msg.charCodeAt(i);
+    }
+    checksum %= 100;
 
-    // Handle error event
-    this.port.on('error', (err) => {
-      console.error(`Error on ${portName}:`, err.message);
-    });
+    // checksum is converted to a 2 digit decimal number and appended to the end of the message
+    return START_MARKER + msg + checksum.toString().padStart(2, '0') + END_MARKER;
+  }
+
+  isOpen() {
+    if (!this.port) {
+      console.error('No port to handle data from');
+      return;
+    }
+    return this.port.isOpen;
   }
 
   // Method to handle incoming data from the Arduino
   handleData(data: string) {
+    if (!this.port) {
+      console.error('No port to handle data from');
+      return;
+    }
     console.log(`Data received from ${this.port.path}:`, data);
   }
 
   // Method to send a command to the Arduino
   sendCommand(command: string) {
-    this.port.write(command + '\n', (err) => {
+    if (!this.port) {
+      console.error('No port to handle data from');
+      return;
+    }
+    const formattedCommand = ArduinoDevice.constructMessage(command);
+    this.port.write(formattedCommand + '\n', (err) => {
       if (err) {
-        console.error(`Error sending command to ${this.port.path}:`, err.message);
-      } else {
-        console.log(`Command sent to ${this.port.path}:`, command);
+        console.error(`Error sending command to ${this.port?.path}:`, err.message);
       }
     });
   }

@@ -7,19 +7,46 @@ enum PortPaths {
   feeder = '/dev/cu.usbmodem1301',
   conveyor = '/dev/cu.usbmodem1401',
 }
-
 class SerialPortManager {
-  devices: Record<string, ArduinoDevice>;
-  portStatuses: Record<string, boolean>;
+  private static instance: SerialPortManager;
+  private devices: Record<string, ArduinoDevice> = {};
 
-  constructor() {
-    this.devices = {};
-    this.portStatuses = {};
-    // Initialize devices for each port path
-    // this.addDevice(PortPaths.sorter_A);
-    // for (const portPath in PortPaths) {
-    //   this.addDevice(portPath);
-    // }
+  // Private constructor to prevent direct instantiation
+  private constructor() {}
+
+  // Method to get the singleton instance
+  public static getInstance(): SerialPortManager {
+    if (!SerialPortManager.instance) {
+      SerialPortManager.instance = new SerialPortManager();
+    }
+    return SerialPortManager.instance;
+  }
+
+  async init(): Promise<{ portName: string; status: 'success' | 'fail'; error?: any }[]> {
+    const devicePromises = Object.values(PortPaths).map((portName) =>
+      this.addDevice(portName)
+        .then(() => ({
+          status: 'success' as const,
+          portName,
+        }))
+        .catch((error) => ({
+          status: 'fail' as const,
+          portName,
+          error,
+        })),
+    );
+
+    // Wait for all device creation attempts to settle
+    return await Promise.all(devicePromises);
+  }
+
+  getAllDeviceStatus() {
+    return Object.keys(this.devices).map((portName) => {
+      return {
+        portName,
+        isOpen: this.devices[portName].isOpen(),
+      };
+    });
   }
 
   // Method to list available serial ports
@@ -27,20 +54,27 @@ class SerialPortManager {
     return await SerialPort.list();
   }
 
-  addDevice(portName: string) {
+  async addDevice(portName: string): Promise<void> {
+    // Check if the device has already been added
+    if (this.devices[portName]) {
+      console.log(`Device for port ${portName} already added.`);
+      return;
+    }
     try {
-      if (!this.devices[portName]) {
-        console.log(`Adding device for port ${portName}`);
-        this.devices[portName] = new ArduinoDevice(portName);
-        this.portStatuses[portName] = true;
+      // Attempt to create the device
+      let device = new ArduinoDevice();
+      if (process.env.ENVIRONMENT === 'DEV') {
+        await device.connectMock(portName);
+      } else {
+        await device.connect(portName);
       }
+      this.devices[portName] = device;
     } catch (error) {
-      this.portStatuses[portName] = false;
       console.error(`Error adding device for port ${portName}:`, error);
     }
   }
 
-  sendCommandToArduino(portName: string, command: string) {
+  sendCommandToDevice(portName: string, command: string) {
     if (this.devices[portName]) {
       this.devices[portName].sendCommand(command);
     } else {
@@ -49,4 +83,4 @@ class SerialPortManager {
   }
 }
 
-export default new SerialPortManager();
+export default SerialPortManager.getInstance();
