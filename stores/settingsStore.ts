@@ -6,6 +6,8 @@ import { db } from '@/services/firestore';
 import { settingsSchema } from '@/types/types';
 import { alertStore } from './alertStore';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { ArduinoPortType } from '@/types/arduinoPort';
+import { settingsFormSchema } from '@/types/settingsForm.type';
 
 interface SettingsState {
   // Classification settings
@@ -23,12 +25,16 @@ interface SettingsState {
   setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => void;
   detectDistanceThreshold: number; // pixels
   setDetectDistanceThreshold: (detectDistanceThreshold: number) => void;
+  conveyorSerialPort: ArduinoPortType;
+  setCoveyorSerialPort: (conveyorSerialPort: ArduinoPortType) => void;
 
   // Sorter settings
   sorters: Sorter[];
   addSorterAtIndex: (index: number) => void;
   removeSorterAtIndex: (index: number) => void;
   updateSorter: (index: number, sorter: Sorter) => void;
+  sorterSerialPorts: ArduinoPortType[];
+  setSorterSerialPort: (sorterSerialPort: ArduinoPortType) => void;
 
   // General settings
   loaded: boolean; // To track if settings have been loaded from DB
@@ -53,6 +59,8 @@ export const settingsStore = create<SettingsState>((set, get) => ({
   setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => set({ conveyorSpeed_PPS, saved: false }),
   detectDistanceThreshold: 0,
   setDetectDistanceThreshold: (detectDistanceThreshold: number) => set({ detectDistanceThreshold, saved: false }),
+  conveyorSerialPort: { name: '', path: '' },
+  setCoveyorSerialPort: (conveyorSerialPort: ArduinoPortType) => set({ conveyorSerialPort, saved: false }),
 
   // Sorter settings
   sorters: [],
@@ -82,8 +90,18 @@ export const settingsStore = create<SettingsState>((set, get) => ({
       return { sorters: newSorters, saved: false };
     });
   },
+  sorterSerialPorts: [],
+  setSorterSerialPort: (sorterSerialPort: ArduinoPortType) => {
+    set((state) => {
+      // a port already has the same portName overwrite it with the new one
+      // otherwise add the new port
+      const newSorterSerialPorts = state.sorterSerialPorts.filter((port) => port.name !== sorterSerialPort.name);
+      newSorterSerialPorts.push(sorterSerialPort);
+      return { sorterSerialPorts: newSorterSerialPorts, saved: false };
+    });
+  },
 
-  // General settings
+  // --- General settings
   loaded: false, // Initial state is not loaded
   fetchSettings: async () => {
     if (get().loaded) return; // If already loaded, do nothing
@@ -100,6 +118,7 @@ export const settingsStore = create<SettingsState>((set, get) => ({
           console.error('Error parsing settings data from DB:', result.error);
           return;
         }
+
         set({
           ...result.data,
           loaded: true,
@@ -115,7 +134,7 @@ export const settingsStore = create<SettingsState>((set, get) => ({
   saveSettings: async () => {
     // just get conveyorSpeed_PPS, sorters, detectDistanceThreshold from state and save to DB
     const state = get();
-    const result = settingsSchema.safeParse(state);
+    const result = settingsFormSchema.safeParse(state);
 
     if (!result.success) {
       console.error('Error parsing settings data on Save:', result.error);
@@ -136,6 +155,3 @@ export const settingsStore = create<SettingsState>((set, get) => ({
     }
   },
 }));
-
-// load settings from Firestore
-settingsStore.getState().fetchSettings();

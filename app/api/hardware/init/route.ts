@@ -1,6 +1,6 @@
 // /api/arduino/route.ts
 
-import { NextResponse, Ne } from 'next/server';
+import { NextResponse } from 'next/server';
 import SerialPortManager from '@/lib/hardware/serialPortManager';
 
 export async function POST(req: Request) {

@@ -20,7 +20,6 @@ export enum ArduinoCommands {
 }
 
 export class ArduinoDeviceCommand {
-  @ValidateIf((o) => o.command !== ArduinoCommands.SETUP && o.command !== ArduinoCommands.RESET)
   @IsString()
   arduinoPath: string;
 
