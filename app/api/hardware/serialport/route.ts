@@ -2,7 +2,6 @@
 
 import { NextResponse } from 'next/server';
 import SerialPortManager from '@/lib/hardware/serialPortManager';
-import { ArduinoPortType } from '@/types/arduinoPort';
 
 // get a list of all serial ports
 export async function GET() {
@@ -11,7 +10,7 @@ export async function GET() {
     const serialPortManager = SerialPortManager.getInstance();
     const ports = await serialPortManager.listSerialPorts(); // Use listSerialPorts to get all ports
     // map the ports to a new array of ArduinoPortType objects
-    const arduinoPorts: ArduinoPortType[] = ports.map((port) => ({ name: 'arduino', path: port.path }));
+    const arduinoPorts: string[] = ports.map((port) => port.path);
 
     // Optionally, perform any additional filtering if needed
 

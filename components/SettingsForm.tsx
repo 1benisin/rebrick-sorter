@@ -1,25 +1,26 @@
 // In your settings/page.tsx
 'use client';
 
-import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
-import { settingsFormSchema, SettingsFormType } from '@/types/settingsForm.type';
+import { settingsFormSchema, SettingsFormType } from '@/types/settingsForm.d';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { settingsStore } from '@/stores/settingsStore';
 import useSettings from '@/hooks/useSettings';
+import SerialPortFormInput from '@/components/SerialPortFormInput';
 
 const SettingsForm = () => {
   const { settings, saveSettings } = useSettings();
 
+  const defaultSettingsObject: SettingsFormType = settingsFormSchema.parse({});
+
   const form = useForm<SettingsFormType>({
     resolver: zodResolver(settingsFormSchema),
     mode: 'onBlur',
-    values: settings || settingsFormSchema.parse({}),
+    values: settings || defaultSettingsObject,
   });
-  const { fields, append, prepend, remove, swap, move, insert } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'sorters',
   });
@@ -33,7 +34,7 @@ const SettingsForm = () => {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
         <FormField
           control={form.control}
           name="conveyorSpeed_PPS"
@@ -62,8 +63,22 @@ const SettingsForm = () => {
             </FormItem>
           )}
         />
+        <SerialPortFormInput
+          control={form.control}
+          name="conveyorJetsSerialPort"
+          label="Conveyor Jets Serial Port"
+          description="Select a serial port"
+        />
+        <SerialPortFormInput
+          control={form.control}
+          name="hopperFeederSerialPort"
+          label="Hopper Feeder Serial Port"
+          description="Select a serial port"
+        />
+
         {fields.map((field, index) => (
-          <div key={field.id}>
+          <div key={field.id} className="flex items-center space-x-2 p-4 border border-slate-300 rounded-md">
+            <SerialPortFormInput control={form.control} name={`sorters.${index}.serialPort`} label="Serial Port" description="Select a serial port" />
             <FormField
               control={form.control}
               name={`sorters.${index}.name`}
@@ -106,9 +121,14 @@ const SettingsForm = () => {
                 </FormItem>
               )}
             />
+            <Button size="sm" variant="destructive" onClick={() => remove(index)}>
+              Delete
+            </Button>
           </div>
         ))}
-        <Button onClick={() => append({ name: '', gridWidth: 1, gridHeight: 1 })}>Add Sorter</Button>
+        <Button type="button" onClick={() => append(defaultSettingsObject.sorters[0])}>
+          Add Sorter
+        </Button>
         <Button type="submit">Save Settings</Button>
       </form>
     </Form>

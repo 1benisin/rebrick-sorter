@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/services/firestore';
-import { settingsFormSchema, SettingsFormType } from '@/types/settingsForm.type';
+import { settingsFormSchema, SettingsFormType } from '@/types/settingsForm.d';
 import { alertStore } from '@/stores/alertStore';
 
 const useSettings = () => {

@@ -11,7 +11,7 @@ export enum PortPaths {
   conveyor_jets = '/dev/cu.usbmodem1401',
 }
 
-const MockPort = [
+const MockedPorts = [
   { name: 'sorter_A', path: '/mock/sorter_A_serial_port' },
   { name: 'sorter_B', path: '/mock/sorter_B_serial_port' },
   { name: 'hopper_feeder', path: '/mock/hopper_feeder_serial_port' },
@@ -63,7 +63,7 @@ export default class SerialPortManager {
   // Method to list available serial ports
   async listSerialPorts() {
     if (process.env.ENVIRONMENT === 'DEV') {
-      return MockPort;
+      return MockedPorts;
     }
     return await SerialPort.list();
   }

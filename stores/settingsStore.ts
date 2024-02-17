@@ -7,7 +7,7 @@ import { settingsSchema } from '@/types/types';
 import { alertStore } from './alertStore';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ArduinoPortType } from '@/types/arduinoPort';
-import { settingsFormSchema } from '@/types/settingsForm.type';
+import { settingsFormSchema } from '@/types/settingsForm.d';
 
 interface SettingsState {
   // Classification settings
