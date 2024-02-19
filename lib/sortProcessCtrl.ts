@@ -9,6 +9,8 @@ import Classifier from './classifier';
 import { DetectionPairGroup, ClassificationItem } from '@/types/detectionPairs';
 import { BrickognizeResponse } from '@/types/types';
 import { v4 as uuid } from 'uuid';
+import axios from 'axios';
+import { SortPartDto } from '@/types/sortPart.dto';
 
 const MIN_PROCESS_LOOP_TIME = 1000;
 
@@ -162,6 +164,26 @@ export default class SortProcessCtrl {
     }
   }
 
+  private sendClassifiedPartsToSorter(): void {
+    // loop through detectionPairGroups
+    for (let i = 0; i < this.detectionPairGroups.length; i++) {
+      const group = this.detectionPairGroups[i];
+      if (group.combineclassification && !group.sentToSorter) {
+        const data: SortPartDto = {
+          partId: group.combineclassification[0].id,
+          initialPosition: group.detectionPairs[0][0].centroid.x,
+          initialTime: group.detectionPairs[0][0].timestamp,
+        };
+        const result = axios.post('/api/hardware/sort', data);
+
+        // console.log('Sending to server', group.combineclassification[0].id);
+        group.sentToSorter = true;
+        // update detectionPairGroups
+        this.detectionPairGroups[i] = group;
+      }
+    }
+  }
+
   private async runProcess() {
     const startTime = Date.now();
     console.log('----------- Process Start ');
@@ -176,6 +198,8 @@ export default class SortProcessCtrl {
 
       // combine classification results
       await this.combineClassificationResults();
+
+      this.sendClassifiedPartsToSorter();
 
       // mark offscreen detections
       this.markOffscreenDetections();

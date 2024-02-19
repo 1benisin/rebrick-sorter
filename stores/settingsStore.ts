@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { Sorter } from '@/types/types';
-import { db } from '@/services/firestore';
+import { db } from '@/services/firebase';
 import { settingsSchema } from '@/types/types';
 import { alertStore } from './alertStore';
 import { doc, getDoc, setDoc } from 'firebase/firestore';

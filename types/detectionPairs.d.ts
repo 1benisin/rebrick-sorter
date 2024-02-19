@@ -10,8 +10,10 @@ export type DetectionPairGroup = {
   classifications?: [BrickognizeResponse, BrickognizeResponse];
   combineclassification?: ClassificationItem[];
   indexUsedToClassify?: number; // index of the detection used to classify
+  sentToSorter?: boolean;
 };
 
+// combined results of two BrickognizeResponses
 export type ClassificationItem = {
   type: string;
   score: number;

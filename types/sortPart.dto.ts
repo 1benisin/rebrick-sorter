@@ -1,0 +1,9 @@
+import { z } from 'zod';
+
+export const sortPartSchema = z.object({
+  partId: z.string(),
+  initialTime: z.number(),
+  initialPosition: z.number(),
+});
+
+export type SortPartDto = z.infer<typeof sortPartSchema>;

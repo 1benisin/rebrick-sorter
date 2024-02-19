@@ -1,15 +1,7 @@
 import ArduinoDevice from './arduinoDevice';
 import { SerialPort, SerialPortMock } from 'serialport';
 import { ArduinoDeviceCommand } from '@/types/arduinoCommands.d';
-import fs from 'fs';
-import path from 'path';
-
-export enum PortPaths {
-  sorter_A = '/dev/cu.usbmodem1101',
-  sorter_B = '/dev/cu.usbmodem1201',
-  hopper_feeder = '/dev/cu.usbmodem1301',
-  conveyor_jets = '/dev/cu.usbmodem1401',
-}
+import { SerialPortType } from '@/types/serialPort.type';
 
 const MockedPorts = [
   { name: 'sorter_A', path: '/mock/sorter_A_serial_port' },
@@ -33,16 +25,16 @@ export default class SerialPortManager {
     return SerialPortManager.instance;
   }
 
-  async init(): Promise<{ portName: string; status: 'success' | 'fail'; error?: any }[]> {
-    const devicePromises = Object.values(PortPaths).map((portName) =>
-      this.connectPort(portName)
+  async connectPorts(serialPortsToConnect: SerialPortType[]): Promise<{ port: SerialPortType; success: boolean; error?: any }[]> {
+    const devicePromises = serialPortsToConnect.map((port) =>
+      this.connectPort(port.path)
         .then(() => ({
-          status: 'success' as const,
-          portName,
+          port,
+          success: true,
         }))
         .catch((error) => ({
-          status: 'fail' as const,
-          portName,
+          port,
+          success: false,
           error,
         })),
     );

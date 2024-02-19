@@ -1,39 +1,54 @@
 import { PartQueue, SpeedQueue, Part } from './hardwareTypes.d';
 import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
-import SerialPortManager, { PortPaths } from './serialPortManager';
+import SerialPortManager from './serialPortManager';
 import { ArduinoCommands, ArduinoDeviceCommand } from '@/types/arduinoCommands.d';
+import { serialPortNames } from '@/types/serialPort.type';
+import { SortPartDto } from '@/types/sortPart.dto';
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/services/firebase';
+import { BinLookup, binLookup } from '@/types/binLookup.type';
+import { HardwareInitDto } from '@/types/hardwareInit.dto';
 
 // TODO: fetch below values from settings
-const conveyorSpeed_PPS = 250; // pixels per second
-const jetPositions = [465, 1460]; // pixels
-const sorterTravelTimes = [
-  [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
-  [0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870, 3006, 3009, 3144],
-];
+// const this.conveyorSpeed_PPS = 250; // pixels per second
+// const this.jetPositions = [465, 1460]; // pixels
+// const this.sorterTravelTimes = [
+//   [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
+//   [0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870, 3006, 3009, 3144],
+// ];
 
-const sorterBinPositions = [
-  [
-    { x: 0, y: 0 },
-    { x: 0, y: 1 },
-    { x: 1, y: 0 },
-    { x: 1, y: 1 },
-  ],
-  [
-    { x: 0, y: 0 },
-    { x: 0, y: 1 },
-    { x: 1, y: 0 },
-    { x: 1, y: 1 },
-  ],
-];
+// const this.sorterBinPositions = [
+//   [
+//     { x: 0, y: 0 },
+//     { x: 0, y: 1 },
+//     { x: 1, y: 0 },
+//     { x: 1, y: 1 },
+//   ],
+//   [
+//     { x: 0, y: 0 },
+//     { x: 0, y: 1 },
+//     { x: 1, y: 0 },
+//     { x: 1, y: 1 },
+//   ],
+// ];
 
 const FALL_TIME = 800; // time it takes to fall down the tube
 const MOVE_PAUSE_BUFFER = 1600; // time buffer for part to fall out the tube
 
 export default class HardwareController {
   static instance: HardwareController;
-  serialPortManager: SerialPortManager;
-  partQueue: PartQueue = [];
-  speedQueue: SpeedQueue = [];
+  private serialPortManager: SerialPortManager;
+
+  private serialPorts: Record<string, string> = {};
+  private binLookup: BinLookup = {};
+  private defaultConveyorSpeed_PPS: number = 0;
+  private sorterTravelTimes: number[][] = [];
+  private sorterBinPositions: { x: number; y: number }[][] = [];
+  private jetPositions: number[] = [];
+  initialized: boolean = false;
+
+  private partQueue: PartQueue = [];
+  private speedQueue: SpeedQueue = [];
 
   constructor() {
     this.serialPortManager = SerialPortManager.getInstance();
@@ -46,17 +61,46 @@ export default class HardwareController {
     return HardwareController.instance;
   }
 
-  processPartQueue = () => {
-    // find out if part will arrive
-  };
+  async init(initSettings: HardwareInitDto): Promise<void> {
+    try {
+      // connect serial ports
+      const connectionStatuses = await this.serialPortManager.connectPorts(initSettings.serialPorts);
+      const isEveryPortConnected = connectionStatuses.every((status) => status.success);
+      if (!isEveryPortConnected) throw new Error(`Failed to connect to serial ports: ${connectionStatuses}`);
+
+      this.serialPorts = initSettings.serialPorts.reduce((acc: Record<string, string>, port) => {
+        acc[port.name] = port.path;
+        return acc;
+      }, {});
+
+      // load bin lookup data
+      this.binLookup = initSettings.binLookup;
+
+      // set sorter travel times
+      this.sorterTravelTimes = initSettings.sorterTravelTimes;
+
+      // set sorter bin positions
+      this.sorterBinPositions = initSettings.sorterBinPositions;
+
+      // set conveyor speed
+      this.defaultConveyorSpeed_PPS = initSettings.defaultConveyorSpeed_PPS;
+
+      // set jet positions
+      this.jetPositions = initSettings.jetPositions;
+
+      this.initialized = true;
+    } catch (error) {
+      throw new Error(`Failed to initialize hardware controller: ${error}`);
+    }
+  }
 
   private calculateTimings(sorter: number, bin: number, initialTime: number, initialPosition: number, prevSorterbin: number | undefined) {
-    const distanceToJet = jetPositions[sorter] - initialPosition;
-    const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.speedQueue, conveyorSpeed_PPS);
+    const distanceToJet = this.jetPositions[sorter] - initialPosition;
+    const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.speedQueue, this.defaultConveyorSpeed_PPS);
     // default to max travel time if no prevSorterPart
     const travelTimeFromLastBin = !prevSorterbin
-      ? sorterTravelTimes[sorter][sorterTravelTimes[sorter].length - 1]
-      : getTravelTimeBetweenBins(sorter, prevSorterbin, bin, sorterBinPositions, sorterTravelTimes);
+      ? this.sorterTravelTimes[sorter][this.sorterTravelTimes[sorter].length - 1]
+      : getTravelTimeBetweenBins(sorter, prevSorterbin, bin, this.sorterBinPositions, this.sorterTravelTimes);
     const moveTime = jetTime - Math.max(travelTimeFromLastBin - FALL_TIME, 1);
     return { moveTime, jetTime, travelTimeFromLastBin };
   }
@@ -194,7 +238,7 @@ export default class HardwareController {
 
   private filterQueues() {
     // -- filter partQueue
-    let lastSorterPartIndexes = new Array(sorterBinPositions.length).fill(0);
+    let lastSorterPartIndexes = new Array(this.sorterBinPositions.length).fill(0);
     let lastPartJettedIndex = 0;
     // get index of last part for each sorter
     // and index of last part jetted
@@ -223,17 +267,30 @@ export default class HardwareController {
     const timeout = !atTime ? 0 : atTime - Date.now();
     return setTimeout(() => {
       console.log('%c jet fired: ', 'color: yellow', jet);
-      const arduinoDeviceCommand: ArduinoDeviceCommand = { arduinoPath: PortPaths.conveyor_jets, command: ArduinoCommands.FIRE_JET, data: jet };
+      const arduinoDeviceCommand: ArduinoDeviceCommand = {
+        arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
+        command: ArduinoCommands.FIRE_JET,
+        data: jet,
+      };
       this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
     }, timeout);
   }
 
   private scheduleSorterToPosition(sorter: number, bin: number, atTime?: number) {
+    // check to make sure serialPortNames[sorter] is a valid key
+    if (!(sorter in serialPortNames)) {
+      throw new Error(`sorter "${sorter}" is not a valid key in serialPortNames`);
+    }
+
     // no timeStamp is provided for manually requested moves
     const timeout = !atTime ? 0 : atTime - Date.now();
     return setTimeout(() => {
       console.log('%c sorterToBin: ', 'color: blue', sorter, bin);
-      const arduinoDeviceCommand: ArduinoDeviceCommand = { arduinoPath: PortPaths[sorter], command: ArduinoCommands.FIRE_JET, data: jet };
+      const arduinoDeviceCommand: ArduinoDeviceCommand = {
+        arduinoPath: this.serialPorts[serialPortNames[sorter as keyof typeof serialPortNames]],
+        command: ArduinoCommands.FIRE_JET,
+        data: bin,
+      };
       this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
     }, timeout);
   }
@@ -242,35 +299,54 @@ export default class HardwareController {
     const timeout = !atTime ? 0 : atTime - Date.now();
     return setTimeout(() => {
       console.log('%c speedChanged: ', 'color: red', speed);
-      //   socket.emit('conveyorToSpeedAtTime', speed);
+      const arduinoDeviceCommand: ArduinoDeviceCommand = {
+        arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
+        command: ArduinoCommands.CONVEYOR_SPEED,
+        data: speed,
+      };
+      this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
     }, timeout);
   }
 
-  public sortPart = (initialTime: number, initialPosition: number, sorter: number, bin: number) => {
-    const prevSorterPart = this.partQueue.filter((part) => part.sorter === sorter).pop();
-    let { moveTime, jetTime, travelTimeFromLastBin } = this.calculateTimings(sorter, bin, initialTime, initialPosition, prevSorterPart?.bin);
-    if (!prevSorterPart?.moveFinishedTime) {
-      console.error('sortPart: prevSorterPart.moveFinishedTime is undefined');
-      return;
+  // return type {sorter: string; bin: number}
+  public sortPart = ({ initialTime, initialPosition, partId }: SortPartDto): { sorter: Number; bin: Number } | { error: String } => {
+    try {
+      // get bin and sorter location for part
+      const binLocation = this.binLookup[partId];
+      if (!binLocation) {
+        throw new Error(`Part with id ${partId} not found in bin lookup`);
+      }
+      const { bin, sorter } = binLocation;
+
+      const prevSorterPart = this.partQueue.filter((part) => part.sorter === sorter).pop();
+      let { moveTime, jetTime, travelTimeFromLastBin } = this.calculateTimings(sorter, bin, initialTime, initialPosition, prevSorterPart?.bin);
+      if (!prevSorterPart?.moveFinishedTime) {
+        throw new Error('prevSorterPart.moveFinishedTime is undefined');
+      }
+      const { slowdownNeeded, arrivalTimeDelay } = this.adjustSpeedIfNeeded(moveTime, prevSorterPart.moveFinishedTime);
+
+      if (slowdownNeeded) {
+        // find updated move and jet times
+        moveTime += arrivalTimeDelay;
+        jetTime += arrivalTimeDelay;
+
+        // --- insert speed change
+        const startSpeedChange = prevSorterPart.jetTime || Date.now();
+        this.insertSpeedChange(startSpeedChange, jetTime, arrivalTimeDelay);
+
+        // --- reschedule part actions after slowdown
+        this.rescheduleActions(startSpeedChange, jetTime, arrivalTimeDelay);
+      }
+
+      // create and schedule part actions
+      this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
+
+      this.filterQueues();
+
+      return { sorter, bin };
+    } catch (error) {
+      console.error('sortPart error:', error);
+      return { error: `Failed to sort part: ${error}` };
     }
-    const { slowdownNeeded, arrivalTimeDelay } = this.adjustSpeedIfNeeded(moveTime, prevSorterPart.moveFinishedTime);
-
-    if (slowdownNeeded) {
-      // find updated move and jet times
-      moveTime += arrivalTimeDelay;
-      jetTime += arrivalTimeDelay;
-
-      // --- insert speed change
-      const startSpeedChange = prevSorterPart.jetTime || Date.now();
-      this.insertSpeedChange(startSpeedChange, jetTime, arrivalTimeDelay);
-
-      // --- reschedule part actions after slowdown
-      this.rescheduleActions(startSpeedChange, jetTime, arrivalTimeDelay);
-    }
-
-    // create and schedule part actions
-    this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
-
-    this.filterQueues();
   };
 }
