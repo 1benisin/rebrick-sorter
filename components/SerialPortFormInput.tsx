@@ -1,15 +1,14 @@
-// In your settings/page.tsx
-'use client';
+// In your components/SerialPortFormInput.tsx
 
-import { Control } from 'react-hook-form';
-import { SettingsFormType } from '@/types/settingsForm.d';
+import { Control, Controller } from 'react-hook-form';
+import { SettingsType } from '@/types/settings.type';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
 interface SerialPortFormInputProps {
-  control: Control<SettingsFormType>;
+  control: Control<SettingsType>;
   name: any;
   label: string;
   description: string;
@@ -27,7 +26,7 @@ const SerialPortFormInput: React.FC<SerialPortFormInputProps> = ({ control, name
         // validate array of strings with zod
         const arduinoPortType = z.array(z.string());
         arduinoPortType.parse(data);
-
+        console.log(data);
         setPorts(data);
       } catch (error) {
         console.error(error);
@@ -37,31 +36,36 @@ const SerialPortFormInput: React.FC<SerialPortFormInputProps> = ({ control, name
     fetchSerialPorts();
   }, []);
 
+  if (!ports.length) return null;
+
   return (
     <FormField
       control={control}
       name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>{' '}
-          <Select onValueChange={field.onChange}>
-            <FormControl>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a Serial Port" />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {ports.map((port) => (
-                <SelectItem key={port} value={port}>
-                  {port}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FormDescription>{description}</FormDescription>
-          <FormMessage />
-        </FormItem>
-      )}
+      render={({ field }) => {
+        console.log(field);
+        return (
+          <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <Select defaultValue={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Port" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {ports.map((port) => (
+                  <SelectItem key={port} value={port}>
+                    {port}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormDescription>{description}</FormDescription>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
     />
   );
 };

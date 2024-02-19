@@ -32,7 +32,7 @@ export default class SortProcessCtrl {
 
   // a function that matches detection pairs to proper DetectionPairGroups
   private matchDetectionsPairsToGroups(detectionPairs: [Detection, Detection][]): void {
-    const detectDistanceThreshold = settingsStore.getState().detectDistanceThreshold;
+    const detectDistanceThreshold = settingsStore.getState().settings.detectDistanceThreshold;
 
     // loop through detectionPairs
     for (const detectionPair of detectionPairs) {
@@ -48,7 +48,7 @@ export default class SortProcessCtrl {
         if (!lastDetection) {
           continue;
         }
-        const conveyorSpeed_PPS = settingsStore.getState().conveyorSpeed_PPS;
+        const conveyorSpeed_PPS = settingsStore.getState().settings.conveyorSpeed_PPS;
 
         const distanceTravelled = ((unmatchedDetection.timestamp - lastDetection.timestamp) / 1000) * conveyorSpeed_PPS;
         const predictedX = lastDetection.centroid.x + distanceTravelled;
@@ -109,7 +109,7 @@ export default class SortProcessCtrl {
     for (const group of this.detectionPairGroups) {
       const lastPair = group.detectionPairs[group.detectionPairs.length - 1];
       // find the predicted centroid of the last detection in the detection group
-      const conveyorSpeed_PPS = settingsStore.getState().conveyorSpeed_PPS;
+      const conveyorSpeed_PPS = settingsStore.getState().settings.conveyorSpeed_PPS;
       const distanceTravelled = ((Date.now() - lastPair[0].timestamp) / 1000) * conveyorSpeed_PPS;
       const predictedX = lastPair[0].centroid.x + distanceTravelled;
       if (predictedX > sortProcessStore.getState().videoCaptureDimensions.width) {

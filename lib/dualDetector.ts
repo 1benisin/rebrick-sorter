@@ -74,7 +74,7 @@ export default class Detector {
   }
 
   // Method to calibrate conveyor spped
-  public async calibrateConveyorSpeed(): Promise<void> {
+  public async calibrateConveyorSpeed(): Promise<number> {
     try {
       if (!this.model) {
         const error = 'Model not loaded. Call loadModel() first.';
@@ -110,7 +110,7 @@ export default class Detector {
       // return median distance
       speeds.sort((a, b) => a - b);
       const conveyorSpeed = speeds[Math.floor(speeds.length / 2)];
-      settingsStore.getState().setConveyorSpeed_PPS(conveyorSpeed);
+      return conveyorSpeed;
     } catch (error) {
       const message = 'Error during calibration: ' + error;
       console.error(message);

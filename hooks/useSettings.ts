@@ -2,11 +2,13 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/services/firebase';
-import { settingsFormSchema, SettingsFormType } from '@/types/settingsForm.d';
+import { settingsSchema, SettingsType } from '@/types/settings.type';
 import { alertStore } from '@/stores/alertStore';
 
 const useSettings = () => {
-  const [settings, setSettings] = useState<SettingsFormType | null>(null);
+  // settings can be null, so we use the type assertion to tell TypeScript that it's not null
+  const [settings, setSettings] = useState<SettingsType | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -17,14 +19,12 @@ const useSettings = () => {
       const docRef = doc(db, 'settings', process.env.NEXT_PUBLIC_USER as string);
       const docSnap = await getDoc(docRef);
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const result = settingsFormSchema.parse(data);
+      if (!docSnap.exists()) throw new Error('No settings document in DB!');
+      const data = docSnap.data();
+      const result = settingsSchema.parse(data);
 
-        setSettings(result);
-      } else {
-        console.log('No settings document in DB!');
-      }
+      setSettings(result);
+      setLoaded(true);
     } catch (error) {
       alertStore.getState().addAlert({
         type: 'error',
@@ -36,9 +36,9 @@ const useSettings = () => {
     }
   };
 
-  const saveSettings = async (state: SettingsFormType) => {
+  const saveSettings = async (state: SettingsType) => {
     try {
-      const result = settingsFormSchema.parse(state);
+      const result = settingsSchema.parse(state);
 
       const docRef = doc(db, 'settings', process.env.NEXT_PUBLIC_USER as string);
       await setDoc(docRef, result, { merge: true });
@@ -59,7 +59,7 @@ const useSettings = () => {
     }
   };
 
-  return { loadSettings, saveSettings, settings };
+  return { loaded, loadSettings, saveSettings, settings };
 };
 
 export default useSettings;

@@ -3,34 +3,46 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
-import { settingsFormSchema, SettingsFormType } from '@/types/settingsForm.d';
+import { settingsSchema, SettingsType, sorterSettingsSchema } from '@/types/settings.type';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import useSettings from '@/hooks/useSettings';
 import SerialPortFormInput from '@/components/SerialPortFormInput';
+import { useEffect } from 'react';
 
 const SettingsForm = () => {
-  const { settings, saveSettings } = useSettings();
+  const { settings, saveSettings, loaded } = useSettings();
 
-  const defaultSettingsObject: SettingsFormType = settingsFormSchema.parse({});
-
-  const form = useForm<SettingsFormType>({
-    resolver: zodResolver(settingsFormSchema),
-    mode: 'onBlur',
-    values: settings || defaultSettingsObject,
+  const form = useForm<SettingsType>({
+    resolver: zodResolver(settingsSchema),
+    // defaultValues: settings || settingsSchema.parse({}),
+    values: settings || settingsSchema.parse({}),
   });
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'sorters',
   });
 
-  const onSubmit: SubmitHandler<SettingsFormType> = (data) => {
+  useEffect(() => {
+    if (!!settings) {
+      console.log('Settings loaded:', settings);
+      // Reset form with loaded settings once they are available
+      form.reset(settings);
+    }
+  }, [loaded, settings, form.reset]);
+
+  useEffect(() => {
+    console.log('Settings changed:', form.getValues());
+  }, [form.getValues()]);
+
+  const onSubmit: SubmitHandler<SettingsType> = (data) => {
     console.log('Saving Settings data: ', data);
     saveSettings(data);
   };
 
-  if (!settings) return null;
+  if (!loaded) return null;
 
   return (
     <Form {...form}>
@@ -126,7 +138,7 @@ const SettingsForm = () => {
             </Button>
           </div>
         ))}
-        <Button type="button" onClick={() => append(defaultSettingsObject.sorters[0])}>
+        <Button type="button" onClick={() => append(sorterSettingsSchema.parse({}))}>
           Add Sorter
         </Button>
         <Button type="submit">Save Settings</Button>

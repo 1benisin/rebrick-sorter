@@ -5,7 +5,6 @@ import { sortProcessStore } from '@/stores/sortProcessStore';
 import { DetectionPairGroup } from '@/types/detectionPairs';
 import { v4 as uuid } from 'uuid';
 import { Badge } from '@/components/ui/badge';
-import { settingsStore } from '@/stores/settingsStore';
 
 const DetectionPairDisplay = () => {
   const detectionPairGroups = sortProcessStore((state) => state.detectionPairGroups);
@@ -25,7 +24,6 @@ const DetectionPairDisplay = () => {
 
 const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
   const topClassification = group.combineclassification ? group.combineclassification[0] : undefined;
-  const validClassificationScore = settingsStore((state) => state.validClassificationScore);
 
   return (
     <div
@@ -36,7 +34,7 @@ const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
           <div className="relative flex items-center w-24 h-24">
             <img src={topClassification.img_url} alt={topClassification.name} />
             <Badge
-              variant={`${topClassification.score < validClassificationScore ? 'destructive' : 'secondary'}`}
+              variant={`${topClassification.score < 1 ? 'destructive' : 'secondary'}`}
               className="absolute top-0 right-0 text-xs"
             >{`${(100 * topClassification.score).toFixed(0)}%`}</Badge>
           </div>

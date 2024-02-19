@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { sortProcessStore } from '@/stores/sortProcessStore';
-import { settingsStore } from '@/stores/settingsStore';
+import useSettings from '@/hooks/useSettings';
 
 const TEST_VIDEOS = ['normal', 'too-close'];
 const TEST_VIDEO_PATH = '/test-videos/';
@@ -15,8 +15,7 @@ const Video = () => {
   const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>([]);
   const [selectedCamera, setSelectedCamera] = useState('');
   const setVideoStreamId = sortProcessStore((state) => state.setVideoStreamId);
-  const camera1VerticalPositionPercentage = settingsStore((state) => state.camera1VerticalPositionPercentage);
-  const camera2VerticalPositionPercentage = settingsStore((state) => state.camera2VerticalPositionPercentage);
+  const { settings, loaded } = useSettings();
 
   useEffect(() => {
     const getCameras = async () => {
@@ -73,6 +72,8 @@ const Video = () => {
     await selectCamera(cameraId);
   };
 
+  if (!loaded) return null;
+
   return (
     <div className="flex flex-col max-w-md min-w-96 mx-auto">
       {/* Video container with Tailwind classes to clip to bottom half */}
@@ -90,7 +91,7 @@ const Video = () => {
             muted
             className="top-0 left-0 w-full"
             // translate video vertically
-            style={{ transform: `translateY(${camera1VerticalPositionPercentage}%)` }}
+            style={{ transform: `translateY(${settings.camera1VerticalPositionPercentage}%)` }}
           ></video>
 
           <canvas id="canvas1" className="absolute top-0 left-0 w-full h-full bg-blue-600 opacity-50"></canvas>
@@ -105,7 +106,7 @@ const Video = () => {
             muted
             className="top-0 left-0 w-full"
             // translate video vertically
-            style={{ transform: `translateY(${camera2VerticalPositionPercentage}%)` }}
+            style={{ transform: `translateY(${settings.camera2VerticalPositionPercentage}%)` }}
           ></video>
           <canvas id="canvas2" className="absolute top-0 left-0 w-full h-full bg-red-600 opacity-50"></canvas>
         </div>

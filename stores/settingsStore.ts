@@ -1,42 +1,13 @@
 // settingsStore.ts
 
 import { create } from 'zustand';
-import { Sorter } from '@/types/types';
 import { db } from '@/services/firebase';
-import { settingsSchema } from '@/types/types';
+import { SettingsType, settingsSchema } from '@/types/settings.type';
 import { alertStore } from './alertStore';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ArduinoPortType } from '@/types/arduinoPort';
-import { settingsFormSchema } from '@/types/settingsForm.d';
 
 interface SettingsState {
-  // Classification settings
-  validClassificationScore: number; // goes form 0 to above 1 - minimum score for a classification to be considered valid
-  setValidClassificationScore: (validClassificationScore: number) => void;
-
-  // Video settings
-  camera1VerticalPositionPercentage: number; // pixels
-  camera2VerticalPositionPercentage: number; // pixels
-  setCamera1VerticalPositionPercentage: (camera1VerticalPositionPercentage: number) => void;
-  setCamera2VerticalPositionPercentage: (camera2VerticalPositionPercentage: number) => void;
-
-  // Conveyor settings
-  conveyorSpeed_PPS: number; // pixels per second
-  setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => void;
-  detectDistanceThreshold: number; // pixels
-  setDetectDistanceThreshold: (detectDistanceThreshold: number) => void;
-  conveyorSerialPort: ArduinoPortType;
-  setCoveyorSerialPort: (conveyorSerialPort: ArduinoPortType) => void;
-
-  // Sorter settings
-  sorters: Sorter[];
-  addSorterAtIndex: (index: number) => void;
-  removeSorterAtIndex: (index: number) => void;
-  updateSorter: (index: number, sorter: Sorter) => void;
-  sorterSerialPorts: ArduinoPortType[];
-  setSorterSerialPort: (sorterSerialPort: ArduinoPortType) => void;
-
-  // General settings
+  settings: SettingsType;
   loaded: boolean; // To track if settings have been loaded from DB
   fetchSettings: () => Promise<void>;
   saved: boolean; // To track if settings have been saved to DB
@@ -44,64 +15,7 @@ interface SettingsState {
 }
 
 export const settingsStore = create<SettingsState>((set, get) => ({
-  // Classification settings
-  validClassificationScore: 1,
-  setValidClassificationScore: (validClassificationScore: number) => set({ validClassificationScore, saved: false }),
-
-  // Video settings
-  camera1VerticalPositionPercentage: 0, // 25,
-  camera2VerticalPositionPercentage: -35,
-  setCamera1VerticalPositionPercentage: (camera1VerticalPositionPercentage: number) => set({ camera1VerticalPositionPercentage, saved: false }),
-  setCamera2VerticalPositionPercentage: (camera2VerticalPositionPercentage: number) => set({ camera2VerticalPositionPercentage, saved: false }),
-
-  // Conveyor settings
-  conveyorSpeed_PPS: 0,
-  setConveyorSpeed_PPS: (conveyorSpeed_PPS: number) => set({ conveyorSpeed_PPS, saved: false }),
-  detectDistanceThreshold: 0,
-  setDetectDistanceThreshold: (detectDistanceThreshold: number) => set({ detectDistanceThreshold, saved: false }),
-  conveyorSerialPort: { name: '', path: '' },
-  setCoveyorSerialPort: (conveyorSerialPort: ArduinoPortType) => set({ conveyorSerialPort, saved: false }),
-
-  // Sorter settings
-  sorters: [],
-  addSorterAtIndex: (index: number) => {
-    set((state) => {
-      const newSorters = [...state.sorters];
-      newSorters.splice(index, 0, {
-        name: Math.random().toString(36).substring(7),
-        gridDimensions: { width: 10, height: 10 },
-        airJetPosition: 0,
-        maxPartDimension: 10,
-      });
-      return { sorters: newSorters, saved: false };
-    });
-  },
-  removeSorterAtIndex: (index: number) => {
-    set((state) => {
-      const newSorters = [...state.sorters];
-      newSorters.splice(index, 1);
-      return { sorters: newSorters, saved: false };
-    });
-  },
-  updateSorter: (index: number, sorter: Sorter) => {
-    set((state) => {
-      const newSorters = [...state.sorters];
-      newSorters[index] = sorter;
-      return { sorters: newSorters, saved: false };
-    });
-  },
-  sorterSerialPorts: [],
-  setSorterSerialPort: (sorterSerialPort: ArduinoPortType) => {
-    set((state) => {
-      // a port already has the same portName overwrite it with the new one
-      // otherwise add the new port
-      const newSorterSerialPorts = state.sorterSerialPorts.filter((port) => port.name !== sorterSerialPort.name);
-      newSorterSerialPorts.push(sorterSerialPort);
-      return { sorterSerialPorts: newSorterSerialPorts, saved: false };
-    });
-  },
-
-  // --- General settings
+  settings: settingsSchema.parse({}), // Initial state is default settings
   loaded: false, // Initial state is not loaded
   fetchSettings: async () => {
     if (get().loaded) return; // If already loaded, do nothing
@@ -134,7 +48,7 @@ export const settingsStore = create<SettingsState>((set, get) => ({
   saveSettings: async () => {
     // just get conveyorSpeed_PPS, sorters, detectDistanceThreshold from state and save to DB
     const state = get();
-    const result = settingsFormSchema.safeParse(state);
+    const result = settingsSchema.safeParse(state);
 
     if (!result.success) {
       console.error('Error parsing settings data on Save:', result.error);
