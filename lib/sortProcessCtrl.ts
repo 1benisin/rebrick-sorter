@@ -11,6 +11,7 @@ import { BrickognizeResponse } from '@/types/types';
 import { v4 as uuid } from 'uuid';
 import axios from 'axios';
 import { SortPartDto } from '@/types/sortPart.dto';
+import DualVideoCapture from '@/lib/dualVideoCapture';
 
 const MIN_PROCESS_LOOP_TIME = 1000;
 
@@ -19,13 +20,13 @@ export default class SortProcessCtrl {
   private detector: Detector;
   private detectionPairGroups: DetectionPairGroup[] = [];
 
-  private constructor() {
-    this.detector = Detector.getInstance();
+  private constructor(detector: Detector) {
+    this.detector = detector;
   }
 
-  public static getInstance(): SortProcessCtrl {
+  public static getInstance(detector: Detector): SortProcessCtrl {
     if (!SortProcessCtrl.instance) {
-      SortProcessCtrl.instance = new SortProcessCtrl();
+      SortProcessCtrl.instance = new SortProcessCtrl(detector);
     }
     return SortProcessCtrl.instance;
   }

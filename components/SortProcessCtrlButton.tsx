@@ -5,24 +5,19 @@ import React, { useEffect, useState } from 'react';
 import SortProcessCtrl from '@/lib/sortProcessCtrl';
 import { Button } from '@/components/ui/button';
 import { sortProcessStore } from '@/stores/sortProcessStore';
+import useSortController from '@/hooks/useSortController';
 
 const SortProcessCtrlButton = () => {
-  const [localSortProcessCtrl, setLocalSortProcessCtrl] = useState<SortProcessCtrl | null>(null);
   const { isRunning } = sortProcessStore();
-
-  useEffect(() => {
-    const controller = SortProcessCtrl.getInstance();
-    setLocalSortProcessCtrl(controller);
-  }, []);
+  const sortController = useSortController();
 
   const handleStartStop = () => {
-    if (!localSortProcessCtrl) {
-      return;
-    }
+    if (!sortController) return;
+
     if (isRunning) {
-      localSortProcessCtrl.stop();
+      sortController.stop();
     } else {
-      localSortProcessCtrl.start();
+      sortController.start();
     }
   };
 

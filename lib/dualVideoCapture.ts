@@ -3,22 +3,29 @@
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import { alertStore } from '@/stores/alertStore';
 import { ImageCaptureType } from '@/types/imageCapture';
+import { initialize } from 'next/dist/server/lib/render-server';
 
 class DualVideoCapture {
+  static instance: DualVideoCapture;
   private imageCapture1: ImageCapture | null = null;
   private imageCapture2: ImageCapture | null = null;
   private videoStreamId: string = '';
 
-  constructor() {
-    // Initial setup can be done here if needed
-    this.setupImageCaptureTrack();
+  private constructor() {}
+
+  public static getInstance(): DualVideoCapture {
+    if (!DualVideoCapture.instance) {
+      console.log('Creating new DualVideoCapture instance');
+      DualVideoCapture.instance = new DualVideoCapture();
+    }
+    return DualVideoCapture.instance;
   }
 
   // Function to initialize or update the MediaStream track for ImageCapture
-  private async setupImageCaptureTrack(): Promise<void> {
+  public async init(videoStreamId: string): Promise<void> {
+    if (this.videoStreamId === videoStreamId) return;
+    console.log('Initializing ImageCapture with videoStreamId:', videoStreamId);
     try {
-      const videoStreamId = sortProcessStore.getState().videoStreamId;
-
       this.videoStreamId = videoStreamId;
       if (videoStreamId.slice(0, 4) === 'test') {
         // if videoStreamId is a test stream, use the video element to capture the stream
@@ -62,18 +69,8 @@ class DualVideoCapture {
     }
   }
 
-  private async checkImageCaptureIsCurrent(): Promise<void> {
-    // make sure it matches videostreamId in case it was changed
-    const videoStreamId = sortProcessStore.getState().videoStreamId;
-    if (!this.imageCapture1 || this.videoStreamId !== videoStreamId) {
-      await this.setupImageCaptureTrack();
-    }
-  }
-
   // Function to capture a photo from the current track
   public async captureImage(): Promise<ImageCaptureType> {
-    await this.checkImageCaptureIsCurrent();
-
     if (!this.imageCapture1 || !this.imageCapture2) {
       const message = 'An ImageCapture not initialized';
       console.error(message);

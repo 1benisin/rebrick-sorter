@@ -1,33 +1,28 @@
 // sorterControllerButton.jsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import Detector from '@/lib/dualDetector';
+import useDetector from '@/hooks/useDetector';
 
 const CalibrationButton = () => {
-  const [localDetector, setLocalDetector] = useState<Detector | null>(null);
   const [isCalibrating, setIsCalibrating] = useState(false);
-  const [calibrationResult, setCalibrationResult] = useState(0);
-
-  useEffect(() => {
-    const detector = Detector.getInstance();
-    setLocalDetector(detector);
-  }, []);
+  const [calibrationResult, setCalibrationResult] = useState<number | null>(null);
+  const detector = useDetector();
 
   const handleCalibrate = async () => {
-    if (!localDetector) {
+    if (!detector) {
       return;
     }
     setIsCalibrating(true);
-    await localDetector.calibrateConveyorSpeed().then((result) => {
+    await detector.calibrateConveyorSpeed().then((result) => {
       setIsCalibrating(false);
       setCalibrationResult(result);
     });
   };
 
   return (
-    <>
+    <div className="flex items-center p-2">
       <Button
         className="ml-4 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
         variant={isCalibrating ? 'outline' : 'default'}
@@ -37,7 +32,7 @@ const CalibrationButton = () => {
         {isCalibrating ? 'Calibrating...' : 'Calibrate'}
       </Button>
       {calibrationResult && <span> {calibrationResult}</span>}
-    </>
+    </div>
   );
 };
 

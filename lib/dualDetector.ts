@@ -6,7 +6,8 @@ import { alertStore } from '@/stores/alertStore';
 import { settingsStore } from '@/stores/settingsStore';
 import { CLASSIFICATION_DIMENSIONS } from './classifier';
 import { Detection } from '@/types/types';
-import DualVideoCapture from './dualVideoCapture';
+import DualVideoCapture from './videoCapture';
+import { initialize } from 'next/dist/server/lib/render-server';
 
 const DETECTION_MODEL_URL = '/detection-model/model.json';
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
@@ -29,20 +30,25 @@ type PredictionsPair = {
 
 export default class Detector {
   private static instance: Detector;
+  private initialized = false;
   private model: automl.ObjectDetectionModel | null = null;
-  private dualVideoCapture: DualVideoCapture;
+  public videoCapture: DualVideoCapture;
 
   // videoId default value is "video"
-  private constructor(videoId = 'video') {
-    this.loadModel();
-    this.dualVideoCapture = new DualVideoCapture();
-  }
+  private constructor() {}
 
   public static getInstance(): Detector {
     if (!Detector.instance) {
       Detector.instance = new Detector();
     }
     return Detector.instance;
+  }
+
+  public async init(videoCapture: DualVideoCapture): Promise<void> {
+    if (this.initialized) return;
+    this.videoCapture = videoCapture;
+    await this.loadModel();
+    this.initialized = true;
   }
 
   // Method to load the model
@@ -121,8 +127,8 @@ export default class Detector {
 
   // Method to detect objects in an image
   public async detect(): Promise<[Detection, Detection][]> {
-    // Check if dualVideoCapture is loaded
-    if (!this.dualVideoCapture) {
+    // Check if videoCapture is loaded
+    if (!this.videoCapture) {
       const error = 'DualVideoCapture for Detector not loaded.';
       alertStore.getState().addAlert({ type: 'error', message: error, timestamp: Date.now() });
       throw new Error(error);
@@ -136,7 +142,7 @@ export default class Detector {
 
     try {
       // Capture an image from the camera
-      const imageCapture = await this.dualVideoCapture.captureImage();
+      const imageCapture = await this.videoCapture.captureImage();
 
       // scale down original image to speed up detection
       const scalar = Detector.getImageScalar(imageCapture.imageBitmaps[0]);

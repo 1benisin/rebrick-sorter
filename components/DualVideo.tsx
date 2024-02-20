@@ -15,7 +15,7 @@ const Video = () => {
   const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>([]);
   const [selectedCamera, setSelectedCamera] = useState('');
   const setVideoStreamId = sortProcessStore((state) => state.setVideoStreamId);
-  const { settings, loaded } = useSettings();
+  const { settings } = useSettings();
 
   useEffect(() => {
     const getCameras = async () => {
@@ -38,7 +38,6 @@ const Video = () => {
 
   const selectCamera = async (cameraId: string) => {
     if (videoRef1.current && videoRef2.current) {
-      setVideoStreamId(cameraId);
       if (cameraId.slice(0, 4) === 'test') {
         videoRef1.current.srcObject = null;
         videoRef2.current.srcObject = null;
@@ -59,8 +58,12 @@ const Video = () => {
           console.error('Error accessing the selected camera:', error);
         }
       }
-      // console.log width and height of video
+
       videoRef1.current.onloadedmetadata = () => {
+        // update videoStreamId in sortProcessStore
+        // this will trigger the useVideoCapture hook to update the videoCapture instance
+        setVideoStreamId(cameraId);
+        // console.log width and height of video
         console.log('videoRef1.current.videoWidth', videoRef1.current?.videoWidth);
         console.log('videoRef1.current.videoHeight', videoRef1.current?.videoHeight);
       };
@@ -72,7 +75,7 @@ const Video = () => {
     await selectCamera(cameraId);
   };
 
-  if (!loaded) return null;
+  if (!settings) return null;
 
   return (
     <div className="flex flex-col max-w-md min-w-96 mx-auto">
