@@ -21,10 +21,12 @@ const SortProcessCtrlButton = () => {
     }
   };
 
+  if (!sortController) return null;
+
   return (
     <Button
       onClick={handleStartStop}
-      className={`px-4 py-2 font-bold text-white rounded 
+      className={`px-4 py-2 font-bold text-white rounded m-2
       ${isRunning ? 'bg-red-500 hover:bg-red-700' : 'bg-green-500 hover:bg-green-700'}`}
     >
       {isRunning ? 'Stop' : 'Start'}

@@ -1,3 +1,4 @@
+'use client';
 // Import necessary hooks and Firebase functions
 import { useState, useEffect } from 'react';
 import DualVideoCapture from '@/lib/dualVideoCapture';

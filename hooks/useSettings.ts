@@ -1,20 +1,29 @@
 // Import necessary hooks and Firebase functions
+'use client';
 import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { settingsSchema, SettingsType } from '@/types/settings.type';
 import { alertStore } from '@/stores/alertStore';
 
+enum LoadStatus {
+  Loading = 'loading',
+  Loaded = 'loaded',
+  Failed = 'failed',
+}
+
 const useSettings = () => {
   // settings can be null, so we use the type assertion to tell TypeScript that it's not null
   const [settings, setSettings] = useState<SettingsType | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
 
   useEffect(() => {
     loadSettings();
   }, []);
 
   const loadSettings = async () => {
+    console.log('Loading settings...');
+    setStatus(LoadStatus.Loading);
     try {
       const docRef = doc(db, 'settings', process.env.NEXT_PUBLIC_USER as string);
       const docSnap = await getDoc(docRef);
@@ -24,13 +33,14 @@ const useSettings = () => {
       const result = settingsSchema.parse(data);
 
       setSettings(result);
-      setLoaded(true);
+      setStatus(LoadStatus.Loaded);
     } catch (error) {
-      alertStore.getState().addAlert({
-        type: 'error',
-        message: 'Failed to fetch settings',
-        timestamp: Date.now(),
-      });
+      setStatus(LoadStatus.Failed);
+      // alertStore.getState().addAlert({
+      //   type: 'error',
+      //   message: 'Failed to fetch settings',
+      //   timestamp: Date.now(),
+      // });
 
       console.error('Error fetching settings:', error);
     }
@@ -59,7 +69,7 @@ const useSettings = () => {
     }
   };
 
-  return { loaded, loadSettings, saveSettings, settings };
+  return { loadSettings, saveSettings, settings, status };
 };
 
 export default useSettings;

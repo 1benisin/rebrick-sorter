@@ -1,5 +1,4 @@
 // sortProcessController.ts
-// import Detector from './detector';
 import Detector from '@/lib/dualDetector';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import { settingsStore } from '@/stores/settingsStore';
@@ -11,35 +10,35 @@ import { BrickognizeResponse } from '@/types/types';
 import { v4 as uuid } from 'uuid';
 import axios from 'axios';
 import { SortPartDto } from '@/types/sortPart.dto';
-import DualVideoCapture from '@/lib/dualVideoCapture';
+import { SettingsType } from '@/types/settings.type';
 
-const MIN_PROCESS_LOOP_TIME = 1000;
+const MIN_PROCESS_LOOP_TIME = 1500;
 
 export default class SortProcessCtrl {
   private static instance: SortProcessCtrl;
   private detector: Detector;
   private detectionPairGroups: DetectionPairGroup[] = [];
+  private settings: SettingsType;
 
-  private constructor(detector: Detector) {
+  private constructor(detector: Detector, settings: SettingsType) {
     this.detector = detector;
+    this.settings = settings;
   }
 
-  public static getInstance(detector: Detector): SortProcessCtrl {
+  public static getInstance(detector: Detector, settings: SettingsType): SortProcessCtrl {
     if (!SortProcessCtrl.instance) {
-      SortProcessCtrl.instance = new SortProcessCtrl(detector);
+      SortProcessCtrl.instance = new SortProcessCtrl(detector, settings);
     }
     return SortProcessCtrl.instance;
   }
 
   // a function that matches detection pairs to proper DetectionPairGroups
   private matchDetectionsPairsToGroups(detectionPairs: [Detection, Detection][]): void {
-    const detectDistanceThreshold = settingsStore.getState().settings.detectDistanceThreshold;
-
     // loop through detectionPairs
     for (const detectionPair of detectionPairs) {
       const unmatchedDetection = detectionPair[0];
       // find the index of the detection group whose last detection centroid is closest unmatchedDetection centroid
-      let closestDistance = detectDistanceThreshold;
+      let closestDistance = this.settings.detectDistanceThreshold;
       let closestGroupIndex = null;
 
       // start form the end of the array to get the last detection
@@ -49,7 +48,7 @@ export default class SortProcessCtrl {
         if (!lastDetection) {
           continue;
         }
-        const conveyorSpeed_PPS = settingsStore.getState().settings.conveyorSpeed_PPS;
+        const conveyorSpeed_PPS = this.settings.conveyorSpeed_PPS;
 
         const distanceTravelled = ((unmatchedDetection.timestamp - lastDetection.timestamp) / 1000) * conveyorSpeed_PPS;
         const predictedX = lastDetection.centroid.x + distanceTravelled;
@@ -61,6 +60,7 @@ export default class SortProcessCtrl {
           closestGroupIndex = i;
         }
       }
+
       if (closestGroupIndex !== null) {
         // if closestDetectionGroup is found, add unmatchedDetection to closestDetectionGroup
         this.detectionPairGroups[closestGroupIndex].detectionPairs.push(detectionPair);
@@ -110,7 +110,7 @@ export default class SortProcessCtrl {
     for (const group of this.detectionPairGroups) {
       const lastPair = group.detectionPairs[group.detectionPairs.length - 1];
       // find the predicted centroid of the last detection in the detection group
-      const conveyorSpeed_PPS = settingsStore.getState().settings.conveyorSpeed_PPS;
+      const conveyorSpeed_PPS = this.settings.conveyorSpeed_PPS;
       const distanceTravelled = ((Date.now() - lastPair[0].timestamp) / 1000) * conveyorSpeed_PPS;
       const predictedX = lastPair[0].centroid.x + distanceTravelled;
       if (predictedX > sortProcessStore.getState().videoCaptureDimensions.width) {

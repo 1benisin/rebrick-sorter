@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { serialPortNamesArray } from '@/types/serialPort.type';
 
 const SettingsForm = () => {
-  const { settings, saveSettings, loaded } = useSettings();
+  const { settings, saveSettings } = useSettings();
 
   const form = useForm<SettingsType>({
     resolver: zodResolver(settingsSchema),
@@ -32,7 +32,7 @@ const SettingsForm = () => {
     saveSettings(data);
   };
 
-  if (!loaded) return null;
+  if (!settings) return null;
 
   return (
     <Form {...form}>
@@ -57,7 +57,7 @@ const SettingsForm = () => {
             name="detectDistanceThreshold"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>detectDistanceThreshold</FormLabel>
+                <FormLabel>Detect Distance Threshold</FormLabel>
                 <FormControl>
                   <Input type="number" {...field} />
                 </FormControl>
@@ -72,7 +72,7 @@ const SettingsForm = () => {
             name="classificationThresholdPercentage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>classificationThresholdPercentage</FormLabel>
+                <FormLabel>Classification Threshold Percentage</FormLabel>
                 <FormControl>
                   <Input type="number" {...field} />
                 </FormControl>
@@ -86,7 +86,7 @@ const SettingsForm = () => {
             name="camera1VerticalPositionPercentage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>camera1VerticalPositionPercentage</FormLabel>
+                <FormLabel>Camera1 Vertical Position </FormLabel>
                 <FormControl>
                   <Input type="number" {...field} />
                 </FormControl>
@@ -100,7 +100,7 @@ const SettingsForm = () => {
             name="camera2VerticalPositionPercentage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>camera2VerticalPositionPercentage</FormLabel>
+                <FormLabel>Camera2 Vertical Position</FormLabel>
                 <FormControl>
                   <Input type="number" {...field} />
                 </FormControl>

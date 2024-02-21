@@ -1,4 +1,5 @@
 // video.tsx:
+'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

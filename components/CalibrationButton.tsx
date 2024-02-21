@@ -8,7 +8,7 @@ import useDetector from '@/hooks/useDetector';
 const CalibrationButton = () => {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationResult, setCalibrationResult] = useState<number | null>(null);
-  const detector = useDetector();
+  const { detector } = useDetector();
 
   const handleCalibrate = async () => {
     if (!detector) {

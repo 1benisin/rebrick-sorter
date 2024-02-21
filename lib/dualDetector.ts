@@ -3,11 +3,9 @@
 import * as automl from '@tensorflow/tfjs-automl';
 import '@tensorflow/tfjs-backend-webgl';
 import { alertStore } from '@/stores/alertStore';
-import { settingsStore } from '@/stores/settingsStore';
 import { CLASSIFICATION_DIMENSIONS } from './classifier';
 import { Detection } from '@/types/types';
-import DualVideoCapture from './videoCapture';
-import { initialize } from 'next/dist/server/lib/render-server';
+import DualVideoCapture from './dualVideoCapture';
 
 const DETECTION_MODEL_URL = '/detection-model/model.json';
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
@@ -32,7 +30,7 @@ export default class Detector {
   private static instance: Detector;
   private initialized = false;
   private model: automl.ObjectDetectionModel | null = null;
-  public videoCapture: DualVideoCapture;
+  public videoCapture: DualVideoCapture | null = null;
 
   // videoId default value is "video"
   private constructor() {}
@@ -51,8 +49,13 @@ export default class Detector {
     this.initialized = true;
   }
 
+  public async reInit(videoCapture: DualVideoCapture): Promise<void> {
+    this.initialized = false;
+    await this.init(videoCapture);
+  }
+
   // Method to load the model
-  async loadModel(): Promise<void> {
+  private async loadModel(): Promise<void> {
     if (this.model) {
       return;
     }
@@ -80,7 +83,7 @@ export default class Detector {
   }
 
   // Method to calibrate conveyor spped
-  public async calibrateConveyorSpeed(): Promise<number> {
+  async calibrateConveyorSpeed(): Promise<number> {
     try {
       if (!this.model) {
         const error = 'Model not loaded. Call loadModel() first.';
@@ -126,7 +129,7 @@ export default class Detector {
   }
 
   // Method to detect objects in an image
-  public async detect(): Promise<[Detection, Detection][]> {
+  async detect(): Promise<[Detection, Detection][]> {
     // Check if videoCapture is loaded
     if (!this.videoCapture) {
       const error = 'DualVideoCapture for Detector not loaded.';
@@ -188,6 +191,13 @@ export default class Detector {
       alertStore.getState().addAlert({ type: 'error', message, timestamp: Date.now() });
       throw new Error(message);
     }
+  }
+
+  public static getImageScalar(imageBitmap: ImageBitmap): number {
+    const { width, height } = imageBitmap;
+    const scalar = Math.min(1, MAX_DETECTION_DIMENSION / Math.max(width, height));
+
+    return scalar;
   }
 
   private createDetections(
@@ -360,13 +370,6 @@ export default class Detector {
         videoCaptureContainer.appendChild(flattenedCanvas);
       }
     }
-  }
-
-  public static getImageScalar(imageBitmap: ImageBitmap): number {
-    const { width, height } = imageBitmap;
-    const scalar = Math.min(1, MAX_DETECTION_DIMENSION / Math.max(width, height));
-
-    return scalar;
   }
 
   private scaleCanvas(canvas: HTMLCanvasElement, scalar: number): HTMLCanvasElement {
