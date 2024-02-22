@@ -6,6 +6,7 @@ export const sorterSettingsSchema = z.object({
   serialPort: z.string().min(1).default('default'),
   gridWidth: z.coerce.number().min(1, { message: 'Grid width must be greater than 0' }).default(1),
   gridHeight: z.coerce.number().min(1, { message: 'Grid height must be greater than 0' }).default(1),
+  jetPosition: z.coerce.number().min(0, { message: 'Jet position must be greater than or equal to 0' }).default(0),
 });
 
 export const settingsSchema = z.object({

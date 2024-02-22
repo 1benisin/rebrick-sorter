@@ -1,13 +1,15 @@
 import { z } from 'zod';
-import { binLookup } from './binLookup.type';
 import { serialPortSchema } from './serialPort.type';
 
 export const hardwareInitSchema = z.object({
-  binLookup: binLookup,
   defaultConveyorSpeed_PPS: z.number(), // pixels per second
-  sorterTravelTimes: z.array(z.array(z.number())),
-  sorterBinPositions: z.array(z.array(z.object({ x: z.number(), y: z.number() }))),
   serialPorts: z.array(serialPortSchema),
+  sorterDimensions: z.array(
+    z.object({
+      gridWidth: z.number(),
+      gridHeight: z.number(),
+    }),
+  ),
   jetPositions: z.array(z.number()),
 });
 

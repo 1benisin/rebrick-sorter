@@ -1,8 +1,7 @@
 // sorterControllerButton.jsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import SortProcessCtrl from '@/lib/sortProcessCtrl';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import useSortController from '@/hooks/useSortController';

@@ -4,33 +4,14 @@ import SerialPortManager from './serialPortManager';
 import { ArduinoCommands, ArduinoDeviceCommand } from '@/types/arduinoCommands.d';
 import { serialPortNames } from '@/types/serialPort.type';
 import { SortPartDto } from '@/types/sortPart.dto';
-import { getStorage, ref, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/services/firebase';
-import { BinLookup, binLookup } from '@/types/binLookup.type';
+import { BinLookupType } from '@/types/binLookup.type';
 import { HardwareInitDto } from '@/types/hardwareInit.dto';
 
-// TODO: fetch below values from settings
-// const this.conveyorSpeed_PPS = 250; // pixels per second
-// const this.jetPositions = [465, 1460]; // pixels
-// const this.sorterTravelTimes = [
-//   [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
-//   [0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870, 3006, 3009, 3144],
-// ];
-
-// const this.sorterBinPositions = [
-//   [
-//     { x: 0, y: 0 },
-//     { x: 0, y: 1 },
-//     { x: 1, y: 0 },
-//     { x: 1, y: 1 },
-//   ],
-//   [
-//     { x: 0, y: 0 },
-//     { x: 0, y: 1 },
-//     { x: 1, y: 0 },
-//     { x: 1, y: 1 },
-//   ],
-// ];
+// TODO: integreate methods to calibrate sorter travel times
+const sorterTravelTimes = [
+  [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
+  [0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870, 3006, 3009, 3144],
+];
 
 const FALL_TIME = 800; // time it takes to fall down the tube
 const MOVE_PAUSE_BUFFER = 1600; // time buffer for part to fall out the tube
@@ -39,13 +20,13 @@ export default class HardwareController {
   static instance: HardwareController;
   private serialPortManager: SerialPortManager;
 
+  initialized: boolean = false;
+
   private serialPorts: Record<string, string> = {};
-  private binLookup: BinLookup = {};
   private defaultConveyorSpeed_PPS: number = 0;
   private sorterTravelTimes: number[][] = [];
   private sorterBinPositions: { x: number; y: number }[][] = [];
   private jetPositions: number[] = [];
-  initialized: boolean = false;
 
   private partQueue: PartQueue = [];
   private speedQueue: SpeedQueue = [];
@@ -74,13 +55,13 @@ export default class HardwareController {
       }, {});
 
       // load bin lookup data
-      this.binLookup = initSettings.binLookup;
+      // this.binLookup = initSettings.binLookup;
 
-      // set sorter travel times
-      this.sorterTravelTimes = initSettings.sorterTravelTimes;
+      // // set sorter travel times
+      this.sorterTravelTimes = sorterTravelTimes;
 
-      // set sorter bin positions
-      this.sorterBinPositions = initSettings.sorterBinPositions;
+      // generate sorter bin positions
+      this.generateBinPositions(initSettings.sorterDimensions);
 
       // set conveyor speed
       this.defaultConveyorSpeed_PPS = initSettings.defaultConveyorSpeed_PPS;
@@ -93,6 +74,23 @@ export default class HardwareController {
       throw new Error(`Failed to initialize hardware controller: ${error}`);
     }
   }
+
+  private generateBinPositions = (
+    sorterDimensions: {
+      gridWidth: number;
+      gridHeight: number;
+    }[],
+  ) => {
+    for (const { gridHeight, gridWidth } of sorterDimensions) {
+      const positions = [{ x: 0, y: 0 }]; // postion 0 is null because bin ids start at 1
+      for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
+          positions.push({ x, y });
+        }
+      }
+      this.sorterBinPositions.push(positions);
+    }
+  };
 
   private calculateTimings(sorter: number, bin: number, initialTime: number, initialPosition: number, prevSorterbin: number | undefined) {
     const distanceToJet = this.jetPositions[sorter] - initialPosition;
@@ -309,15 +307,8 @@ export default class HardwareController {
   }
 
   // return type {sorter: string; bin: number}
-  public sortPart = ({ initialTime, initialPosition, partId }: SortPartDto): { sorter: Number; bin: Number } | { error: String } => {
+  public sortPart = ({ initialTime, initialPosition, bin, sorter }: SortPartDto): { sorter: Number; bin: Number } | { error: String } => {
     try {
-      // get bin and sorter location for part
-      const binLocation = this.binLookup[partId];
-      if (!binLocation) {
-        throw new Error(`Part with id ${partId} not found in bin lookup`);
-      }
-      const { bin, sorter } = binLocation;
-
       const prevSorterPart = this.partQueue.filter((part) => part.sorter === sorter).pop();
       let { moveTime, jetTime, travelTimeFromLastBin } = this.calculateTimings(sorter, bin, initialTime, initialPosition, prevSorterPart?.bin);
       if (!prevSorterPart?.moveFinishedTime) {

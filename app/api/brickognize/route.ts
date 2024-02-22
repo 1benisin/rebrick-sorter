@@ -16,7 +16,6 @@ export async function POST(req: Request) {
       return fetch(imageURI)
         .then((res) => res.blob())
         .catch((error) => {
-          console.error('Conversion to blob failed:', error);
           throw error;
         });
     };
@@ -42,7 +41,6 @@ export async function POST(req: Request) {
     // Send the response back to the client
     return NextResponse.json(response.data);
   } catch (error) {
-    console.error('Error forwarding request to Brickognize:', error);
     return new NextResponse('Internal Error', { status: 500 });
   }
 }

@@ -1,33 +1,33 @@
 // sortProcessController.ts
 import Detector from '@/lib/dualDetector';
-import { sortProcessStore } from '@/stores/sortProcessStore';
-import { settingsStore } from '@/stores/settingsStore';
+import { sortProcessStore, SortProcessState } from '@/stores/sortProcessStore';
 import { alertStore } from '@/stores/alertStore';
-import { Detection } from '@/types/types';
 import Classifier from './classifier';
-import { DetectionPairGroup, ClassificationItem } from '@/types/detectionPairs';
-import { BrickognizeResponse } from '@/types/types';
-import { v4 as uuid } from 'uuid';
-import axios from 'axios';
-import { SortPartDto } from '@/types/sortPart.dto';
+
+import { DetectionPairGroup } from '@/types/detectionPairs';
+import { Detection } from '@/types/types';
 import { SettingsType } from '@/types/settings.type';
+
+import { v4 as uuid } from 'uuid';
 
 const MIN_PROCESS_LOOP_TIME = 1500;
 
 export default class SortProcessCtrl {
   private static instance: SortProcessCtrl;
   private detector: Detector;
+  private classifier: Classifier;
   private detectionPairGroups: DetectionPairGroup[] = [];
   private settings: SettingsType;
 
-  private constructor(detector: Detector, settings: SettingsType) {
+  private constructor(detector: Detector, classifier: Classifier, settings: SettingsType) {
     this.detector = detector;
+    this.classifier = classifier;
     this.settings = settings;
   }
 
-  public static getInstance(detector: Detector, settings: SettingsType): SortProcessCtrl {
+  public static getInstance(detector: Detector, classifier: Classifier, settings: SettingsType): SortProcessCtrl {
     if (!SortProcessCtrl.instance) {
-      SortProcessCtrl.instance = new SortProcessCtrl(detector, settings);
+      SortProcessCtrl.instance = new SortProcessCtrl(detector, classifier, settings);
     }
     return SortProcessCtrl.instance;
   }
@@ -79,24 +79,25 @@ export default class SortProcessCtrl {
     try {
       const videoCaptureDimensions = sortProcessStore.getState().videoCaptureDimensions;
 
-      // loop through detectionPairGroups
+      // loop through detectionPairGroups to find which ones to classify
       for (let i = 0; i < this.detectionPairGroups.length; i++) {
         const group = this.detectionPairGroups[i];
-        const lastDetectionPair = group.detectionPairs[group.detectionPairs.length - 1];
+        const lastDetectionIndex = group.detectionPairs.length - 1;
+        const lastDetectionPair = group.detectionPairs[lastDetectionIndex];
 
-        if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.33 && !group.classifications) {
-          // classify the detection
-          const topViewClassification = await Classifier.classify(lastDetectionPair[0].imageURI);
-          const sideViewClassification = await Classifier.classify(lastDetectionPair[1].imageURI);
+        // if past 1/3 of the screen and not already classifying: classify
+        if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.33 && !group?.classifying) {
+          this.updateDetectionPairGroupValue(group.id, 'classifying', true);
 
-          // update index of the detection used to classify
-          const indexUsedToClassify = group.detectionPairs.length - 1;
-          // add classifications to group
-          group.classifications = [topViewClassification, sideViewClassification];
-          group.indexUsedToClassify = indexUsedToClassify;
-
-          // update detectionPairGroups
-          this.detectionPairGroups[i] = group;
+          this.classifier
+            .classify(lastDetectionPair[0].imageURI, lastDetectionPair[1].imageURI, lastDetectionPair[0].timestamp, lastDetectionPair[0].centroid.x)
+            .then((response) => {
+              this.updateDetectionPairGroupValue(group.id, 'classificationResult', response);
+              this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
+            })
+            .catch((error) => {
+              console.error(`Error classifying detection pair: ${error}`);
+            });
         }
       }
     } catch (error) {
@@ -104,6 +105,21 @@ export default class SortProcessCtrl {
       console.error(message);
       alertStore.getState().addAlert({ type: 'error', message, timestamp: Date.now() });
     }
+  }
+
+  private updateDetectionPairGroupValue<K extends keyof DetectionPairGroup>(groupId: string, key: K, value: DetectionPairGroup[K]): void {
+    const groups = this.detectionPairGroups;
+    // find the group with the given id
+    const index = groups.findIndex((g) => g.id === groupId);
+    if (index === -1) return;
+
+    // Clone the matching group and update the specified key with the given value
+    const updatedGroup = { ...groups[index], [key]: value };
+
+    // Create a new array for detectionPairGroups with the updated group
+    this.detectionPairGroups = [...groups.slice(0, index), updatedGroup, ...groups.slice(index + 1)];
+
+    sortProcessStore.getState().updateDetectionPairGroupValue(groupId, key, value);
   }
 
   private markOffscreenDetections(): void {
@@ -122,68 +138,68 @@ export default class SortProcessCtrl {
     }
   }
 
-  private combineBrickognizeResponses(response1: BrickognizeResponse, response2: BrickognizeResponse): ClassificationItem[] {
-    const allItems = [...response1.items, ...response2.items];
-    const itemsById: Record<string, any[]> = {};
+  // private combineBrickognizeResponses(response1: BrickognizeResponse, response2: BrickognizeResponse): ClassificationItem[] {
+  //   const allItems = [...response1.items, ...response2.items];
+  //   const itemsById: Record<string, any[]> = {};
 
-    // Group items by ID
-    allItems.forEach((item) => {
-      if (!itemsById[item.id]) {
-        itemsById[item.id] = [];
-      }
-      itemsById[item.id].push(item);
-    });
+  //   // Group items by ID
+  //   allItems.forEach((item) => {
+  //     if (!itemsById[item.id]) {
+  //       itemsById[item.id] = [];
+  //     }
+  //     itemsById[item.id].push(item);
+  //   });
 
-    // Calculate a combined score for each item, boosting items that appear in both responses
-    const combinedItems = Object.values(itemsById).map((group) => {
-      if (group.length > 1) {
-        // Found in both responses, calculate average score and add a boost
-        const averageScore = group.reduce((acc, item) => acc + item.score, 0) / group.length;
-        const boostedScore = averageScore + 0.1; // Example boost, adjust as needed
-        return { ...group[0], score: boostedScore }; // Ensure score does not exceed 1
-      }
-      return group[0]; // Single occurrence, no boost needed
-    });
+  //   // Calculate a combined score for each item, boosting items that appear in both responses
+  //   const combinedItems = Object.values(itemsById).map((group) => {
+  //     if (group.length > 1) {
+  //       // Found in both responses, calculate average score and add a boost
+  //       const averageScore = group.reduce((acc, item) => acc + item.score, 0) / group.length;
+  //       const boostedScore = averageScore + 0.1; // Example boost, adjust as needed
+  //       return { ...group[0], score: boostedScore }; // Ensure score does not exceed 1
+  //     }
+  //     return group[0]; // Single occurrence, no boost needed
+  //   });
 
-    // Sort combined items by score, descending
-    combinedItems.sort((a, b) => b.score - a.score);
+  //   // Sort combined items by score, descending
+  //   combinedItems.sort((a, b) => b.score - a.score);
 
-    // Assuming you want the single best result
-    return combinedItems;
-  }
+  //   // Assuming you want the single best result
+  //   return combinedItems;
+  // }
 
-  private combineClassificationResults(): void {
-    // loop through detectionPairGroups
-    for (let i = 0; i < this.detectionPairGroups.length; i++) {
-      const group = this.detectionPairGroups[i];
-      if (group.classifications && !group.combineclassification) {
-        const combinedResults = this.combineBrickognizeResponses(group.classifications[0], group.classifications[1]);
-        group.combineclassification = combinedResults;
-        // update detectionPairGroups
-        this.detectionPairGroups[i] = group;
-      }
-    }
-  }
+  // private combineClassificationResults(): void {
+  //   // loop through detectionPairGroups
+  //   for (let i = 0; i < this.detectionPairGroups.length; i++) {
+  //     const group = this.detectionPairGroups[i];
+  //     if (group.classifications && !group.combineclassification) {
+  //       const combinedResults = this.combineBrickognizeResponses(group.classifications[0], group.classifications[1]);
+  //       group.combineclassification = combinedResults;
+  //       // update detectionPairGroups
+  //       this.detectionPairGroups[i] = group;
+  //     }
+  //   }
+  // }
 
-  private sendClassifiedPartsToSorter(): void {
-    // loop through detectionPairGroups
-    for (let i = 0; i < this.detectionPairGroups.length; i++) {
-      const group = this.detectionPairGroups[i];
-      if (group.combineclassification && !group.sentToSorter) {
-        const data: SortPartDto = {
-          partId: group.combineclassification[0].id,
-          initialPosition: group.detectionPairs[0][0].centroid.x,
-          initialTime: group.detectionPairs[0][0].timestamp,
-        };
-        const result = axios.post('/api/hardware/sort', data);
+  // private async sendClassifiedPartsToSorter(): Promise<void> {
+  //   // loop through detectionPairGroups
+  //   for (let i = 0; i < this.detectionPairGroups.length; i++) {
+  //     const group = this.detectionPairGroups[i];
+  //     if (group.combineclassification && !group.sentToSorter) {
+  //       const data: SortPartDto = {
+  //         partId: group.combineclassification[0].id,
+  //         initialPosition: group.detectionPairs[0][0].centroid.x,
+  //         initialTime: group.detectionPairs[0][0].timestamp,
+  //       };
+  //       const result = await axios.post('/api/hardware/sort', data);
 
-        // console.log('Sending to server', group.combineclassification[0].id);
-        group.sentToSorter = true;
-        // update detectionPairGroups
-        this.detectionPairGroups[i] = group;
-      }
-    }
-  }
+  //       // console.log('Sending to server', group.combineclassification[0].id);
+  //       group.sentToSorter = true;
+  //       // update detectionPairGroups
+  //       this.detectionPairGroups[i] = group;
+  //     }
+  //   }
+  // }
 
   private async runProcess() {
     const startTime = Date.now();
@@ -197,10 +213,10 @@ export default class SortProcessCtrl {
       // classify detections past screen center
       await this.classifyDetections();
 
-      // combine classification results
-      await this.combineClassificationResults();
+      // // combine classification results
+      // await this.combineClassificationResults();
 
-      this.sendClassifiedPartsToSorter();
+      // this.sendClassifiedPartsToSorter();
 
       // mark offscreen detections
       this.markOffscreenDetections();

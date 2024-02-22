@@ -2,6 +2,11 @@
 
 import axios, { AxiosResponse } from 'axios';
 import { brickognizeResponseSchema, BrickognizeResponse } from '@/types/types';
+import { ClassificationItem } from '@/types/detectionPairs.d';
+import { SortPartDto } from '@/types/sortPart.dto';
+import { BinLookupType, binLookupSchema } from '@/types/binLookup.type';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/services/firebase';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -9,11 +14,114 @@ export const CLASSIFICATION_DIMENSIONS = {
 };
 
 export default class Classifier {
-  constructor() {
+  private static instance: Classifier;
+  binLookup: BinLookupType | null = null;
+
+  private constructor() {
     // Initialize the classifier
   }
 
-  public static async classify(imageURI: string): Promise<BrickognizeResponse> {
+  public static getInstance(): Classifier {
+    if (!this.instance) {
+      this.instance = new Classifier();
+    }
+    return this.instance;
+  }
+
+  public async init(): Promise<void> {
+    try {
+      // load bin lookup
+      const storageRef = ref(storage, 'bin_lookup.json');
+      const binLookupUrl = await getDownloadURL(storageRef);
+      const response = await axios.get(binLookupUrl);
+
+      const formattedBinLookup = response.data.reduce((acc: Record<string, { bin: number; sorter: number }>, item: [string, number, string]) => {
+        const [partId, bin, sorter] = item;
+        if (!partId || !bin || !sorter) {
+          throw new Error(`Invalid bin lookup item: ${item}`);
+        }
+
+        //  convert sorter Letter to number (A, B, C to 1, 2, 3)
+        const sorterNumber = sorter.charCodeAt(0) - 64;
+        acc[partId] = { bin, sorter: sorterNumber };
+        return acc;
+      }, {});
+
+      this.binLookup = binLookupSchema.parse(formattedBinLookup);
+    } catch (error) {
+      console.error('Error initializing classifier:', error);
+      throw error;
+    }
+  }
+
+  private combineBrickognizeResponses(response1: BrickognizeResponse, response2: BrickognizeResponse): ClassificationItem {
+    const allItems = [...response1.items, ...response2.items];
+    const itemsById: Record<string, any[]> = {};
+
+    // Group items by ID
+    allItems.forEach((item) => {
+      if (!itemsById[item.id]) {
+        itemsById[item.id] = [];
+      }
+      itemsById[item.id].push(item);
+    });
+
+    // Calculate a combined score for each item, boosting items that appear in both responses
+    const combinedItems = Object.values(itemsById).map((group) => {
+      if (group.length > 1) {
+        // Found in both responses, calculate average score and add a boost
+        const averageScore = group.reduce((acc, item) => acc + item.score, 0) / group.length;
+        const boostedScore = averageScore + 0.1; // Example boost, adjust as needed
+        return { ...group[0], score: boostedScore }; // Ensure score does not exceed 1
+      }
+      return group[0]; // Single occurrence, no boost needed
+    });
+
+    // Sort combined items by score, descending
+    combinedItems.sort((a, b) => b.score - a.score);
+
+    // Assuming you want the single best result
+    return combinedItems[0];
+  }
+
+  public async classify(imageURI1: string, imageURI2: string, initialTime: number, initialPosition: number): Promise<ClassificationItem> {
+    try {
+      if (!this.binLookup) {
+        throw new Error('Classifier not initialized: binLookup not loaded');
+      }
+      // Classify images
+      const response1 = await this.classifyImage(imageURI1);
+      const response2 = await this.classifyImage(imageURI2);
+
+      // Combine the results
+      const combinedResult = this.combineBrickognizeResponses(response1, response2);
+
+      // lookup bin position
+      const binPosition = this.binLookup[combinedResult.id];
+      if (!binPosition) {
+        throw new Error(`No bin position found for part ID: ${combinedResult.id}`);
+      }
+
+      // send to sorter
+      const data: SortPartDto = {
+        partId: combinedResult.id,
+        initialPosition,
+        initialTime,
+        bin: binPosition.bin,
+        sorter: binPosition.sorter,
+      };
+      axios.post('/api/hardware/sort', data);
+
+      combinedResult.bin = binPosition.bin;
+      combinedResult.sorter = binPosition.sorter;
+
+      return combinedResult;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  private async classifyImage(imageURI: string): Promise<BrickognizeResponse> {
     try {
       // Send the request to your Next.js server's API route with the image URI
       const response: AxiosResponse = await axios.post('/api/brickognize', {
@@ -25,7 +133,6 @@ export default class Classifier {
       // Handle the server response as needed
       return brickognizeResponse;
     } catch (error) {
-      console.error('Error sending image to Brickognize:', error);
       throw error;
     }
   }

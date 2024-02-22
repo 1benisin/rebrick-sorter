@@ -23,20 +23,20 @@ const DetectionPairDisplay = () => {
 };
 
 const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
-  const topClassification = group.combineclassification ? group.combineclassification[0] : undefined;
+  const classification = group.classificationResult || undefined;
 
   return (
     <div
       className={`flex flex-col items-center mr-1 p-1 w-28 min-w-28 border rounded-lg ${group.offScreen == true ? ' border-gray-400 text-gray-400' : ' border-emerald-400'}`}
     >
-      {topClassification && (
+      {classification && (
         <>
           <div className="relative flex items-center w-24 h-24">
-            <img src={topClassification.img_url} alt={topClassification.name} />
+            <img src={classification.img_url} alt={classification.name} />
             <Badge
-              variant={`${topClassification.score < 1 ? 'destructive' : 'secondary'}`}
+              variant={`${classification.score < 1 ? 'destructive' : 'secondary'}`}
               className="absolute top-0 right-0 text-xs"
-            >{`${(100 * topClassification.score).toFixed(0)}%`}</Badge>
+            >{`${(100 * classification.score).toFixed(0)}%`}</Badge>
           </div>
         </>
       )}
@@ -78,7 +78,7 @@ const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
         ))}
       </div>
       {/* Display classification top item info if available */}
-      {topClassification && <div className="text-xs">{topClassification.name}</div>}
+      {classification && <div className="text-xs">{classification.name}</div>}
     </div>
   );
 };

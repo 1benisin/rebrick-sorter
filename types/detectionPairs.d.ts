@@ -11,6 +11,8 @@ export type DetectionPairGroup = {
   combineclassification?: ClassificationItem[];
   indexUsedToClassify?: number; // index of the detection used to classify
   sentToSorter?: boolean;
+  classifying?: boolean;
+  classificationResult?: ClassificationItem;
 };
 
 // combined results of two BrickognizeResponses
@@ -22,4 +24,6 @@ export type ClassificationItem = {
   img_url: string;
   external_sites?: any[];
   category: string;
+  bin?: number;
+  sorter?: number;
 };

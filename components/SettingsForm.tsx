@@ -140,7 +140,23 @@ const SettingsForm = () => {
                 </FormItem>
               )}
             />
+
             <SerialPortFormInput control={form.control} name={`sorters.${index}.serialPort`} label="Serial Port" />
+
+            <FormField
+              control={form.control}
+              name={`sorters.${index}.jetPosition`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Jet Position</FormLabel>
+                  <FormControl>
+                    <Input type="number" {...field} />
+                  </FormControl>
+
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -156,6 +172,7 @@ const SettingsForm = () => {
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name={`sorters.${index}.gridHeight`}

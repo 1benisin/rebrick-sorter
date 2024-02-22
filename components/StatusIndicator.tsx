@@ -1,11 +1,15 @@
 // Import React and necessary hooks
 import useDetector from '@/hooks/useDetector';
+import useHardware from '@/hooks/useHardware';
 import useSettings from '@/hooks/useSettings';
+import useClassifier from '@/hooks/useClassifier';
 import { cn } from '@/lib/utils';
 
 const StatusIndicator = ({}) => {
   const { status: detectorStatus, reInit } = useDetector();
   const { status: settingsStatus, loadSettings } = useSettings();
+  const { status: hardwareStatus } = useHardware();
+  const { status: cassifierStatus } = useClassifier();
 
   const statusColor = {
     loading: 'bg-yellow-700', // Yellow for loading
@@ -19,9 +23,13 @@ const StatusIndicator = ({}) => {
         Detector
       </div>
 
-      <div className={cn(statusColor[detectorStatus], 'rounded-md px-2 mx-auto w-full')} onClick={loadSettings}>
+      <div className={cn(statusColor[settingsStatus], 'rounded-md px-2 mx-auto w-full')} onClick={loadSettings}>
         Settings
       </div>
+
+      <div className={cn(statusColor[cassifierStatus], 'rounded-md px-2 mx-auto w-full')}>Classifier</div>
+
+      <div className={cn(statusColor[hardwareStatus], 'rounded-md px-2 mx-auto w-full')}>Hardware</div>
     </div>
   );
 };

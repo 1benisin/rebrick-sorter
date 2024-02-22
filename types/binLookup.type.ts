@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const binLookup = z.record(
+export const binLookupSchema = z.record(
   z.string(),
   z.object({
     bin: z.number(),
@@ -8,4 +8,4 @@ export const binLookup = z.record(
   }),
 );
 
-export type BinLookup = z.infer<typeof binLookup>;
+export type BinLookupType = z.infer<typeof binLookupSchema>;
