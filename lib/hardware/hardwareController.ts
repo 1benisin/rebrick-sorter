@@ -6,6 +6,7 @@ import { serialPortNames } from '@/types/serialPort.type';
 import { SortPartDto } from '@/types/sortPart.dto';
 import { BinLookupType } from '@/types/binLookup.type';
 import { HardwareInitDto } from '@/types/hardwareInit.dto';
+import { init } from 'next/dist/compiled/@vercel/og/satori';
 
 // TODO: integreate methods to calibrate sorter travel times
 const sorterTravelTimes = [
@@ -31,7 +32,7 @@ export default class HardwareController {
   private partQueue: PartQueue = [];
   private speedQueue: SpeedQueue = [];
 
-  constructor() {
+  private constructor() {
     this.serialPortManager = SerialPortManager.getInstance();
   }
 
@@ -43,6 +44,10 @@ export default class HardwareController {
   }
 
   async init(initSettings: HardwareInitDto): Promise<void> {
+    if (this.initialized) {
+      console.log('HardwareController already initialized');
+      return;
+    }
     try {
       // connect serial ports
       const connectionStatuses = await this.serialPortManager.connectPorts(initSettings.serialPorts);
@@ -53,9 +58,6 @@ export default class HardwareController {
         acc[port.name] = port.path;
         return acc;
       }, {});
-
-      // load bin lookup data
-      // this.binLookup = initSettings.binLookup;
 
       // // set sorter travel times
       this.sorterTravelTimes = sorterTravelTimes;
@@ -96,6 +98,7 @@ export default class HardwareController {
     const distanceToJet = this.jetPositions[sorter] - initialPosition;
     const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.speedQueue, this.defaultConveyorSpeed_PPS);
     // default to max travel time if no prevSorterPart
+    console.log('sorterTravelTimes aslkdf:', this.sorterTravelTimes);
     const travelTimeFromLastBin = !prevSorterbin
       ? this.sorterTravelTimes[sorter][this.sorterTravelTimes[sorter].length - 1]
       : getTravelTimeBetweenBins(sorter, prevSorterbin, bin, this.sorterBinPositions, this.sorterTravelTimes);
@@ -307,7 +310,7 @@ export default class HardwareController {
   }
 
   // return type {sorter: string; bin: number}
-  public sortPart = ({ initialTime, initialPosition, bin, sorter }: SortPartDto): { sorter: Number; bin: Number } | { error: String } => {
+  public sortPart = ({ initialTime, initialPosition, bin, sorter }: SortPartDto): void => {
     try {
       const prevSorterPart = this.partQueue.filter((part) => part.sorter === sorter).pop();
       let { moveTime, jetTime, travelTimeFromLastBin } = this.calculateTimings(sorter, bin, initialTime, initialPosition, prevSorterPart?.bin);
@@ -333,11 +336,9 @@ export default class HardwareController {
       this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
 
       this.filterQueues();
-
-      return { sorter, bin };
     } catch (error) {
       console.error('sortPart error:', error);
-      return { error: `Failed to sort part: ${error}` };
+      throw error;
     }
   };
 }
