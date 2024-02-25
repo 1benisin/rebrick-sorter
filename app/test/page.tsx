@@ -1,39 +1,19 @@
 'use client';
+import React, { useState } from 'react';
+import { useSocket } from '@/components/providers/socketProvider';
 
-import React, { useEffect, useState } from 'react';
-import io from 'socket.io-client';
-
-let socket;
-
-const Test = () => {
+const Home = () => {
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
   const [allMessages, setAllMessages] = useState([]);
 
-  useEffect(() => {
-    socketInitializer();
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
-  async function socketInitializer() {
-    // const res = await fetch('/api/socket');
-    // console.log('res from api/socket', res);
-
-    // socket = io();
-    socket = io('http://localhost:3002');
-
-    socket.on('receive-message', (data) => {
-      setAllMessages((pre) => [...pre, data]);
-    });
-  }
+  const { socket } = useSocket();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!socket) return;
 
-    console.log('emitted', message, username);
+    console.log('emitted');
 
     socket.emit('send-message', {
       username,
@@ -69,4 +49,4 @@ const Test = () => {
   );
 };
 
-export default Test;
+export default Home;

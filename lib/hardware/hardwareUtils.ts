@@ -85,7 +85,7 @@ export const getTravelTimeBetweenBins = (
   binPositions: { x: number; y: number }[][],
   travelTimes: number[][],
 ) => {
-  console.log(`sorter: ${sorter} from: ${fromBin} to: ${toBin}`);
+  // console.log(`sorter: ${sorter} from: ${fromBin} to: ${toBin}`);
   const { x: x1, y: y1 } = binPositions[sorter][toBin];
   const { x: x2, y: y2 } = binPositions[sorter][fromBin];
   const y = x2 - x1;

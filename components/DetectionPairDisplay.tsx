@@ -11,8 +11,6 @@ const DetectionPairDisplay = () => {
 
   return (
     <>
-      {/* <Button onClick={}>Clear Detections</Button> */}
-
       <div className={`flex`} onClick={() => console.log(detectionPairGroups)}>
         {detectionPairGroups.map((group) => (
           <DetectionRow key={group.id} group={group} />
@@ -77,8 +75,13 @@ const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
           </div>
         ))}
       </div>
-      {/* Display classification top item info if available */}
-      {classification && <div className="text-xs">{classification.name}</div>}
+      {classification && (
+        <div className="text-xs">
+          <div>{`Sorter: ${classification?.sorter}`}</div>
+          <div>{`Bin: ${classification?.bin}`}</div>
+          <div>{classification.name}</div>
+        </div>
+      )}
     </div>
   );
 };

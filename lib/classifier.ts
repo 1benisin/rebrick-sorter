@@ -7,6 +7,8 @@ import { SortPartDto } from '@/types/sortPart.dto';
 import { BinLookupType, binLookupSchema } from '@/types/binLookup.type';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/services/firebase';
+import { Socket } from 'socket.io-client';
+import { SocketAction } from '@/types/socketMessage.type';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -15,6 +17,7 @@ export const CLASSIFICATION_DIMENSIONS = {
 
 export default class Classifier {
   private static instance: Classifier;
+  private socket: Socket | null = null;
   binLookup: BinLookupType | null = null;
 
   private constructor() {
@@ -28,8 +31,11 @@ export default class Classifier {
     return this.instance;
   }
 
-  public async init(): Promise<void> {
+  public async init(socket: Socket): Promise<void> {
     try {
+      // load socket
+      this.socket = socket;
+
       // load bin lookup
       const storageRef = ref(storage, 'bin_lookup.json');
       const binLookupUrl = await getDownloadURL(storageRef);
@@ -41,8 +47,7 @@ export default class Classifier {
           throw new Error(`Invalid bin lookup item: ${item}`);
         }
 
-        //  convert sorter Letter to number (A, B, C to 1, 2, 3)
-        const sorterNumber = sorter.charCodeAt(0) - 64;
+        const sorterNumber = sorter.charCodeAt(0) - 65;
         acc[partId] = { bin, sorter: sorterNumber };
         return acc;
       }, {});
@@ -86,7 +91,7 @@ export default class Classifier {
 
   public async classify(imageURI1: string, imageURI2: string, initialTime: number, initialPosition: number): Promise<ClassificationItem> {
     try {
-      if (!this.binLookup) {
+      if (!this.binLookup || !this.socket) {
         throw new Error('Classifier not initialized: binLookup not loaded');
       }
       // Classify images
@@ -110,7 +115,9 @@ export default class Classifier {
         bin: binPosition.bin,
         sorter: binPosition.sorter,
       };
-      axios.post('/api/hardware/sort', data);
+
+      // axios.post('/api/hardware/sort', data);
+      this.socket.emit(SocketAction.SORT_PART, data);
 
       combinedResult.bin = binPosition.bin;
       combinedResult.sorter = binPosition.sorter;

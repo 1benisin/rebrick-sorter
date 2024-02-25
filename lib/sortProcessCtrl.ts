@@ -20,6 +20,7 @@ export default class SortProcessCtrl {
   private settings: SettingsType;
 
   private constructor(detector: Detector, classifier: Classifier, settings: SettingsType) {
+    console.log('SortProcessCtrl created');
     this.detector = detector;
     this.classifier = classifier;
     this.settings = settings;

@@ -4,12 +4,14 @@ import useHardware from '@/hooks/useHardware';
 import useSettings from '@/hooks/useSettings';
 import useClassifier from '@/hooks/useClassifier';
 import { cn } from '@/lib/utils';
+import { useSocket } from '@/components/providers/socketProvider';
 
 const StatusIndicator = ({}) => {
   const { status: detectorStatus, reInit } = useDetector();
   const { status: settingsStatus, loadSettings } = useSettings();
   const { status: hardwareStatus } = useHardware();
   const { status: cassifierStatus } = useClassifier();
+  const { isConnected } = useSocket();
 
   const statusColor = {
     loading: 'bg-yellow-700', // Yellow for loading
@@ -19,6 +21,8 @@ const StatusIndicator = ({}) => {
 
   return (
     <div className="fixed flex flex-col gap-2 top-2 right-0 p-2 m-2 bg-slate-400 opacity-90 rounded-md">
+      <div className={cn(isConnected ? statusColor['loaded'] : statusColor['failed'], 'rounded-md px-2 mx-auto w-full')}>Socket</div>
+
       <div className={cn(statusColor[detectorStatus], 'rounded-md px-2 mx-auto w-full')} onClick={reInit}>
         Detector
       </div>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import NavBar from '@/components/navbar';
 import AlertDisplay from '@/components/AlertDisplay';
+import { SocketProvider } from '@/components/providers/socketProvider';
 
 import './globals.css';
 
@@ -19,7 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <NavBar />
 
         <AlertDisplay />
-        {children}
+        <SocketProvider>{children}</SocketProvider>
       </body>
     </html>
   );

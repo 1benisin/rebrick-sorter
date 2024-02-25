@@ -5,6 +5,8 @@ import axios from 'axios';
 import { HardwareInitDto } from '@/types/hardwareInit.dto';
 import useSettings from './useSettings';
 import { serialPortNames } from '@/types/serialPort.type';
+import { useSocket } from '@/components/providers/socketProvider';
+import { SocketAction, SocketMessage } from '@/types/socketMessage.type';
 
 enum LoadStatus {
   Loading = 'loading',
@@ -15,12 +17,13 @@ enum LoadStatus {
 const useHardware = () => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
   const { settings } = useSettings();
+  const { socket, isConnected: isSocketConnected } = useSocket();
 
   useEffect(() => {
     const initHardware = async () => {
       console.log('Initializing Hardware...');
       try {
-        if (!settings) {
+        if (!settings || !isSocketConnected || !socket) {
           return;
         }
 
@@ -44,14 +47,10 @@ const useHardware = () => {
           jetPositions: jetPositions,
         };
 
-        const result = await axios.post('/api/hardware/init', hardwareSettings);
-
-        // throw error if result is not successful
-        if (result.status !== 200) {
-          throw new Error('Failed to initialize hardware');
-        }
-
-        setStatus(LoadStatus.Loaded);
+        socket.emit(SocketAction.INIT_HARDWARE, hardwareSettings);
+        socket.on(SocketAction.INIT_HARDWARE_SUCCESS, (success: SocketMessage[SocketAction.INIT_HARDWARE_SUCCESS]) => {
+          setStatus(success ? LoadStatus.Loaded : LoadStatus.Failed);
+        });
       } catch (error) {
         setStatus(LoadStatus.Failed);
         console.error('Error initializing hardware:', error);
@@ -59,7 +58,7 @@ const useHardware = () => {
     };
 
     initHardware();
-  }, [settings]);
+  }, [settings, isSocketConnected, socket]);
 
   return { status };
 };

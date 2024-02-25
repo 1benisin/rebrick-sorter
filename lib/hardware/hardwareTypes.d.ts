@@ -3,6 +3,7 @@ export type Part = {
   bin: number;
   initialPosition: number;
   initialTime: number;
+  defaultArrivalTime?: number; // the time it takes for the part to reach the jet at default speed
   jetTime?: number;
   jetRef?: NodeJS.Timeout;
   moveTime?: number;
