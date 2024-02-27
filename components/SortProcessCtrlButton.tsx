@@ -8,19 +8,19 @@ import useSortController from '@/hooks/useSortController';
 
 const SortProcessCtrlButton = () => {
   const { isRunning } = sortProcessStore();
-  const sortController = useSortController();
+  const { controller } = useSortController();
 
   const handleStartStop = () => {
-    if (!sortController) return;
+    if (!controller) return;
 
     if (isRunning) {
-      sortController.stop();
+      controller.stop();
     } else {
-      sortController.start();
+      controller.start();
     }
   };
 
-  if (!sortController) return null;
+  if (!controller) return null;
 
   return (
     <Button

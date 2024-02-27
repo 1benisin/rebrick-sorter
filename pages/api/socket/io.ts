@@ -29,11 +29,13 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
       // INIT_HARDWARE
       socket.on(SocketAction.INIT_HARDWARE, async (data) => {
         try {
+          console.log('INIT_HARDWARE');
           const hardwareSettings = hardwareInitSchema.parse(data);
 
           // get the singleton instance of the SerialPortManager
           const hardwareController = HardwareController.getInstance();
           await hardwareController.init(hardwareSettings);
+          console.log('INIT_HARDWARE_SUCCESS');
           socket.emit(SocketAction.INIT_HARDWARE_SUCCESS, true);
         } catch (error) {
           console.error(error);
@@ -53,6 +55,22 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
           console.error(error);
           socket.emit(SocketAction.SORT_PART_SUCCESS, false);
         }
+      });
+
+      // LOG_PART_QUEUE
+      socket.on(SocketAction.LOG_PART_QUEUE, () => {
+        console.log('LOG_PART_QUEUE');
+        const hardwareController = HardwareController.getInstance();
+        const partQueue = hardwareController.logPartQueue();
+        socket.emit(SocketAction.LOG_PART_QUEUE_SUCCESS, partQueue);
+      });
+
+      // LOG_SPEED_QUEUE
+      socket.on(SocketAction.LOG_SPEED_QUEUE, () => {
+        console.log('LOG_SPEED_QUEUE');
+        const hardwareController = HardwareController.getInstance();
+        const speedQueue = hardwareController.logSpeedQueue();
+        socket.emit(SocketAction.LOG_SPEED_QUEUE_SUCCESS, speedQueue);
       });
     });
     res.socket.server.io = io;

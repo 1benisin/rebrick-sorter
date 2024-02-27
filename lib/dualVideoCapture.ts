@@ -15,7 +15,6 @@ class DualVideoCapture {
 
   public static getInstance(): DualVideoCapture {
     if (!DualVideoCapture.instance) {
-      console.log('Creating new DualVideoCapture instance');
       DualVideoCapture.instance = new DualVideoCapture();
     }
     return DualVideoCapture.instance;

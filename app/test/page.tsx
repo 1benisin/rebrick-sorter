@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { useSocket } from '@/components/providers/socketProvider';
+import { useSocket } from '@/contexts/SocketContext';
 
 const Home = () => {
   const [message, setMessage] = useState('');

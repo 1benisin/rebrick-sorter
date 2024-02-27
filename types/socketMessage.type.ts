@@ -7,6 +7,11 @@ export enum SocketAction {
 
   SORT_PART = 'sort-part',
   SORT_PART_SUCCESS = 'sort-part-success',
+
+  LOG_PART_QUEUE = 'log-part-queue',
+  LOG_PART_QUEUE_SUCCESS = 'log-part-queue-success',
+  LOG_SPEED_QUEUE = 'log-speed-queue',
+  LOG_SPEED_QUEUE_SUCCESS = 'log-speed-queue-success',
 }
 
 export type SocketMessage = {

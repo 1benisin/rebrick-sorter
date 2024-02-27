@@ -20,7 +20,6 @@ export default class SortProcessCtrl {
   private settings: SettingsType;
 
   private constructor(detector: Detector, classifier: Classifier, settings: SettingsType) {
-    console.log('SortProcessCtrl created');
     this.detector = detector;
     this.classifier = classifier;
     this.settings = settings;
@@ -139,69 +138,6 @@ export default class SortProcessCtrl {
     }
   }
 
-  // private combineBrickognizeResponses(response1: BrickognizeResponse, response2: BrickognizeResponse): ClassificationItem[] {
-  //   const allItems = [...response1.items, ...response2.items];
-  //   const itemsById: Record<string, any[]> = {};
-
-  //   // Group items by ID
-  //   allItems.forEach((item) => {
-  //     if (!itemsById[item.id]) {
-  //       itemsById[item.id] = [];
-  //     }
-  //     itemsById[item.id].push(item);
-  //   });
-
-  //   // Calculate a combined score for each item, boosting items that appear in both responses
-  //   const combinedItems = Object.values(itemsById).map((group) => {
-  //     if (group.length > 1) {
-  //       // Found in both responses, calculate average score and add a boost
-  //       const averageScore = group.reduce((acc, item) => acc + item.score, 0) / group.length;
-  //       const boostedScore = averageScore + 0.1; // Example boost, adjust as needed
-  //       return { ...group[0], score: boostedScore }; // Ensure score does not exceed 1
-  //     }
-  //     return group[0]; // Single occurrence, no boost needed
-  //   });
-
-  //   // Sort combined items by score, descending
-  //   combinedItems.sort((a, b) => b.score - a.score);
-
-  //   // Assuming you want the single best result
-  //   return combinedItems;
-  // }
-
-  // private combineClassificationResults(): void {
-  //   // loop through detectionPairGroups
-  //   for (let i = 0; i < this.detectionPairGroups.length; i++) {
-  //     const group = this.detectionPairGroups[i];
-  //     if (group.classifications && !group.combineclassification) {
-  //       const combinedResults = this.combineBrickognizeResponses(group.classifications[0], group.classifications[1]);
-  //       group.combineclassification = combinedResults;
-  //       // update detectionPairGroups
-  //       this.detectionPairGroups[i] = group;
-  //     }
-  //   }
-  // }
-
-  // private async sendClassifiedPartsToSorter(): Promise<void> {
-  //   // loop through detectionPairGroups
-  //   for (let i = 0; i < this.detectionPairGroups.length; i++) {
-  //     const group = this.detectionPairGroups[i];
-  //     if (group.combineclassification && !group.sentToSorter) {
-  //       const data: SortPartDto = {
-  //         partId: group.combineclassification[0].id,
-  //         initialPosition: group.detectionPairs[0][0].centroid.x,
-  //         initialTime: group.detectionPairs[0][0].timestamp,
-  //       };
-  //       const result = await axios.post('/api/hardware/sort', data);
-
-  //       // console.log('Sending to server', group.combineclassification[0].id);
-  //       group.sentToSorter = true;
-  //       // update detectionPairGroups
-  //       this.detectionPairGroups[i] = group;
-  //     }
-  //   }
-  // }
-
   private async runProcess() {
     const startTime = Date.now();
     console.log('----------- Process Start ');
@@ -213,11 +149,6 @@ export default class SortProcessCtrl {
 
       // classify detections past screen center
       await this.classifyDetections();
-
-      // // combine classification results
-      // await this.combineClassificationResults();
-
-      // this.sendClassifiedPartsToSorter();
 
       // mark offscreen detections
       this.markOffscreenDetections();

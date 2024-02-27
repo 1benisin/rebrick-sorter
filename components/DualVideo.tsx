@@ -35,7 +35,7 @@ const Video = () => {
     };
 
     getCameras();
-  }, [selectedCamera]);
+  }, []);
 
   const selectCamera = async (cameraId: string) => {
     if (videoRef1.current && videoRef2.current) {
@@ -61,10 +61,8 @@ const Video = () => {
       }
 
       videoRef1.current.onloadedmetadata = () => {
-        // update videoStreamId in sortProcessStore
-        // this will trigger the useVideoCapture hook to update the videoCapture instance
+        setSelectedCamera(cameraId);
         setVideoStreamId(cameraId);
-        // console.log width and height of video
         console.log('videoRef1.current.videoWidth', videoRef1.current?.videoWidth);
         console.log('videoRef1.current.videoHeight', videoRef1.current?.videoHeight);
       };
@@ -72,7 +70,6 @@ const Video = () => {
   };
 
   const handleCameraChange = async (cameraId: string) => {
-    setSelectedCamera(cameraId);
     await selectCamera(cameraId);
   };
 

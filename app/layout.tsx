@@ -1,10 +1,15 @@
+import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import NavBar from '@/components/navbar';
 import AlertDisplay from '@/components/AlertDisplay';
-import { SocketProvider } from '@/components/providers/socketProvider';
-
-import './globals.css';
+import { SocketProvider } from '@/contexts/SocketContext';
+import { ClassifierProvider } from '@/contexts/ClassifierContext';
+import { SettingsProvider } from '@/contexts/SettingsContext';
+import { HardwareProvider } from '@/contexts/HardwareContext';
+import { DetectorProvider } from '@/contexts/DetectorContext';
+import { VideoCaptureProvider } from '@/contexts/VideoCaptureContext';
+import { SortControllerProvider } from '@/contexts/SortControllerContext';
 
 const font = Inter({ subsets: ['latin'] });
 
@@ -20,7 +25,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <NavBar />
 
         <AlertDisplay />
-        <SocketProvider>{children}</SocketProvider>
+
+        <SettingsProvider>
+          <SocketProvider>
+            <VideoCaptureProvider>
+              <ClassifierProvider>
+                <HardwareProvider>
+                  <DetectorProvider>
+                    <SortControllerProvider> {children} </SortControllerProvider>
+                  </DetectorProvider>
+                </HardwareProvider>
+              </ClassifierProvider>
+            </VideoCaptureProvider>
+          </SocketProvider>
+        </SettingsProvider>
       </body>
     </html>
   );
