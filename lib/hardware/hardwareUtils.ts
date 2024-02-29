@@ -1,7 +1,11 @@
 import { SpeedQueue } from './hardwareTypes.d';
 
 // find the timestamp when part has taveled a certain distance
-export const findTimeAfterDistance = (startTime: number, distance: number, speedQueue: SpeedQueue, defaultSpeed_PPS: number) => {
+export const findTimeAfterDistance = (startTime: number, distance: number, speedQueue: SpeedQueue) => {
+  if (distance < 0) console.warn('findTimeAfterDistance: distance is negative'); // sanity check
+  if (speedQueue.length === 0) console.warn('findTimeAfterDistance: speedQueue is empty'); // sanity check
+  if (distance === 0) return startTime; // exit condition
+
   let remainingDistance = distance;
   let finishTime = startTime;
 
@@ -10,13 +14,11 @@ export const findTimeAfterDistance = (startTime: number, distance: number, speed
     // exit condition
     if (remainingDistance <= 1) break;
 
-    const { speed: speedPercent, time: speedStart } = speedQueue[i];
+    const { speed: speed, time: speedStart } = speedQueue[i];
     let { time: speedEnd } = speedQueue[i + 1] || {};
 
     // if no next speed change use 5 minutes from now as the end time
     speedEnd = speedEnd || Date.now() + 5 * 60 * 1000;
-
-    const speed_PPS = speedPercent * defaultSpeed_PPS;
 
     // use later start time
     const start = speedStart > startTime ? speedStart : startTime;
@@ -25,11 +27,11 @@ export const findTimeAfterDistance = (startTime: number, distance: number, speed
     // if speed ended before the start time of the part timeTraveled will be negative
     // -clamp the time traveled to 0 because it has no effect on the position
     timeTraveled = timeTraveled < 0 ? 0 : timeTraveled;
-    let distanceTraveled = timeTraveled * speed_PPS;
+    let distanceTraveled = timeTraveled * speed;
 
     if (distanceTraveled > remainingDistance) {
       distanceTraveled = remainingDistance;
-      timeTraveled = distanceTraveled / speed_PPS;
+      timeTraveled = distanceTraveled * speed;
     }
 
     finishTime += timeTraveled;
@@ -38,22 +40,23 @@ export const findTimeAfterDistance = (startTime: number, distance: number, speed
   return finishTime;
 };
 
-export const findPositionAtTime = (startPos: number, startTime: number, endTime: number, speedQueue: SpeedQueue, defaultSpeed_PPS: number) => {
+export const findPositionAtTime = (startPos: number, startTime: number, endTime: number, speedQueue: SpeedQueue) => {
   let remainingTime = endTime - startTime;
-  if (remainingTime < 0) console.warn('findPositionAtTime: startTime is after endTime'); // sanity check
+  if (remainingTime < 0) {
+    console.warn('findPositionAtTime: startTime is after endTime'); // sanity check
+    return startPos;
+  }
   let endPos = startPos;
 
   for (let i = 0; i < speedQueue.length; i++) {
     // exit condition
     if (remainingTime <= 1) break;
 
-    const { speed: speedPercent, time: speedStart } = speedQueue[i];
+    const { speed, time: speedStart } = speedQueue[i];
     let { time: speedEnd } = speedQueue[i + 1] || {};
 
     // if no next speed change use 5 minutes from now as the end time
     speedEnd = speedEnd || Date.now() + 5 * 60 * 1000;
-
-    const speed_PPS = speedPercent * defaultSpeed_PPS;
 
     // use later start time
     const start = speedStart > startTime ? speedStart : startTime;
@@ -61,14 +64,8 @@ export const findPositionAtTime = (startPos: number, startTime: number, endTime:
     let timeTraveled = speedEnd - start;
     // if speed ended before the start time of the part timeTraveled will be negative
     // -clamp the time traveled to 0 cause it has no effect on the position
-    timeTraveled = timeTraveled < 0 ? 0 : timeTraveled;
-    let distanceTraveled = timeTraveled * speed_PPS;
-
-    // if traveled more than remaining time
-    if (timeTraveled > remainingTime) {
-      timeTraveled = remainingTime;
-      distanceTraveled = timeTraveled * speed_PPS;
-    }
+    timeTraveled = timeTraveled < 0 ? 0 : timeTraveled > remainingTime ? remainingTime : timeTraveled;
+    let distanceTraveled = timeTraveled * speed;
 
     remainingTime -= timeTraveled;
     endPos += distanceTraveled;

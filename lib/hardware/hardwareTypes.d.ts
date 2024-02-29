@@ -3,12 +3,12 @@ export type Part = {
   bin: number;
   initialPosition: number;
   initialTime: number;
-  defaultArrivalTime?: number; // the time it takes for the part to reach the jet at default speed
-  jetTime?: number;
+  jetTime: number;
   jetRef?: NodeJS.Timeout;
-  moveTime?: number;
+  moveTime: number;
   moveRef?: NodeJS.Timeout;
-  moveFinishedTime?: number;
+  moveFinishedTime: number;
+  defaultArrivalTime?: number; // the time it takes for the part to reach the jet at default speed
 };
 export type PartQueue = Part[];
 

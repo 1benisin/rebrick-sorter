@@ -1,6 +1,6 @@
 import ArduinoDevice from './arduinoDevice';
 import { SerialPort, SerialPortMock } from 'serialport';
-import { ArduinoDeviceCommand } from '@/types/arduinoCommands.d';
+import { ArduinoDeviceCommand } from '@/types/arduinoCommands.type';
 import { SerialPortType } from '@/types/serialPort.type';
 
 const MockedPorts = [

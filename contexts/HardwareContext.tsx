@@ -25,26 +25,16 @@ export const HardwareProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!socket) return;
-
-    socket.on(SocketAction.INIT_HARDWARE_SUCCESS, (succes) => {
-      console.log('INIT_HARDWARE_SUCCESS result: ', succes);
-      if (succes) {
-        setStatus(LoadStatus.Loaded);
-      } else {
-        setStatus(LoadStatus.Failed);
-      }
-    });
   }, [socket]);
 
   useEffect(() => {
     setStatus(LoadStatus.Loading);
 
-    if (settingsStatus === LoadStatus.Loaded && settings && socketStatus === LoadStatus.Loaded && socket) {
-      init();
-    }
-  }, [settingsStatus, settings, socketStatus, socket]);
+    init();
+  }, [settings, socket]);
 
   const init = async () => {
+    console.log('Initializing hardware');
     try {
       if (!settings || !socket) {
         setStatus(LoadStatus.Failed);
@@ -62,6 +52,15 @@ export const HardwareProvider = ({ children }: { children: ReactNode }) => {
         sorterDimensions: settings.sorters.map((sorter) => ({ gridWidth: sorter.gridWidth, gridHeight: sorter.gridHeight })),
         jetPositions: settings.sorters.map((sorter) => sorter.jetPosition),
       };
+
+      socket.on(SocketAction.INIT_HARDWARE_SUCCESS, (succes) => {
+        console.log('INIT_HARDWARE_SUCCESS');
+        if (succes) {
+          setStatus(LoadStatus.Loaded);
+        } else {
+          setStatus(LoadStatus.Failed);
+        }
+      });
 
       socket.emit(SocketAction.INIT_HARDWARE, hardwareSettings);
     } catch (error) {

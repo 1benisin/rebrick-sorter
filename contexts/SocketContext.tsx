@@ -20,6 +20,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
 
   useEffect(() => {
+    setStatus(LoadStatus.Loading);
     const socketInstance = new (ClientIO as any)(process.env.NEXT_PUBLIC_SITE_URL!, {
       path: '/api/socket/io',
       addTrailingSlash: false,
@@ -30,6 +31,11 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     });
 
     socketInstance.on('disconnect', () => {
+      setStatus(LoadStatus.Failed);
+    });
+
+    socketInstance.on('connect_error', () => {
+      console.log('socket connect_error');
       setStatus(LoadStatus.Failed);
     });
 

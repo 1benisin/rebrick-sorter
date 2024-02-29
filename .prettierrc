@@ -2,5 +2,13 @@
   "singleQuote": true,
   "semi": true,
   "trailingComma": "all",
-  "printWidth": 150
+  "printWidth": 120,
+  "overrides": [
+    {
+      "files": "*.json",
+      "options": {
+        "trailingComma": "none"
+      }
+    }
+  ]
 }

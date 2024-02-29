@@ -1,6 +1,5 @@
 {
   "extends": ["next/core-web-vitals", "plugin:prettier/recommended"],
   "rules": {
-    // Additional, per-project rules...
   }
 }
