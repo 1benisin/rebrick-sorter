@@ -11,7 +11,7 @@ const DETECTION_MODEL_URL = '/detection-model/model.json';
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
 const MAX_DETECTION_DIMENSION = 300; // max width or height of image to be used for detection
 const MIN_DETECT_DIST_PERCENT = 0.1; // min percentage of detection image width two detections can be from each other
-const CALIBRATION_SAMPLE_COUNT = 20;
+const CALIBRATION_SAMPLE_COUNT = 30;
 
 // create tagged predictions type that extends automl.PredictedObject
 type TaggedPredictionType = automl.PredictedObject & {
@@ -111,7 +111,7 @@ export default class Detector {
           lastTimestamp = nextDetection.timestamp;
         } else {
           // add speed in pixels per sec to speeds
-          const speed = (nextDetection.centroid.x - lastPosition.x) / ((nextDetection.timestamp - lastTimestamp) / 1000);
+          const speed = (nextDetection.centroid.x - lastPosition.x) / (nextDetection.timestamp - lastTimestamp);
 
           speeds.push(speed);
         }
@@ -160,7 +160,10 @@ export default class Detector {
       const predictions = await this.model.detect(scaledCanvas, DETECTION_OPTIONS);
 
       // tag detections - too close to each other, to close to screen edge, is from top view, has a matching vertical pair
-      const taggedPredictions = this.tagPredictions(predictions, { width: scaledCanvas.width, height: scaledCanvas.height });
+      const taggedPredictions = this.tagPredictions(predictions, {
+        width: scaledCanvas.width,
+        height: scaledCanvas.height,
+      });
 
       // inject the detection canvas into the video-capture-container and highlight detections
       this.displayDetectionCanvas(scaledCanvas, taggedPredictions);
@@ -175,14 +178,21 @@ export default class Detector {
       });
 
       // filter predictions: keep only top view predictions that are not too close to the screen edge or other detections.
-      const validPredictionPairs = pairedPredictions.filter((p) => !p.topView.isTooCloseToScreenEdge && !p.topView.isTooCloseToOtherDetection);
+      const validPredictionPairs = pairedPredictions.filter(
+        (p) => !p.topView.isTooCloseToScreenEdge && !p.topView.isTooCloseToOtherDetection,
+      );
 
       // scale up predictions to original image size
       const scaledPredictionPairs = this.scaleUpPredictions(validPredictionPairs, scalar);
 
       // add cropped detection images, centroid, and timestamp to detections
       const cropCanvas = document.createElement('canvas');
-      const DetectionPairs = this.createDetections(imageCapture.timestamp, mergedCanvas, cropCanvas, scaledPredictionPairs);
+      const DetectionPairs = this.createDetections(
+        imageCapture.timestamp,
+        mergedCanvas,
+        cropCanvas,
+        scaledPredictionPairs,
+      );
 
       return DetectionPairs;
     } catch (error) {
@@ -236,7 +246,10 @@ export default class Detector {
     });
   }
 
-  private tagPredictions(predictions: automl.PredictedObject[], canvasDim: { width: number; height: number }): TaggedPredictionType[] {
+  private tagPredictions(
+    predictions: automl.PredictedObject[],
+    canvasDim: { width: number; height: number },
+  ): TaggedPredictionType[] {
     let taggedPredictions: TaggedPredictionType[] = predictions.map((prediction) => {
       return {
         ...prediction,
@@ -316,9 +329,11 @@ export default class Detector {
         // Check for overlap
         const isOverlapping = leftEdge < otherRightEdge && rightEdge > otherLeftEdge;
         // Check closeness between box's left edge and other box's edges
-        const isLeftClose = Math.abs(leftEdge - otherLeftEdge) < min_dist || Math.abs(leftEdge - otherRightEdge) < min_dist;
+        const isLeftClose =
+          Math.abs(leftEdge - otherLeftEdge) < min_dist || Math.abs(leftEdge - otherRightEdge) < min_dist;
         // Check closeness between box's right edge and other box's edges
-        const isRightClose = Math.abs(rightEdge - otherLeftEdge) < min_dist || Math.abs(rightEdge - otherRightEdge) < min_dist;
+        const isRightClose =
+          Math.abs(rightEdge - otherLeftEdge) < min_dist || Math.abs(rightEdge - otherRightEdge) < min_dist;
 
         return isOverlapping || isLeftClose || isRightClose;
       });
@@ -455,7 +470,9 @@ export default class Detector {
     let { left, top, width, height } = box;
     // turn detection box into a square
     [left, top, width, height] =
-      width > height ? [left, top - (width - height) / 2, width, width] : [left - (height - width) / 2, top, height, height];
+      width > height
+        ? [left, top - (width - height) / 2, width, width]
+        : [left - (height - width) / 2, top, height, height];
 
     // create cropped imgUrl
     cropCanvas.width = CLASSIFICATION_DIMENSIONS.width;

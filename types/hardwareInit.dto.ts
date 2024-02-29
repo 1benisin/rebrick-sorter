@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { serialPortSchema } from './serialPort.type';
 
 export const hardwareInitSchema = z.object({
-  defaultConveyorSpeed_PPS: z.number(), // pixels per second
+  defaultConveyorSpeed: z.number(), // pixels per second
   serialPorts: z.array(serialPortSchema),
   sorterDimensions: z.array(
     z.object({

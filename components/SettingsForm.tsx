@@ -40,10 +40,10 @@ const SettingsForm = () => {
         <div className="grid gap-4 grid-cols-3 p-3 border border-slate-300 rounded-md">
           <FormField
             control={form.control}
-            name="conveyorSpeed_PPS"
+            name="conveyorSpeed"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>ConveyorSpeed_PPS</FormLabel>
+                <FormLabel>Conveyor Speed</FormLabel>
                 <FormControl>
                   <Input type="number" {...field} />
                 </FormControl>

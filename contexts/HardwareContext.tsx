@@ -42,14 +42,17 @@ export const HardwareProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const hardwareSettings: HardwareInitDto = {
-        defaultConveyorSpeed_PPS: settings.conveyorSpeed_PPS,
+        defaultConveyorSpeed: settings.conveyorSpeed,
         serialPorts: settings.sorters
           .map((sorter) => ({ name: sorter.name, path: sorter.serialPort }))
           .concat([
             { name: serialPortNames.conveyor_jets, path: settings.conveyorJetsSerialPort },
             { name: serialPortNames.hopper_feeder, path: settings.hopperFeederSerialPort },
           ]),
-        sorterDimensions: settings.sorters.map((sorter) => ({ gridWidth: sorter.gridWidth, gridHeight: sorter.gridHeight })),
+        sorterDimensions: settings.sorters.map((sorter) => ({
+          gridWidth: sorter.gridWidth,
+          gridHeight: sorter.gridHeight,
+        })),
         jetPositions: settings.sorters.map((sorter) => sorter.jetPosition),
       };
 

@@ -44,13 +44,14 @@ export default class SortProcessCtrl {
       // start form the end of the array to get the last detection
       for (let i = this.detectionPairGroups.length - 1; i >= 0; i--) {
         // find the predicted centroid of the last detection in the detection group
-        const [lastDetection, _] = this.detectionPairGroups[i].detectionPairs[this.detectionPairGroups[i].detectionPairs.length - 1];
+        const [lastDetection, _] =
+          this.detectionPairGroups[i].detectionPairs[this.detectionPairGroups[i].detectionPairs.length - 1];
         if (!lastDetection) {
           continue;
         }
-        const conveyorSpeed_PPS = this.settings.conveyorSpeed_PPS;
+        const conveyorSpeed = this.settings.conveyorSpeed;
 
-        const distanceTravelled = ((unmatchedDetection.timestamp - lastDetection.timestamp) / 1000) * conveyorSpeed_PPS;
+        const distanceTravelled = (unmatchedDetection.timestamp - lastDetection.timestamp) * conveyorSpeed;
         const predictedX = lastDetection.centroid.x + distanceTravelled;
         const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
         // console.log('distance', distance, 'detectDistanceThreshold', detectDistanceThreshold);
@@ -64,7 +65,9 @@ export default class SortProcessCtrl {
       if (closestGroupIndex !== null) {
         // if closestDetectionGroup is found, add unmatchedDetection to closestDetectionGroup
         this.detectionPairGroups[closestGroupIndex].detectionPairs.push(detectionPair);
-        sortProcessStore.getState().addDetectionPairToGroup(this.detectionPairGroups[closestGroupIndex].id, detectionPair);
+        sortProcessStore
+          .getState()
+          .addDetectionPairToGroup(this.detectionPairGroups[closestGroupIndex].id, detectionPair);
       } else {
         // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionPairGroups
         const newGroup = { id: uuid(), detectionPairs: [detectionPair] };
@@ -90,7 +93,12 @@ export default class SortProcessCtrl {
           this.updateDetectionPairGroupValue(group.id, 'classifying', true);
 
           this.classifier
-            .classify(lastDetectionPair[0].imageURI, lastDetectionPair[1].imageURI, lastDetectionPair[0].timestamp, lastDetectionPair[0].centroid.x)
+            .classify(
+              lastDetectionPair[0].imageURI,
+              lastDetectionPair[1].imageURI,
+              lastDetectionPair[0].timestamp,
+              lastDetectionPair[0].centroid.x,
+            )
             .then((response) => {
               this.updateDetectionPairGroupValue(group.id, 'classificationResult', response);
               this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
@@ -107,7 +115,11 @@ export default class SortProcessCtrl {
     }
   }
 
-  private updateDetectionPairGroupValue<K extends keyof DetectionPairGroup>(groupId: string, key: K, value: DetectionPairGroup[K]): void {
+  private updateDetectionPairGroupValue<K extends keyof DetectionPairGroup>(
+    groupId: string,
+    key: K,
+    value: DetectionPairGroup[K],
+  ): void {
     const groups = this.detectionPairGroups;
     // find the group with the given id
     const index = groups.findIndex((g) => g.id === groupId);
@@ -126,8 +138,8 @@ export default class SortProcessCtrl {
     for (const group of this.detectionPairGroups) {
       const lastPair = group.detectionPairs[group.detectionPairs.length - 1];
       // find the predicted centroid of the last detection in the detection group
-      const conveyorSpeed_PPS = this.settings.conveyorSpeed_PPS;
-      const distanceTravelled = ((Date.now() - lastPair[0].timestamp) / 1000) * conveyorSpeed_PPS;
+      const conveyorSpeed = this.settings.conveyorSpeed;
+      const distanceTravelled = (Date.now() - lastPair[0].timestamp) * conveyorSpeed;
       const predictedX = lastPair[0].centroid.x + distanceTravelled;
       if (predictedX > sortProcessStore.getState().videoCaptureDimensions.width) {
         group.offScreen = true;

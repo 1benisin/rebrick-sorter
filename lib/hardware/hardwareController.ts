@@ -26,7 +26,7 @@ export default class HardwareController {
   initialized: boolean = false;
 
   serialPorts: Record<string, string> = {};
-  defaultConveyorSpeed_PPS: number = 0;
+  defaultConveyorSpeed: number = 0;
   sorterTravelTimes: number[][] = [];
   sorterBinPositions: { x: number; y: number }[][] = [];
   jetPositions: number[] = [];
@@ -60,8 +60,8 @@ export default class HardwareController {
 
       // initialize speed queue
       this.speedQueue = [];
-      // const speedRef = this.scheduleConveyorSpeedChange(initSettings.defaultConveyorSpeed_PPS);
-      this.speedQueue = [{ speed: initSettings.defaultConveyorSpeed_PPS, time: Date.now(), ref: setTimeout(() => {}) }];
+      // const speedRef = this.scheduleConveyorSpeedChange(initSettings.defaultConveyorSpeed);
+      this.speedQueue = [{ speed: initSettings.defaultConveyorSpeed, time: Date.now(), ref: setTimeout(() => {}) }];
 
       // initialize part queue
       // init the part queue with a part for every sorter if it hasn't already
@@ -90,7 +90,7 @@ export default class HardwareController {
       this.generateBinPositions(initSettings.sorterDimensions);
 
       // set conveyor speed
-      this.defaultConveyorSpeed_PPS = initSettings.defaultConveyorSpeed_PPS;
+      this.defaultConveyorSpeed = initSettings.defaultConveyorSpeed;
 
       // set jet positions
       this.jetPositions = initSettings.jetPositions;
@@ -365,7 +365,7 @@ export default class HardwareController {
     const timeout = !atTime ? 0 : atTime - Date.now();
 
     // normalize spped to conveyor motor speed 0-255
-    const normalizeConveyorSpeed = Math.round((speed / this.defaultConveyorSpeed_PPS) * 255);
+    const normalizeConveyorSpeed = Math.round((speed / this.defaultConveyorSpeed) * 255);
 
     return setTimeout(() => {
       console.log(getFormattedTime('min', 'ms'), '- speed Changed:', speed);
@@ -388,7 +388,7 @@ export default class HardwareController {
       const arrivalTime = findTimeAfterDistance(
         part.initialTime,
         this.jetPositions[part.sorter] - part.initialPosition,
-        [{ time: part.initialTime, speed: this.defaultConveyorSpeed_PPS, ref: setTimeout(() => {}, 0) }],
+        [{ time: part.initialTime, speed: this.defaultConveyorSpeed, ref: setTimeout(() => {}, 0) }],
       );
       part.defaultArrivalTime = arrivalTime;
       return part;

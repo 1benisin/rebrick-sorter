@@ -16,7 +16,7 @@ jest.mock('./hardwareUtils', () => ({
 }));
 
 const initSettings: HardwareInitDto = {
-  defaultConveyorSpeed_PPS: 10,
+  defaultConveyorSpeed: 10,
   serialPorts: [
     { name: 'sorter_A', path: '/mock/sorter_A_serial_port' },
     { name: 'sorter_B', path: '/mock/sorter_B_serial_port' },
@@ -45,7 +45,7 @@ describe('HARDWARE CONTROLLER ---', () => {
 
     beforeEach(() => {
       controller = HardwareController.getInstance();
-      controller.defaultConveyorSpeed_PPS = 10; // Set a default speed for the conveyor
+      controller.defaultConveyorSpeed = 10; // Set a default speed for the conveyor
       controller.jetPositions = [100, 200, 300]; // Mock jet positions
     });
 

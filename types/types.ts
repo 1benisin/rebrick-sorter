@@ -1,26 +1,5 @@
 import { z } from 'zod';
 
-// Define Zod schema for sorter
-export const sorterSchema = z.object({
-  name: z.string(),
-  gridDimensions: z.object({
-    width: z.number(),
-    height: z.number(),
-  }),
-  airJetPosition: z.number(),
-  maxPartDimension: z.number(),
-});
-export type Sorter = z.infer<typeof sorterSchema>;
-
-// Define Zod schema for the settings document
-// sorters can be an array of sorterSchema or empty
-export const settingsSchema = z.object({
-  conveyorSpeed_PPS: z.number(),
-  detectDistanceThreshold: z.number(),
-  sorters: z.array(sorterSchema).optional(),
-});
-export type Settings = z.infer<typeof settingsSchema>;
-
 export const brickognizeResponseSchema = z.object({
   listing_id: z.string(),
   bounding_box: z.object({

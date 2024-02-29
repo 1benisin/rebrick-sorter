@@ -46,7 +46,7 @@ export const settingsStore = create<SettingsState>((set, get) => ({
   },
   saved: true,
   saveSettings: async () => {
-    // just get conveyorSpeed_PPS, sorters, detectDistanceThreshold from state and save to DB
+    // just get conveyorSpeed, sorters, detectDistanceThreshold from state and save to DB
     const state = get();
     const result = settingsSchema.safeParse(state);
 
