@@ -385,7 +385,7 @@ export default class HardwareController {
   prioritySortPartQueue() {
     // add defaultArrivalTime if it doesn't exist
     this.partQueue.map((part) => {
-      if (!!part.defaultArrivalTime) {
+      if (part.defaultArrivalTime) {
         return part;
       }
       // find arrival time with mock speedQueue with only default speed

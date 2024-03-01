@@ -12,7 +12,7 @@ export function absoluteUrl(path: string) {
 type TimeUnit = 'hr' | 'min' | 'sec' | 'ms';
 
 export function getFormattedTime(fromAccuracy: TimeUnit, toAccuracy: TimeUnit, timeToFormatt?: number): string {
-  const date = !!timeToFormatt ? new Date(timeToFormatt) : new Date();
+  const date = timeToFormatt ? new Date(timeToFormatt) : new Date();
   const timeComponents: Record<TimeUnit, string> = {
     hr: date.getHours().toString().padStart(2, '0'),
     min: date.getMinutes().toString().padStart(2, '0'),

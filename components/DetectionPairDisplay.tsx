@@ -54,7 +54,9 @@ const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
                   }
                 />
               ) : (
-                <div className="w-12 h-12 flex items-center justify-center border border-gray-300 rounded-md">No Image</div>
+                <div className="w-12 h-12 flex items-center justify-center border border-gray-300 rounded-md">
+                  No Image
+                </div>
               )}
             </div>
             <div className="flex flex-col items-center">
@@ -69,7 +71,9 @@ const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
                   }
                 />
               ) : (
-                <div className="w-12 h-12 flex items-center justify-center border border-gray-300 rounded-md">No Image</div>
+                <div className="w-12 h-12 flex items-center justify-center border border-gray-300 rounded-md">
+                  No Image
+                </div>
               )}
             </div>
           </div>

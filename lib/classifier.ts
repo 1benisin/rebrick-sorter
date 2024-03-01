@@ -41,16 +41,19 @@ export default class Classifier {
       const binLookupUrl = await getDownloadURL(storageRef);
       const response = await axios.get(binLookupUrl);
 
-      const formattedBinLookup = response.data.reduce((acc: Record<string, { bin: number; sorter: number }>, item: [string, number, string]) => {
-        const [partId, bin, sorter] = item;
-        if (!partId || !bin || !sorter) {
-          throw new Error(`Invalid bin lookup item: ${item}`);
-        }
+      const formattedBinLookup = response.data.reduce(
+        (acc: Record<string, { bin: number; sorter: number }>, item: [string, number, string]) => {
+          const [partId, bin, sorter] = item;
+          if (!partId || !bin || !sorter) {
+            throw new Error(`Invalid bin lookup item: ${item}`);
+          }
 
-        const sorterNumber = sorter.charCodeAt(0) - 65;
-        acc[partId] = { bin, sorter: sorterNumber };
-        return acc;
-      }, {});
+          const sorterNumber = sorter.charCodeAt(0) - 65;
+          acc[partId] = { bin, sorter: sorterNumber };
+          return acc;
+        },
+        {},
+      );
 
       this.binLookup = binLookupSchema.parse(formattedBinLookup);
     } catch (error) {
@@ -59,7 +62,10 @@ export default class Classifier {
     }
   }
 
-  private combineBrickognizeResponses(response1: BrickognizeResponse, response2: BrickognizeResponse): ClassificationItem {
+  private combineBrickognizeResponses(
+    response1: BrickognizeResponse,
+    response2: BrickognizeResponse,
+  ): ClassificationItem {
     const allItems = [...response1.items, ...response2.items];
     const itemsById: Record<string, any[]> = {};
 
@@ -89,7 +95,12 @@ export default class Classifier {
     return combinedItems[0];
   }
 
-  public async classify(imageURI1: string, imageURI2: string, initialTime: number, initialPosition: number): Promise<ClassificationItem> {
+  public async classify(
+    imageURI1: string,
+    imageURI2: string,
+    initialTime: number,
+    initialPosition: number,
+  ): Promise<ClassificationItem> {
     try {
       if (!this.binLookup || !this.socket) {
         throw new Error('Classifier not initialized: binLookup not loaded');

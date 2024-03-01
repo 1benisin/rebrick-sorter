@@ -25,7 +25,9 @@ export default class SerialPortManager {
     return SerialPortManager.instance;
   }
 
-  async connectPorts(serialPortsToConnect: SerialPortType[]): Promise<{ port: SerialPortType; success: boolean; error?: any }[]> {
+  async connectPorts(
+    serialPortsToConnect: SerialPortType[],
+  ): Promise<{ port: SerialPortType; success: boolean; error?: any }[]> {
     const devicePromises = serialPortsToConnect.map((port) =>
       this.connectPort(port.path)
         .then(() => ({
@@ -105,7 +107,10 @@ export default class SerialPortManager {
 
   sendCommandToDevice(arduinoDeviceCommand: ArduinoDeviceCommand) {
     if (this.devices[arduinoDeviceCommand.arduinoPath]) {
-      this.devices[arduinoDeviceCommand.arduinoPath].sendCommand(arduinoDeviceCommand.command, arduinoDeviceCommand.data);
+      this.devices[arduinoDeviceCommand.arduinoPath].sendCommand(
+        arduinoDeviceCommand.command,
+        arduinoDeviceCommand.data,
+      );
     } else {
       console.log(`Device ${arduinoDeviceCommand.arduinoPath} not found`);
     }
