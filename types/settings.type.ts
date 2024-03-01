@@ -10,7 +10,7 @@ export const sorterSettingsSchema = z.object({
 });
 
 export const settingsSchema = z.object({
-  conveyorSpeed: z.coerce.number().min(1, { message: 'Conveyor speed must be greater than 0' }).default(1),
+  conveyorSpeed: z.coerce.number().min(0, { message: 'Conveyor speed must be greater than 0' }).default(1),
   detectDistanceThreshold: z.coerce
     .number()
     .min(1, { message: 'Detect distance threshold must be greater than 0' })

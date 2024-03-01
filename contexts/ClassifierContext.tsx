@@ -26,15 +26,12 @@ export const ClassifierProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     setStatus(LoadStatus.Loading); // Set status to Loading when the effect runs
-    if (socketStatus === LoadStatus.Loaded && socket) {
-      // Proceed with initialization only if the socket exists
-      init();
-    }
-  }, [socket, socketStatus]); // Re-run the effect if socket or connection status changes
+    init();
+  }, [socket?.connected]); // Re-run the effect if socket or connection status changes
 
   const init = async () => {
     try {
-      if (socketStatus === LoadStatus.Failed || !socket) {
+      if (!socket?.connected) {
         setStatus(LoadStatus.Failed);
         setLocalClassifier(null);
         console.log('Socket not connected. Cannot initialize Classifier.');
@@ -53,5 +50,9 @@ export const ClassifierProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  return <ClassifierContext.Provider value={{ classifier: localClassifier, status, init }}>{children}</ClassifierContext.Provider>;
+  return (
+    <ClassifierContext.Provider value={{ classifier: localClassifier, status, init }}>
+      {children}
+    </ClassifierContext.Provider>
+  );
 };

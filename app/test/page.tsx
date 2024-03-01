@@ -1,52 +1,28 @@
 'use client';
-import React, { useState } from 'react';
-import { useSocket } from '@/contexts/SocketContext';
+import { Button } from '@/components/ui/button';
+import useSocket from '@/hooks/useSocket';
 
-const Home = () => {
-  const [message, setMessage] = useState('');
-  const [username, setUsername] = useState('');
-  const [allMessages, setAllMessages] = useState([]);
-
+const TestPage = () => {
   const { socket } = useSocket();
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!socket) return;
-
-    console.log('emitted');
-
-    socket.emit('send-message', {
-      username,
-      message,
-    });
-    setMessage('');
+  function handleTest() {
+    if (!socket || !socket.connected) {
+      console.log('Socket not connected', socket?.id);
+      return;
+    }
+    console.log('test', socket.connected, socket.id);
+    socket.emit('outer', 'outer');
+    socket.emit('abc', 'abc');
   }
 
   return (
     <div>
-      <h1>Chat app</h1>
-      <h1>Enter a username</h1>
-
-      <input value={username} onChange={(e) => setUsername(e.target.value)} />
-
-      <br />
-      <br />
-
-      <div>
-        {allMessages.map(({ username, message }, index) => (
-          <div key={index}>
-            {username}: {message}
-          </div>
-        ))}
-
-        <br />
-
-        <form onSubmit={handleSubmit}>
-          <input name="message" placeholder="enter your message" value={message} onChange={(e) => setMessage(e.target.value)} autoComplete={'off'} />
-        </form>
-      </div>
+      <h1>Test Page</h1>
+      <p>{`Active: ${socket?.active}`}</p>
+      <Button onClick={handleTest}>Test</Button>
+      <p>Socket ID: {socket?.id}</p>
     </div>
   );
 };
 
-export default Home;
+export default TestPage;

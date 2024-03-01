@@ -9,17 +9,15 @@ import useVideoCapture from '@/hooks/useVideoCapture';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 import { SocketAction } from '@/types/socketMessage.type';
-import { sortProcessStore } from '@/stores/sortProcessStore';
 
 const StatusIndicator = ({}) => {
   const { status: cassifierStatus } = useClassifier();
   const { status: detectorStatus, reInit } = useDetector();
   const { status: hardwareStatus, init: initHardware } = useHardware();
   const { status: settingsStatus, loadSettings } = useSettings();
-  const { status: socketStatus, socket } = useSocket();
+  const { socket, status: socketStatus } = useSocket();
   const { status: videoCaptureStatus, init: initVideoCapture } = useVideoCapture();
   const { status: sortControllerStatus } = useSortController();
-  const videoStreamId = sortProcessStore((state) => state.videoStreamId);
 
   const statusColor = {
     loading: 'bg-yellow-700', // Yellow for loading
@@ -29,19 +27,34 @@ const StatusIndicator = ({}) => {
 
   return (
     <div className="fixed flex flex-col gap-2 top-2 right-0 p-2 m-2 bg-slate-400 opacity-90 rounded-md">
-      <div className={cn(statusColor[settingsStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')} onClick={loadSettings}>
+      <div
+        className={cn(statusColor[socketStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        onClick={() => {
+          console.log('SOCKET STATUS: ', { active: socket?.active, connected: socket?.connected, id: socket?.id });
+        }}
+      >
+        Socket
+      </div>
+      <div
+        className={cn(statusColor[settingsStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        onClick={loadSettings}
+      >
         Settings
       </div>
 
-      <div className={cn(statusColor[socketStatus], 'rounded-md px-2 mx-auto w-full')}>Socket</div>
-
-      <div className={cn(statusColor[videoCaptureStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')} onClick={initVideoCapture}>
+      <div
+        className={cn(statusColor[videoCaptureStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        onClick={initVideoCapture}
+      >
         Video Capture
       </div>
 
       <div className={cn(statusColor[cassifierStatus], 'rounded-md px-2 mx-auto w-full')}>Classifier</div>
 
-      <div className={cn(statusColor[hardwareStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')} onClick={initHardware}>
+      <div
+        className={cn(statusColor[hardwareStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        onClick={initHardware}
+      >
         Hardware
       </div>
 

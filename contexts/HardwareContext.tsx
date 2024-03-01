@@ -21,25 +21,21 @@ export const HardwareContext = createContext<HardwareContextType | undefined>(un
 export const HardwareProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
   const { settings, status: settingsStatus } = useSettings();
-  const { socket, status: socketStatus } = useSocket();
+  const { socket } = useSocket();
 
-  useEffect(() => {
-    if (!socket) return;
-  }, [socket]);
+  // useEffect(() => {
+  //   setStatus(LoadStatus.Loading);
 
-  useEffect(() => {
-    setStatus(LoadStatus.Loading);
-
-    init();
-  }, [settings, socket]);
+  //   init();
+  // }, [settings, socket?.connected]);
 
   const init = async () => {
-    console.log('Initializing hardware');
     try {
-      if (!settings || !socket) {
+      if (!settings || !socket?.connected) {
         setStatus(LoadStatus.Failed);
         return;
       }
+      console.log('Initializing hardware');
 
       const hardwareSettings: HardwareInitDto = {
         defaultConveyorSpeed: settings.conveyorSpeed,
@@ -57,7 +53,7 @@ export const HardwareProvider = ({ children }: { children: ReactNode }) => {
       };
 
       socket.on(SocketAction.INIT_HARDWARE_SUCCESS, (succes) => {
-        console.log('INIT_HARDWARE_SUCCESS');
+        console.log('INIT_HARDWARE_SUCCESS hardwarecontext', succes);
         if (succes) {
           setStatus(LoadStatus.Loaded);
         } else {
@@ -65,6 +61,7 @@ export const HardwareProvider = ({ children }: { children: ReactNode }) => {
         }
       });
 
+      socket.emit('abc', { data: 'yeah baby' });
       socket.emit(SocketAction.INIT_HARDWARE, hardwareSettings);
     } catch (error) {
       setStatus(LoadStatus.Failed);

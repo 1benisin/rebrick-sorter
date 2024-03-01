@@ -60,27 +60,24 @@ export default class HardwareController {
 
       // initialize speed queue
       this.speedQueue = [];
-      // const speedRef = this.scheduleConveyorSpeedChange(initSettings.defaultConveyorSpeed);
       this.speedQueue = [{ speed: initSettings.defaultConveyorSpeed, time: Date.now(), ref: setTimeout(() => {}) }];
 
       // initialize part queue
-      // init the part queue with a part for every sorter if it hasn't already
-      if (this.partQueue.length < initSettings.sorterDimensions.length) {
-        this.partQueue = [];
-        for (let i = 0; i < initSettings.sorterDimensions.length; i++) {
-          const part: Part = {
-            sorter: i,
-            bin: 1,
-            initialPosition: 0,
-            initialTime: Date.now(),
-            moveTime: Date.now(),
-            moveRef: undefined,
-            moveFinishedTime: Date.now(),
-            jetTime: Date.now(),
-            jetRef: undefined,
-          };
-          this.partQueue.push(part);
-        }
+      // init the part queue with a part for every sorter
+      this.partQueue = [];
+      for (let i = 0; i < initSettings.sorterDimensions.length; i++) {
+        const part: Part = {
+          sorter: i,
+          bin: 1,
+          initialPosition: 0,
+          initialTime: Date.now(),
+          moveTime: Date.now(),
+          moveRef: undefined,
+          moveFinishedTime: Date.now(),
+          jetTime: Date.now(),
+          jetRef: undefined,
+        };
+        this.partQueue.push(part);
       }
 
       // set sorter travel times
@@ -169,14 +166,18 @@ export default class HardwareController {
   }) {
     /* insert new speed change at beginning (startSpeedChange) and end (newArrivalTime) of slowdown
      and slow down all speed changes during slowdown by slowDownPercent */
-    if (startSpeedChange < Date.now() || newArrivalTime < Date.now() || oldArrivalTime < Date.now())
+    if (newArrivalTime < Date.now() || oldArrivalTime < Date.now())
       throw new Error(
         `insertSpeedChange: time is in the past: ${Date.now()}, ${startSpeedChange}, ${newArrivalTime}, ${oldArrivalTime}`,
       );
+    // 5506, 4605.7515, 8515.7515, 7582.505
     if (startSpeedChange > newArrivalTime)
       throw new Error(`insertSpeedChange: startSpeedChange > newArrivalTime: ${startSpeedChange}, ${newArrivalTime}`);
     if (oldArrivalTime > newArrivalTime)
       throw new Error(`insertSpeedChange: oldArrivalTime > newArrivalTime: ${oldArrivalTime}, ${newArrivalTime}`);
+
+    // start speed change now or in the future once last part at same sorter has been jetted ( startSpeedChange = lastPartJettedTime)
+    startSpeedChange = Math.max(startSpeedChange, Date.now());
 
     // find new speed percent
     const tooSmallTimeDif = oldArrivalTime - startSpeedChange;
@@ -362,13 +363,16 @@ export default class HardwareController {
   }
 
   scheduleConveyorSpeedChange(speed: number, atTime?: number) {
+    if (speed < 0 || speed > this.defaultConveyorSpeed) {
+      throw new Error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
+    }
     const timeout = !atTime ? 0 : atTime - Date.now();
 
     // normalize spped to conveyor motor speed 0-255
     const normalizeConveyorSpeed = Math.round((speed / this.defaultConveyorSpeed) * 255);
 
     return setTimeout(() => {
-      console.log(getFormattedTime('min', 'ms'), '- speed Changed:', speed);
+      console.log(getFormattedTime('min', 'ms'), '- speed Changed:', speed, normalizeConveyorSpeed);
       const arduinoDeviceCommand: ArduinoDeviceCommand = {
         arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
         command: ArduinoCommands.CONVEYOR_SPEED,
@@ -404,7 +408,13 @@ export default class HardwareController {
 
   // return type {sorter: string; bin: number}
   public sortPart = ({ initialTime, initialPosition, bin, sorter }: SortPartDto) => {
-    console.log('--- sortPart:', { initialTime, initialPosition, bin, sorter });
+    console.log('--- sortPart:', {
+      init: getFormattedTime('min', 'sec', initialTime),
+      initialTime,
+      initialPosition,
+      bin,
+      sorter,
+    });
     try {
       if (!this.initialized) {
         throw new Error('HardwareController not initialized');
@@ -434,6 +444,7 @@ export default class HardwareController {
 
       // slow down conveyor if arrivalTimeDelay > 0
       if (arrivalTimeDelay > 0) {
+        console.log('SLOW-DOWN:', arrivalTimeDelay);
         // find updated move and jet times
         const oldJetTime = jetTime;
         moveTime += arrivalTimeDelay;

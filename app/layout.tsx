@@ -3,13 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import NavBar from '@/components/navbar';
 import AlertDisplay from '@/components/AlertDisplay';
-import { SocketProvider } from '@/contexts/SocketContext';
-import { ClassifierProvider } from '@/contexts/ClassifierContext';
-import { SettingsProvider } from '@/contexts/SettingsContext';
-import { HardwareProvider } from '@/contexts/HardwareContext';
-import { DetectorProvider } from '@/contexts/DetectorContext';
-import { VideoCaptureProvider } from '@/contexts/VideoCaptureContext';
-import { SortControllerProvider } from '@/contexts/SortControllerContext';
+import RootContextProvider from '@/contexts/RootProvider';
 
 const font = Inter({ subsets: ['latin'] });
 
@@ -26,19 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
         <AlertDisplay />
 
-        <SettingsProvider>
-          <SocketProvider>
-            <VideoCaptureProvider>
-              <ClassifierProvider>
-                <HardwareProvider>
-                  <DetectorProvider>
-                    <SortControllerProvider> {children} </SortControllerProvider>
-                  </DetectorProvider>
-                </HardwareProvider>
-              </ClassifierProvider>
-            </VideoCaptureProvider>
-          </SocketProvider>
-        </SettingsProvider>
+        <RootContextProvider>{children}</RootContextProvider>
       </body>
     </html>
   );
