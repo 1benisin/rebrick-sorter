@@ -4,12 +4,11 @@ import { ArduinoDeviceCommand } from '@/types/arduinoCommands.type';
 import { SerialPortType } from '@/types/serialPort.type';
 
 const MockedPorts = [
-  { name: 'sorter_A', path: '/mock/sorter_A_serial_port' },
-  { name: 'sorter_B', path: '/mock/sorter_B_serial_port' },
-  { name: 'hopper_feeder', path: '/mock/hopper_feeder_serial_port' },
-  { name: 'conveyor_jets', path: '/mock/conveyor_jets_serial_port' },
+  { name: 'sorter_A', path: '/dev/tty.usbmodem1101' },
+  { name: 'sorter_B', path: '/dev/tty.usbmodem1201' },
+  { name: 'conveyor_jets', path: '/dev/tty.usbmodem1401' },
+  { name: 'hopper_feeder', path: '/dev/tty.usbserial-130' },
 ];
-
 export default class SerialPortManager {
   private static instance: SerialPortManager;
   private devices: Record<string, ArduinoDevice> = {};
@@ -94,7 +93,6 @@ export default class SerialPortManager {
   }
 
   sendCommandToDevice(arduinoDeviceCommand: ArduinoDeviceCommand) {
-    console.log('SerialPortManager Device: ', this.devices[arduinoDeviceCommand.arduinoPath]);
     if (this.devices[arduinoDeviceCommand.arduinoPath]) {
       this.devices[arduinoDeviceCommand.arduinoPath].sendCommand(
         arduinoDeviceCommand.command,

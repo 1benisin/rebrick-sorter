@@ -26,13 +26,13 @@ export const VideoCaptureProvider = ({ children }: { children: ReactNode }) => {
   }, [videoStreamId]);
 
   const init = async () => {
-    if (!videoStreamId) {
-      console.log('No video stream id available.');
-      setVideoCapture(null);
-      setStatus(LoadStatus.Failed);
-      return;
-    }
     try {
+      if (!videoStreamId) {
+        console.log('No video stream id available.');
+        setVideoCapture(null);
+        setStatus(LoadStatus.Failed);
+        return;
+      }
       const localVideoCapture = DualVideoCapture.getInstance();
       await localVideoCapture.init(videoStreamId);
       setVideoCapture(localVideoCapture);

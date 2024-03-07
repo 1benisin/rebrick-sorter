@@ -38,6 +38,7 @@ class DualVideoCapture {
 
         const mediaStream1 = videoElement1.captureStream();
         const mediaStream2 = videoElement2.captureStream();
+
         const videoTracks1 = mediaStream1.getVideoTracks();
         const videoTracks2 = mediaStream2.getVideoTracks();
         if (videoTracks1.length === 0 || videoTracks2.length === 0) {
@@ -49,7 +50,13 @@ class DualVideoCapture {
         this.imageCapture2 = new ImageCapture(videoTracks2[0]);
       } else {
         // else use webcam to capture the stream
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: videoStreamId } });
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId: videoStreamId,
+            width: { ideal: 3840, max: 3840 },
+            height: { ideal: 2160, max: 2160 },
+          },
+        });
         const videoTracks = mediaStream.getVideoTracks();
         if (videoTracks.length === 0) {
           const error = 'No video tracks available in the provided stream.';

@@ -150,7 +150,15 @@ export default class SortProcessCtrl {
     }
   }
 
+  test_loopProcessCount = 0;
+  test_loopProcessMax = 5;
   private async runProcess() {
+    // testing purposes only
+    if (this.test_loopProcessCount > this.test_loopProcessMax) {
+      sortProcessStore.getState().setIsRunning(false);
+    }
+    this.test_loopProcessCount++;
+
     const startTime = Date.now();
     console.log('----------- Process Start ');
     try {

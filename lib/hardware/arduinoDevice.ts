@@ -63,7 +63,7 @@ export default class ArduinoDevice {
       parser.on('data', (data) => this.handleData(data));
 
       this.port.on('open', () => {
-        console.log(`${this.portPath} opened`);
+        console.log(`${this.portPath} MOCK opened`);
         resolve();
       });
 
@@ -100,7 +100,7 @@ export default class ArduinoDevice {
 
     // checksum is converted to a 2 digit decimal number and appended to the end of the message
     const formattedMessage = START_MARKER + msg + checksum.toString().padStart(2, '0') + END_MARKER;
-    console.log('Arduino MESSAGE --- ', msg, ' to ', formattedMessage);
+    return formattedMessage;
   };
 
   isOpen = () => {
@@ -126,10 +126,9 @@ export default class ArduinoDevice {
       console.error('No port to handle data from');
       return;
     }
-    console.log(`--- Sending command to ${this.port.path}:`, command, data);
-    const message = data ? `${command},${data}` : command;
+    const message = data ? `${command}${data}` : command;
     const formattedMessage = this.constructMessage(message);
-    this.port.write(formattedMessage + '\n', (err) => {
+    this.port.write(formattedMessage, (err) => {
       if (err) {
         console.error(`Error sending message: ${message} - to portPath: ${this.port?.path}: `, err.message);
       }

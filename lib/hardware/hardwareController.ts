@@ -151,7 +151,8 @@ export default class HardwareController {
       arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
       command: ArduinoCommands.CONVEYOR_ON_OFF,
     };
-    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+    const serialPortManager = SerialPortManager.getInstance();
+    serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
   public logPartQueue() {
@@ -180,6 +181,15 @@ export default class HardwareController {
     // jet time is the time it takes to travel the distance to the jet
     // jetTime should always be after initialTime
     const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.speedQueue);
+    console.log('calculateTimings: ', {
+      initialTime: getFormattedTime('min', 'ms', initialTime),
+      jetTime: getFormattedTime('min', 'ms', jetTime),
+      initialPosition,
+      bin,
+      sorter,
+      distanceToJet,
+      jetPositions: this.jetPositions,
+    });
 
     const travelTimeFromLastBin = getTravelTimeBetweenBins(
       sorter,
@@ -370,7 +380,7 @@ export default class HardwareController {
     const timeout = !atTime ? 0 : atTime - Date.now();
 
     return setTimeout(() => {
-      console.log(getFormattedTime('min', 'ms'), 'jet fired: ', jet);
+      console.log(getFormattedTime('min', 'ms'), 'jet fired: ', jet, getFormattedTime('min', 'ms', atTime));
       const arduinoDeviceCommand: ArduinoDeviceCommand = {
         arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
         command: ArduinoCommands.FIRE_JET,
@@ -390,7 +400,7 @@ export default class HardwareController {
     const timeout = !atTime ? 0 : atTime - Date.now();
 
     return setTimeout(() => {
-      console.log(getFormattedTime('min', 'ms'), 'sorter To Bin:', sorter, bin);
+      console.log(getFormattedTime('min', 'ms'), 'sorter To Bin:', sorter, bin, getFormattedTime('min', 'ms', atTime));
       const arduinoDeviceCommand: ArduinoDeviceCommand = {
         arduinoPath: this.serialPorts[serialPortNames[sorter as keyof typeof serialPortNames]],
         command: ArduinoCommands.MOVE_TO_BIN,
@@ -410,7 +420,13 @@ export default class HardwareController {
     const normalizeConveyorSpeed = Math.round((speed / this.defaultConveyorSpeed) * 255);
 
     return setTimeout(() => {
-      console.log(getFormattedTime('min', 'ms'), '- speed Changed:', speed, normalizeConveyorSpeed);
+      console.log(
+        getFormattedTime('min', 'ms'),
+        '- speed Changed:',
+        speed,
+        normalizeConveyorSpeed,
+        getFormattedTime('min', 'ms', atTime),
+      );
       const arduinoDeviceCommand: ArduinoDeviceCommand = {
         arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
         command: ArduinoCommands.CONVEYOR_SPEED,
@@ -446,13 +462,13 @@ export default class HardwareController {
 
   // return type {sorter: string; bin: number}
   public sortPart = ({ initialTime, initialPosition, bin, sorter }: SortPartDto) => {
-    console.log('--- sortPart:', {
-      init: getFormattedTime('min', 'sec', initialTime),
-      initialTime,
-      initialPosition,
-      bin,
-      sorter,
-    });
+    // console.log('--- sortPart:', {
+    //   init: getFormattedTime('min', 'ms', initialTime),
+    //   initialTime,
+    //   initialPosition,
+    //   bin,
+    //   sorter,
+    // });
     try {
       if (!this.initialized) {
         throw new Error('HardwareController not initialized');
@@ -477,6 +493,18 @@ export default class HardwareController {
         initialPosition,
         prevSorterPart.bin,
       );
+
+      console.log('--- Sort Pat: ', {
+        sorter,
+        bin,
+        initialTime: getFormattedTime('min', 'ms', initialTime),
+        moveTime: getFormattedTime('min', 'ms', moveTime),
+        jetTime: getFormattedTime('min', 'ms', jetTime),
+        travelTimeFromLastBin,
+        initialPosition,
+        prevBin: prevSorterPart.bin,
+        distanceToJet: this.jetPositions[sorter] - initialPosition,
+      });
 
       const arrivalTimeDelay = Math.max(prevSorterPart.moveFinishedTime - moveTime, 0);
 

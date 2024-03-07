@@ -20,7 +20,6 @@ export const SocketContext = createContext<SocketContextType>({
 });
 
 let socketInstance: Socket | null = null;
-let loadOnce = false;
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);

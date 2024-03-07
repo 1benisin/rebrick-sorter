@@ -17,13 +17,14 @@ export const findTimeAfterDistance = (startTime: number, distance: number, speed
     const { speed: speed, time: speedStart } = speedQueue[i];
     let { time: speedEnd } = speedQueue[i + 1] || {};
 
-    // if no next speed change use 5 minutes from now as the end time
-    speedEnd = speedEnd || Date.now() + 5 * 60 * 1000;
+    // if no next speed change use 5 minutes from start as the end time
+    speedEnd = speedEnd || speedStart + 5 * 60 * 1000;
 
     // use later start time
     const start = speedStart > startTime ? speedStart : startTime;
 
     let timeTraveled = speedEnd - start;
+
     // if speed ended before the start time of the part timeTraveled will be negative
     // -clamp the time traveled to 0 because it has no effect on the position
     timeTraveled = timeTraveled < 0 ? 0 : timeTraveled;
@@ -31,7 +32,7 @@ export const findTimeAfterDistance = (startTime: number, distance: number, speed
 
     if (distanceTraveled > remainingDistance) {
       distanceTraveled = remainingDistance;
-      timeTraveled = distanceTraveled * speed;
+      timeTraveled = distanceTraveled / speed;
     }
 
     finishTime += timeTraveled;

@@ -49,7 +49,7 @@ const Video = () => {
       } else {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: cameraId },
+            video: { deviceId: cameraId, width: { ideal: 3840, max: 3840 }, height: { ideal: 2160, max: 2160 } },
           });
           videoRef1.current.src = '';
           videoRef2.current.src = '';

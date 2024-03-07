@@ -3,7 +3,7 @@ import { findTimeAfterDistance, findPositionAtTime } from './hardwareUtils';
 
 describe('findTimeAfterDistance function', () => {
   it('returns the start time when distance is zero', () => {
-    const startTime = Date.now();
+    const startTime = 100;
     const distance = 0;
     const speedQueue: SpeedQueue = [{ time: startTime, speed: 10, ref: setTimeout(() => {}, 0) }];
 
@@ -12,7 +12,7 @@ describe('findTimeAfterDistance function', () => {
   });
 
   it('handles negative distance', () => {
-    const startTime = Date.now();
+    const startTime = 100;
     const distance = -10; // intentionally negative
     const speedQueue: SpeedQueue = [{ time: startTime, speed: 10, ref: setTimeout(() => {}, 0) }];
 
@@ -22,7 +22,7 @@ describe('findTimeAfterDistance function', () => {
   });
 
   it('calculates finish time overlapping one speed change', () => {
-    const startTime = Date.now();
+    const startTime = 100;
     const distance = 50; // some positive distance
     const speedQueue: SpeedQueue = [
       { time: startTime, speed: 1, ref: setTimeout(() => {}, 0) },
@@ -35,20 +35,20 @@ describe('findTimeAfterDistance function', () => {
   });
 
   it('calculates finish time overlapping two speed changes', () => {
-    const startTime = Date.now();
+    const startTime = 100;
     const distance = 1500; // some positive distance
     const speedQueue: SpeedQueue = [
       { time: startTime, speed: 1, ref: setTimeout(() => {}, 0) },
       { time: startTime + 1000, speed: 2, ref: setTimeout(() => {}, 0) },
     ];
 
-    const expectedFinishTime = startTime + 1000 + 1000;
+    const expectedFinishTime = startTime + 1000 + 250;
     const result = findTimeAfterDistance(startTime, distance, speedQueue);
     expect(result).toBe(expectedFinishTime);
   });
 
   it('calculates finish time with an arbitrary number of previous speed changes', () => {
-    const startTime = Date.now();
+    const startTime = 100;
     const distance = 1500; // some positive distance
     const speedQueue: SpeedQueue = [
       { time: startTime - 1000, speed: 100, ref: setTimeout(() => {}, 0) },
@@ -58,7 +58,17 @@ describe('findTimeAfterDistance function', () => {
       { time: startTime + 1000, speed: 2, ref: setTimeout(() => {}, 0) },
     ];
 
-    const expectedFinishTime = startTime + 1000 + 1000;
+    const expectedFinishTime = startTime + 1000 + 250;
+    const result = findTimeAfterDistance(startTime, distance, speedQueue);
+    expect(result).toBe(expectedFinishTime);
+  });
+
+  it('calculates finish past the last speed change', () => {
+    const startTime = 100;
+    const distance = 3000; // some positive distance
+    const speedQueue: SpeedQueue = [{ time: startTime - 1000, speed: 1, ref: setTimeout(() => {}, 0) }];
+
+    const expectedFinishTime = startTime + 3000;
     const result = findTimeAfterDistance(startTime, distance, speedQueue);
     expect(result).toBe(expectedFinishTime);
   });
