@@ -1,3 +1,4 @@
+// contexts/HardwareContext.tsx
 'use client';
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
@@ -23,11 +24,11 @@ export const HardwareProvider = ({ children }: { children: ReactNode }) => {
   const { settings, status: settingsStatus } = useSettings();
   const { socket } = useSocket();
 
-  // useEffect(() => {
-  //   setStatus(LoadStatus.Loading);
+  useEffect(() => {
+    setStatus(LoadStatus.Loading);
 
-  //   init();
-  // }, [settings, socket?.connected]);
+    init();
+  }, [settings, socket?.connected]);
 
   const init = async () => {
     try {
@@ -61,7 +62,6 @@ export const HardwareProvider = ({ children }: { children: ReactNode }) => {
         }
       });
 
-      socket.emit('abc', { data: 'yeah baby' });
       socket.emit(SocketAction.INIT_HARDWARE, hardwareSettings);
     } catch (error) {
       setStatus(LoadStatus.Failed);

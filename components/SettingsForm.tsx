@@ -11,6 +11,7 @@ import useSettings from '@/hooks/useSettings';
 import SerialPortFormInput from '@/components/SerialPortFormInput';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { serialPortNamesArray } from '@/types/serialPort.type';
+import { Card } from '@/components/ui/card';
 
 const SettingsForm = () => {
   const { settings, saveSettings } = useSettings();
@@ -36,8 +37,8 @@ const SettingsForm = () => {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
-        <div className="grid gap-4 grid-cols-3 p-3 border border-slate-300 rounded-md">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2 pt-2">
+        <Card className="grid gap-1 grid-cols-[repeat(auto-fill,minmax(120px,1fr))] w-full p-2">
           <FormField
             control={form.control}
             name="conveyorSpeed"
@@ -45,7 +46,7 @@ const SettingsForm = () => {
               <FormItem>
                 <FormLabel>Conveyor Speed</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} />
+                  <Input className="w-16" {...field} />
                 </FormControl>
 
                 <FormMessage />
@@ -59,7 +60,7 @@ const SettingsForm = () => {
               <FormItem>
                 <FormLabel>Detect Distance Threshold</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} />
+                  <Input className="w-16" {...field} />
                 </FormControl>
 
                 <FormMessage />
@@ -74,7 +75,7 @@ const SettingsForm = () => {
               <FormItem>
                 <FormLabel>Classification Threshold Percentage</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} />
+                  <Input className="w-16" {...field} />
                 </FormControl>
 
                 <FormMessage />
@@ -88,7 +89,7 @@ const SettingsForm = () => {
               <FormItem>
                 <FormLabel>Camera1 Vertical Position </FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} />
+                  <Input className="w-16" {...field} />
                 </FormControl>
 
                 <FormMessage />
@@ -102,7 +103,7 @@ const SettingsForm = () => {
               <FormItem>
                 <FormLabel>Camera2 Vertical Position</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} />
+                  <Input className="w-16" {...field} />
                 </FormControl>
 
                 <FormMessage />
@@ -112,9 +113,9 @@ const SettingsForm = () => {
 
           <SerialPortFormInput control={form.control} name="conveyorJetsSerialPort" label="Conveyor Jets Serial Port" />
           <SerialPortFormInput control={form.control} name="hopperFeederSerialPort" label="Hopper Feeder Serial Port" />
-        </div>
+        </Card>
         {fields.map((field, index) => (
-          <div key={field.id} className="flex flex-row space-x-2 p-4 border border-slate-300 rounded-md">
+          <Card key={field.id} className="flex flex-row space-x-2 p-2 items-end">
             <FormField
               control={form.control}
               name={`sorters.${index}.name`}
@@ -150,7 +151,7 @@ const SettingsForm = () => {
                 <FormItem>
                   <FormLabel>Jet Position</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input className="w-16" {...field} />
                   </FormControl>
 
                   <FormMessage />
@@ -165,7 +166,7 @@ const SettingsForm = () => {
                 <FormItem>
                   <FormLabel>Grid Width</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input className="w-16" {...field} />
                   </FormControl>
 
                   <FormMessage />
@@ -180,7 +181,7 @@ const SettingsForm = () => {
                 <FormItem>
                   <FormLabel>Grid Height</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input className="w-16" {...field} />
                   </FormControl>
 
                   <FormMessage />
@@ -190,7 +191,7 @@ const SettingsForm = () => {
             <Button size="sm" variant="destructive" onClick={() => remove(index)}>
               Delete
             </Button>
-          </div>
+          </Card>
         ))}
         <Button type="button" onClick={() => append(sorterSettingsSchema.parse({}))}>
           Add Sorter

@@ -5,6 +5,11 @@ export enum SocketAction {
   INIT_HARDWARE = 'init-hardware',
   INIT_HARDWARE_SUCCESS = 'init-hardware-success',
 
+  CONVEYOR_ON_OFF = 'conveyor-on-off',
+  MOVE_SORTER = 'move-sorter',
+  FIRE_JET = 'fire-jet',
+  HOME_SORTER = 'home-sorter',
+
   SORT_PART = 'sort-part',
   SORT_PART_SUCCESS = 'sort-part-success',
 

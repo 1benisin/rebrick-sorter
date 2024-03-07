@@ -113,7 +113,7 @@ const Video = () => {
         </div>
       </div>
 
-      <div className="flex w-full items-center text-xs">
+      <div className="flex w-full items-center text-xs pt-1">
         <label htmlFor="cameraSelect">Select Camera:</label>
         <Select value={selectedCamera} onValueChange={handleCameraChange}>
           <SelectTrigger className="text-xs">

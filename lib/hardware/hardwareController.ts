@@ -116,6 +116,44 @@ export default class HardwareController {
     }
   };
 
+  public homeSorter(sorter: number) {
+    console.log('homeSorter:', sorter);
+    const arduinoDeviceCommand: ArduinoDeviceCommand = {
+      arduinoPath: this.serialPorts[serialPortNames[sorter as keyof typeof serialPortNames]],
+      command: ArduinoCommands.MOVE_TO_ORIGIN,
+    };
+    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+  }
+
+  public fireJet(sorter: number) {
+    console.log('fireJet:', sorter);
+    const arduinoDeviceCommand: ArduinoDeviceCommand = {
+      arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
+      command: ArduinoCommands.FIRE_JET,
+      data: sorter,
+    };
+    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+  }
+
+  public moveSorter({ sorter, bin }: { sorter: number; bin: number }) {
+    console.log('moveSorter:', sorter, bin);
+    const arduinoDeviceCommand: ArduinoDeviceCommand = {
+      arduinoPath: this.serialPorts[serialPortNames[sorter as keyof typeof serialPortNames]],
+      command: ArduinoCommands.MOVE_TO_BIN,
+      data: bin,
+    };
+    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+  }
+
+  public conveyorOnOff() {
+    console.log('conveyorOnOff');
+    const arduinoDeviceCommand: ArduinoDeviceCommand = {
+      arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
+      command: ArduinoCommands.CONVEYOR_ON_OFF,
+    };
+    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+  }
+
   public logPartQueue() {
     const partQueue = this.partQueue.map((p) => ({
       sorter: p.sorter,
@@ -355,7 +393,7 @@ export default class HardwareController {
       console.log(getFormattedTime('min', 'ms'), 'sorter To Bin:', sorter, bin);
       const arduinoDeviceCommand: ArduinoDeviceCommand = {
         arduinoPath: this.serialPorts[serialPortNames[sorter as keyof typeof serialPortNames]],
-        command: ArduinoCommands.FIRE_JET,
+        command: ArduinoCommands.MOVE_TO_BIN,
         data: bin,
       };
       this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);

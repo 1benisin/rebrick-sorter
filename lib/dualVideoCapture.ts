@@ -21,7 +21,7 @@ class DualVideoCapture {
   }
 
   // Function to initialize or update the MediaStream track for ImageCapture
-  public async init(videoStreamId: string): Promise<void> {
+  init = async (videoStreamId: string): Promise<void> => {
     if (this.videoStreamId === videoStreamId) return;
     console.log('Initializing ImageCapture with videoStreamId:', videoStreamId);
     try {
@@ -61,12 +61,12 @@ class DualVideoCapture {
       }
       // setup VideoCaptureDimensions
       const imageBitmap = await this.imageCapture1.grabFrame();
-
+      console.log('ImageCapture initialized with dimensions:', imageBitmap.width, imageBitmap.height);
       sortProcessStore.getState().setVideoCaptureDimensions(imageBitmap.width, imageBitmap.height);
     } catch (error) {
       console.error('Error initializing ImageCapture:', error);
     }
-  }
+  };
 
   // Function to capture a photo from the current track
   public async captureImage(): Promise<ImageCaptureType> {

@@ -10,18 +10,18 @@ import { SortControllerProvider } from '@/contexts/SortControllerContext';
 
 export default async function RootProvider({ children }: { children: React.ReactNode }) {
   return (
-    <SocketProvider>
-      <SettingsProvider>
-        <VideoCaptureProvider>
-          <ClassifierProvider>
-            <HardwareProvider>
+    <SettingsProvider>
+      <SocketProvider>
+        <ClassifierProvider>
+          <HardwareProvider>
+            <VideoCaptureProvider>
               <DetectorProvider>
                 <SortControllerProvider> {children} </SortControllerProvider>
               </DetectorProvider>
-            </HardwareProvider>
-          </ClassifierProvider>
-        </VideoCaptureProvider>
-      </SettingsProvider>
-    </SocketProvider>
+            </VideoCaptureProvider>
+          </HardwareProvider>
+        </ClassifierProvider>
+      </SocketProvider>
+    </SettingsProvider>
   );
 }

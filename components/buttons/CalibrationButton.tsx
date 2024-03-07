@@ -22,9 +22,9 @@ const CalibrationButton = () => {
   };
 
   return (
-    <div className="flex items-center p-2">
+    <div className="flex items-center">
       <Button
-        className="ml-4 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+        className="bg-green-500 hover:bg-green-700"
         variant={isCalibrating ? 'outline' : 'default'}
         onClick={handleCalibrate}
         disabled={isCalibrating}

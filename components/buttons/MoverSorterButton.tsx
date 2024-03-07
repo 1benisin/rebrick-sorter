@@ -1,0 +1,38 @@
+// sorterControllerButton.jsx
+'use client';
+
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import useSocket from '@/hooks/useSocket';
+import { SocketAction } from '@/types/socketMessage.type';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+
+const MoveSorterButton = () => {
+  const [sorter, setSorter] = useState('0');
+  const [bin, setBin] = useState('0');
+  const { socket } = useSocket();
+
+  const handleClick = async () => {
+    if (!socket) return;
+    console.log(SocketAction.MOVE_SORTER, { sorter, bin });
+    socket.emit(SocketAction.MOVE_SORTER, { sorter, bin });
+  };
+
+  return (
+    <Card className="flex gap-3 items-end p-2">
+      <Button onClick={handleClick}>Move Sorter</Button>
+      <div className="grid gap-1">
+        <Label htmlFor="sorter">Sorter:</Label>
+        <Input id="sorter" className="w-12" placeholder={sorter} onChange={(e) => setSorter(e.target.value)} />
+      </div>
+      <div className="grid gap-1">
+        <Label htmlFor="bin">Bin:</Label>
+        <Input id="bin" className="w-12" placeholder={bin} onChange={(e) => setBin(e.target.value)} />
+      </div>
+    </Card>
+  );
+};
+
+export default MoveSorterButton;

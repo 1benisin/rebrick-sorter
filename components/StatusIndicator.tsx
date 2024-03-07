@@ -15,7 +15,7 @@ const StatusIndicator = ({}) => {
   const { status: detectorStatus, reInit } = useDetector();
   const { status: hardwareStatus, init: initHardware } = useHardware();
   const { status: settingsStatus, loadSettings } = useSettings();
-  const { socket, status: socketStatus } = useSocket();
+  const { socket, status: socketStatus, init: initializeSocket } = useSocket();
   const { status: videoCaptureStatus, init: initVideoCapture } = useVideoCapture();
   const { status: sortControllerStatus } = useSortController();
 
@@ -28,14 +28,6 @@ const StatusIndicator = ({}) => {
   return (
     <div className="fixed flex flex-col gap-2 top-2 right-0 p-2 m-2 bg-slate-400 opacity-90 rounded-md">
       <div
-        className={cn(statusColor[socketStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
-        onClick={() => {
-          console.log('SOCKET STATUS: ', { active: socket?.active, connected: socket?.connected, id: socket?.id });
-        }}
-      >
-        Socket
-      </div>
-      <div
         className={cn(statusColor[settingsStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
         onClick={loadSettings}
       >
@@ -43,19 +35,29 @@ const StatusIndicator = ({}) => {
       </div>
 
       <div
-        className={cn(statusColor[videoCaptureStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
-        onClick={initVideoCapture}
+        className={cn(statusColor[socketStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        onClick={() => {
+          initializeSocket();
+          console.log('SOCKET STATUS: ', { active: socket?.active, connected: socket?.connected, id: socket?.id });
+        }}
       >
-        Video Capture
+        Socket
       </div>
-
-      <div className={cn(statusColor[cassifierStatus], 'rounded-md px-2 mx-auto w-full')}>Classifier</div>
 
       <div
         className={cn(statusColor[hardwareStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
         onClick={initHardware}
       >
         Hardware
+      </div>
+
+      <div className={cn(statusColor[cassifierStatus], 'rounded-md px-2 mx-auto w-full')}>Classifier</div>
+
+      <div
+        className={cn(statusColor[videoCaptureStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        onClick={initVideoCapture}
+      >
+        Video Capture
       </div>
 
       <div className={cn(statusColor[detectorStatus], 'rounded-md px-2 mx-auto w-full')} onClick={reInit}>

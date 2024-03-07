@@ -1,13 +1,12 @@
 // pages/api/socket/io.ts
 
 import { Server as NetServer } from 'http';
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest } from 'next';
 import { Server as ServerIO } from 'socket.io';
 import { SocketAction } from '@/types/socketMessage.type';
 import { hardwareInitSchema } from '@/types/hardwareInit.dto';
 import HardwareController from '@/lib/hardware/hardwareController';
 import { sortPartSchema } from '@/types/sortPart.dto';
-
 import { NextApiResponseServerIo } from '@/types/nextApiResponseServerIo.type';
 
 export const config = {
@@ -74,8 +73,14 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
       }
     });
 
+    // CONVEYOR_ON_OFF
+    socket.on(SocketAction.CONVEYOR_ON_OFF, () => {
+      const hardwareController = HardwareController.getInstance();
+      hardwareController.conveyorOnOff();
+    });
+
     // SORT_PART
-    socket.on(SocketAction.SORT_PART, async (data) => {
+    socket.on(SocketAction.SORT_PART, (data) => {
       try {
         const sortPartDto = sortPartSchema.parse(data);
         const hardwareController = HardwareController.getInstance();
@@ -102,6 +107,27 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
       const hardwareController = HardwareController.getInstance();
       const speedQueue = hardwareController.logSpeedQueue();
       io.emit(SocketAction.LOG_SPEED_QUEUE_SUCCESS, speedQueue);
+    });
+
+    // MOVE_SORTER
+    socket.on(SocketAction.MOVE_SORTER, ({ sorter, bin }: { sorter: number; bin: number }) => {
+      console.log('MOVE_SORTER', sorter, bin);
+      const hardwareController = HardwareController.getInstance();
+      hardwareController.moveSorter({ sorter, bin });
+    });
+
+    // HOME_SORTER
+    socket.on(SocketAction.HOME_SORTER, (sorter: number) => {
+      console.log('HOME_SORTER', sorter);
+      const hardwareController = HardwareController.getInstance();
+      hardwareController.homeSorter(sorter);
+    });
+
+    // FIRE_JET
+    socket.on(SocketAction.FIRE_JET, (sorter: number) => {
+      console.log('FIRE_JET', sorter);
+      const hardwareController = HardwareController.getInstance();
+      hardwareController.fireJet(sorter);
     });
   });
 

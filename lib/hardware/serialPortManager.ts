@@ -28,6 +28,7 @@ export default class SerialPortManager {
   async connectPorts(
     serialPortsToConnect: SerialPortType[],
   ): Promise<{ port: SerialPortType; success: boolean; error?: any }[]> {
+    console.log('serialPortsToConnect', serialPortsToConnect);
     const devicePromises = serialPortsToConnect.map((port) =>
       this.connectPort(port.path)
         .then(() => ({
@@ -62,50 +63,38 @@ export default class SerialPortManager {
     return await SerialPort.list();
   }
 
-  // async addPort(portName: string, portPath: string): Promise<void> {
-  //   // use file system to add device to local public arduino_devices.json file
-
-  //   const filePath = path.join(__dirname, '../../public/arduino_devices.json');
-  //   console.log('filePath', filePath);
-  //   const data = fs.readFileSync(filePath);
-  //   const arduinoDevices = JSON.parse(data.toString());
-  //   // add new device to array
-  //   arduinoDevices[portName] = portPath;
-  //   // write to file
-  //   fs.writeFileSync(filePath, JSON.stringify(arduinoDevices, null, 2));
-  // }
-
-  private async connectPort(portName: string): Promise<void> {
+  private async connectPort(portPath: string): Promise<void> {
     // Check if the device has already been added
-    if (this.devices[portName]) {
-      console.log(`Device for port ${portName} already added.`);
+    if (this.devices[portPath]) {
+      console.log(`Device for port ${portPath} already added.`);
       return;
     }
     try {
       // Attempt to create the device
-      let device = new ArduinoDevice();
+      let device = new ArduinoDevice(portPath);
       if (process.env.ENVIRONMENT === 'DEV') {
-        await device.connectMock(portName);
+        await device.connectMock();
       } else {
-        await device.connect(portName);
+        await device.connect();
       }
-      this.devices[portName] = device;
+      this.devices[portPath] = device;
     } catch (error) {
-      console.error(`Error adding device for port ${portName}:`, error);
+      console.error(`Error adding device for port ${portPath}:`, error);
       throw error;
     }
   }
 
-  removeDevice(portName: string) {
-    if (this.devices[portName]) {
-      this.devices[portName].disconnect();
-      delete this.devices[portName];
+  removeDevice(portPath: string) {
+    if (this.devices[portPath]) {
+      this.devices[portPath].disconnect();
+      delete this.devices[portPath];
     } else {
-      console.log(`Device ${portName} not found`);
+      console.log(`Device ${portPath} not found`);
     }
   }
 
   sendCommandToDevice(arduinoDeviceCommand: ArduinoDeviceCommand) {
+    console.log('SerialPortManager Device: ', this.devices[arduinoDeviceCommand.arduinoPath]);
     if (this.devices[arduinoDeviceCommand.arduinoPath]) {
       this.devices[arduinoDeviceCommand.arduinoPath].sendCommand(
         arduinoDeviceCommand.command,

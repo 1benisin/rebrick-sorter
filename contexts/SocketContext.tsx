@@ -5,15 +5,18 @@ import { SocketAction } from '@/types/socketMessage.type';
 import { createContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { LoadStatus } from '@/types/loadStatus.type';
+import useSettings from '@/hooks/useSettings';
 
 type SocketContextType = {
   socket: Socket | null;
   status: LoadStatus;
+  init: () => void;
 };
 
 export const SocketContext = createContext<SocketContextType>({
   socket: null,
   status: LoadStatus.Loading,
+  init: () => {},
 });
 
 let socketInstance: Socket | null = null;
@@ -21,12 +24,11 @@ let loadOnce = false;
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
+  const { settings, status: settingsStatus } = useSettings();
 
   useEffect(() => {
     console.log('SocketProvider rendered');
-    if (!socketInstance) {
-      init();
-    }
+    init();
 
     return () => {
       console.log('SocketProvider cleanup');
@@ -35,51 +37,47 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         socketInstance.disconnect();
       }
     };
-  }, []);
+  }, [settings]);
 
   const init = async () => {
-    if (loadOnce) return;
-    loadOnce = true;
+    console.log('Initializing socket', socketInstance, settingsStatus);
+    if (!socketInstance && settingsStatus === LoadStatus.Loaded) {
+      socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL!, {
+        path: '/api/socket/io',
+        addTrailingSlash: false,
+      });
 
-    setStatus(LoadStatus.Loading);
+      socketInstance.on('connect', () => {
+        console.log('SOCKET CONNECTED');
+        setStatus(LoadStatus.Loaded);
+      });
 
-    await fetch('/api/socket/io');
+      socketInstance.on('disconnect', () => {
+        setStatus(LoadStatus.Failed);
+      });
 
-    socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL!, {
-      path: '/api/socket/io',
-      addTrailingSlash: false,
-    });
+      socketInstance.on('error', () => {
+        console.log('socket error');
+      });
 
-    socketInstance.on('connect', () => {
-      console.log('SOCKET CONNECTED');
-      setStatus(LoadStatus.Loaded);
-    });
+      socketInstance.on('connect_error', () => {
+        console.log('socket connect_error');
+        setStatus(LoadStatus.Failed);
+      });
 
-    socketInstance.on('disconnect', () => {
-      setStatus(LoadStatus.Failed);
-    });
+      socketInstance.on(SocketAction.LOG_PART_QUEUE_SUCCESS, (data: any) => {
+        console.log('Part Queue: ', data);
+      });
 
-    socketInstance.on('error', () => {
-      console.log('socket error');
-    });
+      socketInstance.on(SocketAction.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
+        console.log('Speed Queue: ', data);
+      });
 
-    socketInstance.on('connect_error', () => {
-      console.log('socket connect_error');
-      setStatus(LoadStatus.Failed);
-    });
-
-    socketInstance.on(SocketAction.LOG_PART_QUEUE_SUCCESS, (data: any) => {
-      console.log('Part Queue: ', data);
-    });
-
-    socketInstance.on(SocketAction.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
-      console.log('Speed Queue: ', data);
-    });
-
-    socketInstance.on(SocketAction.INIT_HARDWARE_SUCCESS, (succes: boolean) => {
-      console.log('INIT_HARDWARE_SUCCESS result: ', succes);
-    });
+      socketInstance.on(SocketAction.INIT_HARDWARE_SUCCESS, (succes: boolean) => {
+        console.log('INIT_HARDWARE_SUCCESS result: ', succes);
+      });
+    }
   };
 
-  return <SocketContext.Provider value={{ socket: socketInstance, status }}>{children}</SocketContext.Provider>;
+  return <SocketContext.Provider value={{ socket: socketInstance, status, init }}>{children}</SocketContext.Provider>;
 };
