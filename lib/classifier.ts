@@ -113,7 +113,7 @@ export default class Classifier {
     detectionDimensions: { width: number; height: number };
     classificationThresholdPercentage: number;
     maxPartDimensions: { width: number; height: number }[];
-  }): Promise<ClassificationItem | { error: SkipSortReason; reason: any }> {
+  }): Promise<{ classification: ClassificationItem; reason?: SkipSortReason; error?: string }> {
     try {
       if (!this.binLookup || !this.socket) {
         throw new Error('Classifier not initialized: binLookup not loaded');
@@ -127,13 +127,22 @@ export default class Classifier {
 
       // skip part if confidence is too low
       if (combinedResult.score < classificationThresholdPercentage) {
-        return { error: SkipSortReason.tooLowConfidence, reason: Math.round(combinedResult.score * 100) / 100 };
+        return {
+          classification: combinedResult,
+          reason: SkipSortReason.tooLowConfidence,
+          error: (Math.round(combinedResult.score * 100) / 100).toFixed(2),
+        };
       }
+
       // lookup bin position
       const binPosition = this.binLookup[combinedResult.id];
       if (!binPosition) {
         console.error(`No bin position found for part ID: ${combinedResult.id}`);
-        return { error: SkipSortReason.noBinForPartId, reason: combinedResult.id };
+        return {
+          classification: combinedResult,
+          reason: SkipSortReason.noBinForPartId,
+          error: combinedResult.id,
+        };
       }
       combinedResult.bin = binPosition.bin;
       combinedResult.sorter = binPosition.sorter;
@@ -142,8 +151,9 @@ export default class Classifier {
       const { width: maxPartWidth, height: maxPartHeight } = maxPartDimensions[binPosition.sorter];
       if (detectionDimensions.width > maxPartWidth || detectionDimensions.height > maxPartHeight) {
         return {
-          error: SkipSortReason.tooLargeForSorter,
-          reason: `${Math.round(detectionDimensions.width)}x${Math.round(detectionDimensions.height)}`,
+          classification: combinedResult,
+          reason: SkipSortReason.tooLargeForSorter,
+          error: `${Math.round(detectionDimensions.width)}x${Math.round(detectionDimensions.height)}`,
         };
       }
 
@@ -159,7 +169,7 @@ export default class Classifier {
       // axios.post('/api/hardware/sort', data);
       this.socket.emit(SocketAction.SORT_PART, data);
 
-      return combinedResult;
+      return { classification: combinedResult };
     } catch (error) {
       throw error;
     }

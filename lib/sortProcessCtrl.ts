@@ -91,33 +91,32 @@ export default class SortProcessCtrl {
         const lastDetectionPair = group.detectionPairs[lastDetectionIndex];
 
         // if past 1/3 of the screen and not already classifying: classify
-        if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.33 && !group?.classifying) {
+        if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.25 && !group?.classifying) {
           this.updateDetectionPairGroupValue(group.id, 'classifying', true);
 
-          const result = await this.classifier.classify({
-            imageURI1: lastDetectionPair[0].imageURI,
-            imageURI2: lastDetectionPair[1].imageURI,
-            initialTime: lastDetectionPair[0].timestamp,
-            initialPosition: lastDetectionPair[0].centroid.x,
-            detectionDimensions: { width: lastDetectionPair[0].box.width, height: lastDetectionPair[0].box.height },
-            classificationThresholdPercentage: this.settings.classificationThresholdPercentage,
-            maxPartDimensions: this.settings.sorters.map((s) => s.maxPartDimensions),
-          });
-
-          if (result.hasOwnProperty('error')) {
-            const resultError = result as {
-              error: string;
-              reason: any;
-            };
-            const message = resultError.error + ' ' + resultError.reason;
-            console.log('skip sorting part', message);
-
-            this.updateDetectionPairGroupValue(group.id, 'skipSort', message);
-          } else {
-            // else update classificationResult and indexUsedToClassify of the group
-            this.updateDetectionPairGroupValue(group.id, 'classificationResult', result as ClassificationItem);
-            this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
-          }
+          this.classifier
+            .classify({
+              imageURI1: lastDetectionPair[0].imageURI,
+              imageURI2: lastDetectionPair[1].imageURI,
+              initialTime: lastDetectionPair[0].timestamp,
+              initialPosition: lastDetectionPair[0].centroid.x,
+              detectionDimensions: { width: lastDetectionPair[0].box.width, height: lastDetectionPair[0].box.height },
+              classificationThresholdPercentage: this.settings.classificationThresholdPercentage,
+              maxPartDimensions: this.settings.sorters.map((s) => s.maxPartDimensions),
+            })
+            .then(({ classification, error, reason }) => {
+              this.updateDetectionPairGroupValue(group.id, 'skipSort', error);
+              this.updateDetectionPairGroupValue(group.id, 'skipSortReason', reason);
+              this.updateDetectionPairGroupValue(
+                group.id,
+                'classificationResult',
+                classification as ClassificationItem,
+              );
+              this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
+            })
+            .catch((error) => {
+              console.error(`Error classifying detection pair: ${error}`);
+            });
         }
       }
     } catch (error) {

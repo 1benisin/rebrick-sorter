@@ -47,11 +47,8 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
       // set default values for development environment
       if (process.env.NEXT_PUBLIC_ENVIRONMENT == 'DEV') {
         result.conveyorSpeed = 0.3;
+        result.classificationThresholdPercentage = 1;
       }
-
-      console.log('ENVIRONMENT', process.env.ENVIRONMENT);
-      console.log('NEXT_PUBLIC_ENVIRONMENT', process.env.NEXT_PUBLIC_ENVIRONMENT);
-      console.log('SETTINGS', result);
 
       // set start conveyor speed in sortProcessStore
       sortProcessStore.getState().setConveyorSpeed(result.conveyorSpeed);
