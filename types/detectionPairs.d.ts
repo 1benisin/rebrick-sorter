@@ -3,6 +3,13 @@ import { Detection } from './types';
 
 export type DetectionPair = [Detection, Detection];
 
+export enum SkipSortReason {
+  // 'tooLargeForSorter' | 'tooLowConfidence' | 'noBinForPartId';
+  tooLargeForSorter = 'tooLargeForSorter',
+  tooLowConfidence = 'tooLowConfidence',
+  noBinForPartId = 'noBinForPartId',
+}
+
 export type DetectionPairGroup = {
   id: string;
   detectionPairs: [Detection, Detection][];
@@ -13,6 +20,7 @@ export type DetectionPairGroup = {
   sentToSorter?: boolean;
   classifying?: boolean;
   classificationResult?: ClassificationItem;
+  skipSort?: null | string;
 };
 
 // combined results of two BrickognizeResponses

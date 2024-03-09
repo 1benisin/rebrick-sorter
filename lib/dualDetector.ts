@@ -364,7 +364,12 @@ export default class Detector {
     });
 
     //   redraw canvas in a new canvas that's 25% of the original canvas height
+    // const template = document.getElementById('video-capture-canvas-template') as HTMLTemplateElement;
+    // const clone = document.importNode(template!.content, true);
+    // const flattenedCanvas = clone.querySelector('canvas') as HTMLCanvasElement;
     const flattenedCanvas = document.createElement('canvas');
+
+    // const flattenedCanvas = document.createElement('canvas');
     flattenedCanvas.width = canvas.width;
     flattenedCanvas.height = canvas.height * 0.5;
     // set key to current timestamp

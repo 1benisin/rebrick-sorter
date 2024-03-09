@@ -1,9 +1,9 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import NavBar from '@/components/navbar';
 import AlertDisplay from '@/components/AlertDisplay';
 import RootContextProvider from '@/contexts/RootProvider';
+import NavBar from '@/components/Navbar';
 
 const font = Inter({ subsets: ['latin'] });
 
@@ -17,7 +17,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" suppressHydrationWarning>
       <body className={font.className}>
         <NavBar />
-
         <AlertDisplay />
 
         <RootContextProvider>{children}</RootContextProvider>

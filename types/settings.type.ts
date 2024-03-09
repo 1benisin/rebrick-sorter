@@ -7,6 +7,10 @@ export const sorterSettingsSchema = z.object({
   gridWidth: z.coerce.number().min(1, { message: 'Grid width must be greater than 0' }).default(1),
   gridHeight: z.coerce.number().min(1, { message: 'Grid height must be greater than 0' }).default(1),
   jetPosition: z.coerce.number().min(0, { message: 'Jet position must be greater than or equal to 0' }).default(0),
+  maxPartDimensions: z.object({
+    width: z.coerce.number().min(1, { message: 'Max part width must be greater than 0' }).default(1),
+    height: z.coerce.number().min(1, { message: 'Max part height must be greater than 0' }).default(1),
+  }),
 });
 
 export const settingsSchema = z.object({

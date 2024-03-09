@@ -10,7 +10,11 @@ export interface SortProcessState {
   // ---
   detectionPairGroups: DetectionPairGroup[];
   addDetectionPairGroup: (detectionPairGroup: DetectionPairGroup) => void;
-  updateDetectionPairGroupValue: <K extends keyof DetectionPairGroup>(id: string, key: K, value: DetectionPairGroup[K]) => void;
+  updateDetectionPairGroupValue: <K extends keyof DetectionPairGroup>(
+    id: string,
+    key: K,
+    value: DetectionPairGroup[K],
+  ) => void;
   addDetectionPairToGroup: (groupId: string, detectionPair: DetectionPair) => void;
 
   // ---
@@ -18,6 +22,10 @@ export interface SortProcessState {
   setVideoCaptureDimensions: (width: number, height: number) => void;
   videoStreamId: string;
   setVideoStreamId: (id: string) => void;
+
+  // ---
+  conveyorSpeed: number;
+  setConveyorSpeed: (speed: number) => void;
 }
 
 export const sortProcessStore = create<SortProcessState>((set) => ({
@@ -26,8 +34,14 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   // ---
   detectionPairGroups: [],
   addDetectionPairGroup: (detectionPairGroup: DetectionPairGroup) =>
-    set((state) => ({ detectionPairGroups: [detectionPairGroup, ...state.detectionPairGroups].slice(0, MAX_DETECTION_GROUPS) })),
-  updateDetectionPairGroupValue: <K extends keyof DetectionPairGroup>(id: string, key: K, value: DetectionPairGroup[K]) => {
+    set((state) => ({
+      detectionPairGroups: [detectionPairGroup, ...state.detectionPairGroups].slice(0, MAX_DETECTION_GROUPS),
+    })),
+  updateDetectionPairGroupValue: <K extends keyof DetectionPairGroup>(
+    id: string,
+    key: K,
+    value: DetectionPairGroup[K],
+  ) => {
     set((state) => {
       const groups = state.detectionPairGroups;
       // find the group with the given id
@@ -59,4 +73,8 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   setVideoCaptureDimensions: (width: number, height: number) => set({ videoCaptureDimensions: { width, height } }),
   videoStreamId: '',
   setVideoStreamId: (id: string) => set({ videoStreamId: id }),
+
+  // ---
+  conveyorSpeed: 0,
+  setConveyorSpeed: (speed: number) => set({ conveyorSpeed: speed }),
 }));

@@ -151,7 +151,7 @@ const SettingsForm = () => {
                 <FormItem>
                   <FormLabel>Jet Position</FormLabel>
                   <FormControl>
-                    <Input className="w-16" {...field} />
+                    <Input className="w-20" {...field} />
                   </FormControl>
 
                   <FormMessage />
@@ -180,6 +180,34 @@ const SettingsForm = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Grid Height</FormLabel>
+                  <FormControl>
+                    <Input className="w-16" {...field} />
+                  </FormControl>
+
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name={`sorters.${index}.maxPartDimensions.width`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Max Part Width</FormLabel>
+                  <FormControl>
+                    <Input className="w-16" {...field} />
+                  </FormControl>
+
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name={`sorters.${index}.maxPartDimensions.height`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Max Part Height</FormLabel>
                   <FormControl>
                     <Input className="w-16" {...field} />
                   </FormControl>

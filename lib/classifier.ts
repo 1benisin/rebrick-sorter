@@ -9,6 +9,8 @@ import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/services/firebase';
 import { Socket } from 'socket.io-client';
 import { SocketAction } from '@/types/socketMessage.type';
+import { SkipSortReason } from '@/types/detectionPairs.d';
+import { settingsStore } from '@/stores/settingsStore';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -95,12 +97,23 @@ export default class Classifier {
     return combinedItems[0];
   }
 
-  public async classify(
-    imageURI1: string,
-    imageURI2: string,
-    initialTime: number,
-    initialPosition: number,
-  ): Promise<ClassificationItem> {
+  public async classify({
+    imageURI1,
+    imageURI2,
+    initialTime,
+    initialPosition,
+    detectionDimensions,
+    classificationThresholdPercentage,
+    maxPartDimensions,
+  }: {
+    imageURI1: string;
+    imageURI2: string;
+    initialTime: number;
+    initialPosition: number;
+    detectionDimensions: { width: number; height: number };
+    classificationThresholdPercentage: number;
+    maxPartDimensions: { width: number; height: number }[];
+  }): Promise<ClassificationItem | { error: SkipSortReason; reason: any }> {
     try {
       if (!this.binLookup || !this.socket) {
         throw new Error('Classifier not initialized: binLookup not loaded');
@@ -112,10 +125,26 @@ export default class Classifier {
       // Combine the results
       const combinedResult = this.combineBrickognizeResponses(response1, response2);
 
+      // skip part if confidence is too low
+      if (combinedResult.score < classificationThresholdPercentage) {
+        return { error: SkipSortReason.tooLowConfidence, reason: Math.round(combinedResult.score * 100) / 100 };
+      }
       // lookup bin position
       const binPosition = this.binLookup[combinedResult.id];
       if (!binPosition) {
-        throw new Error(`No bin position found for part ID: ${combinedResult.id}`);
+        console.error(`No bin position found for part ID: ${combinedResult.id}`);
+        return { error: SkipSortReason.noBinForPartId, reason: combinedResult.id };
+      }
+      combinedResult.bin = binPosition.bin;
+      combinedResult.sorter = binPosition.sorter;
+
+      // skip part if it's too large for the sorter
+      const { width: maxPartWidth, height: maxPartHeight } = maxPartDimensions[binPosition.sorter];
+      if (detectionDimensions.width > maxPartWidth || detectionDimensions.height > maxPartHeight) {
+        return {
+          error: SkipSortReason.tooLargeForSorter,
+          reason: `${Math.round(detectionDimensions.width)}x${Math.round(detectionDimensions.height)}`,
+        };
       }
 
       // send to sorter
@@ -129,9 +158,6 @@ export default class Classifier {
 
       // axios.post('/api/hardware/sort', data);
       this.socket.emit(SocketAction.SORT_PART, data);
-
-      combinedResult.bin = binPosition.bin;
-      combinedResult.sorter = binPosition.sorter;
 
       return combinedResult;
     } catch (error) {

@@ -22,6 +22,7 @@ const DetectionPairDisplay = () => {
 
 const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
   const classification = group.classificationResult || undefined;
+  const skipSort = group.skipSort || undefined;
 
   return (
     <div
@@ -38,6 +39,7 @@ const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
           </div>
         </>
       )}
+      {skipSort && <div className="text-xs text-red-700">{skipSort}</div>}
       {/* Display detections */}
       <div className="flex flex-col" onClick={() => console.log('Detection Pairs: ', group.detectionPairs)}>
         {group.detectionPairs.map((pair, index) => (

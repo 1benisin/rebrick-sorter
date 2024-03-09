@@ -33,6 +33,7 @@ export default class HardwareController {
 
   partQueue: PartQueue = [];
   speedQueue: SpeedQueue = [];
+  speedUpdateCallback: (speed: number) => void = () => {};
 
   private constructor() {
     this.serialPortManager = SerialPortManager.getInstance();
@@ -96,6 +97,10 @@ export default class HardwareController {
     } catch (error) {
       throw new Error(`Failed to initialize hardware controller: ${error}`);
     }
+  }
+
+  public onSpeedUpdate(callback: (speed: number) => void): void {
+    this.speedUpdateCallback = callback;
   }
 
   generateBinPositions = (
@@ -181,15 +186,6 @@ export default class HardwareController {
     // jet time is the time it takes to travel the distance to the jet
     // jetTime should always be after initialTime
     const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.speedQueue);
-    console.log('calculateTimings: ', {
-      initialTime: getFormattedTime('min', 'ms', initialTime),
-      jetTime: getFormattedTime('min', 'ms', jetTime),
-      initialPosition,
-      bin,
-      sorter,
-      distanceToJet,
-      jetPositions: this.jetPositions,
-    });
 
     const travelTimeFromLastBin = getTravelTimeBetweenBins(
       sorter,
@@ -215,14 +211,14 @@ export default class HardwareController {
     /* insert new speed change at beginning (startSpeedChange) and end (newArrivalTime) of slowdown
      and slow down all speed changes during slowdown by slowDownPercent */
     if (newArrivalTime < Date.now() || oldArrivalTime < Date.now())
-      throw new Error(
+      console.error(
         `insertSpeedChange: time is in the past: ${Date.now()}, ${startSpeedChange}, ${newArrivalTime}, ${oldArrivalTime}`,
       );
     // 5506, 4605.7515, 8515.7515, 7582.505
     if (startSpeedChange > newArrivalTime)
-      throw new Error(`insertSpeedChange: startSpeedChange > newArrivalTime: ${startSpeedChange}, ${newArrivalTime}`);
+      console.error(`insertSpeedChange: startSpeedChange > newArrivalTime: ${startSpeedChange}, ${newArrivalTime}`);
     if (oldArrivalTime > newArrivalTime)
-      throw new Error(`insertSpeedChange: oldArrivalTime > newArrivalTime: ${oldArrivalTime}, ${newArrivalTime}`);
+      console.error(`insertSpeedChange: oldArrivalTime > newArrivalTime: ${oldArrivalTime}, ${newArrivalTime}`);
 
     // start speed change now or in the future once last part at same sorter has been jetted ( startSpeedChange = lastPartJettedTime)
     startSpeedChange = Math.max(startSpeedChange, Date.now());
@@ -230,7 +226,9 @@ export default class HardwareController {
     // find new speed percent
     const tooSmallTimeDif = oldArrivalTime - startSpeedChange;
     const targetTimeDif = newArrivalTime - startSpeedChange;
-    const slowDownPercent = tooSmallTimeDif / targetTimeDif;
+    let slowDownPercent = tooSmallTimeDif / targetTimeDif;
+    // limit slowDownPercent to min of 0.20
+    slowDownPercent = Math.max(slowDownPercent, 0.2);
 
     // -- insert new speed change beginning and end of slowdown
 
@@ -433,6 +431,7 @@ export default class HardwareController {
         data: normalizeConveyorSpeed,
       };
       this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+      this.speedUpdateCallback(speed);
     }, timeout);
   }
 
@@ -462,13 +461,12 @@ export default class HardwareController {
 
   // return type {sorter: string; bin: number}
   public sortPart = ({ initialTime, initialPosition, bin, sorter }: SortPartDto) => {
-    // console.log('--- sortPart:', {
-    //   init: getFormattedTime('min', 'ms', initialTime),
-    //   initialTime,
-    //   initialPosition,
-    //   bin,
-    //   sorter,
-    // });
+    console.log('--- sortPart:', {
+      initialTime: getFormattedTime('min', 'ms', initialTime),
+      initialPosition,
+      bin,
+      sorter,
+    });
     try {
       if (!this.initialized) {
         throw new Error('HardwareController not initialized');
@@ -493,18 +491,6 @@ export default class HardwareController {
         initialPosition,
         prevSorterPart.bin,
       );
-
-      console.log('--- Sort Pat: ', {
-        sorter,
-        bin,
-        initialTime: getFormattedTime('min', 'ms', initialTime),
-        moveTime: getFormattedTime('min', 'ms', moveTime),
-        jetTime: getFormattedTime('min', 'ms', jetTime),
-        travelTimeFromLastBin,
-        initialPosition,
-        prevBin: prevSorterPart.bin,
-        distanceToJet: this.jetPositions[sorter] - initialPosition,
-      });
 
       const arrivalTimeDelay = Math.max(prevSorterPart.moveFinishedTime - moveTime, 0);
 

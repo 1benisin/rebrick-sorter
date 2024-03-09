@@ -61,6 +61,12 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
           .init(hardwareSettings)
           .then(() => {
             console.log('INIT_HARDWARE_SUCCESS');
+
+            // Set up a callback to emit speed updates
+            hardwareController.onSpeedUpdate((speedVariable) => {
+              io.emit(SocketAction.CONVEYOR_SPEED_UPDATE, speedVariable);
+            });
+
             io.emit(SocketAction.INIT_HARDWARE_SUCCESS, true);
           })
           .catch((error) => {

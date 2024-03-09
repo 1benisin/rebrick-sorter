@@ -13,6 +13,8 @@ export enum SocketAction {
   SORT_PART = 'sort-part',
   SORT_PART_SUCCESS = 'sort-part-success',
 
+  CONVEYOR_SPEED_UPDATE = 'conveyor-speed-update',
+
   LOG_PART_QUEUE = 'log-part-queue',
   LOG_PART_QUEUE_SUCCESS = 'log-part-queue-success',
   LOG_SPEED_QUEUE = 'log-speed-queue',

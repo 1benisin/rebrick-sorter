@@ -3,14 +3,14 @@ import Detector from '@/lib/dualDetector';
 import { sortProcessStore, SortProcessState } from '@/stores/sortProcessStore';
 import { alertStore } from '@/stores/alertStore';
 import Classifier from './classifier';
-
+import { ClassificationItem } from '@/types/detectionPairs';
 import { DetectionPairGroup } from '@/types/detectionPairs';
 import { Detection } from '@/types/types';
 import { SettingsType } from '@/types/settings.type';
 
 import { v4 as uuid } from 'uuid';
 
-const MIN_PROCESS_LOOP_TIME = 1500;
+const MIN_PROCESS_LOOP_TIME = 1000;
 
 export default class SortProcessCtrl {
   private static instance: SortProcessCtrl;
@@ -34,6 +34,10 @@ export default class SortProcessCtrl {
 
   // a function that matches detection pairs to proper DetectionPairGroups
   private matchDetectionsPairsToGroups(detectionPairs: [Detection, Detection][]): void {
+    // const conveyorSpeed = this.settings.conveyorSpeed;
+    const conveyorSpeed = sortProcessStore.getState().conveyorSpeed;
+    console.log('Speed: ', conveyorSpeed);
+
     // loop through detectionPairs
     for (const detectionPair of detectionPairs) {
       const unmatchedDetection = detectionPair[0];
@@ -49,12 +53,10 @@ export default class SortProcessCtrl {
         if (!lastDetection) {
           continue;
         }
-        const conveyorSpeed = this.settings.conveyorSpeed;
 
         const distanceTravelled = (unmatchedDetection.timestamp - lastDetection.timestamp) * conveyorSpeed;
         const predictedX = lastDetection.centroid.x + distanceTravelled;
         const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
-        // console.log('distance', distance, 'detectDistanceThreshold', detectDistanceThreshold);
 
         if (distanceBetweenDetections < closestDistance) {
           closestDistance = distanceBetweenDetections;
@@ -70,7 +72,7 @@ export default class SortProcessCtrl {
           .addDetectionPairToGroup(this.detectionPairGroups[closestGroupIndex].id, detectionPair);
       } else {
         // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionPairGroups
-        const newGroup = { id: uuid(), detectionPairs: [detectionPair] };
+        const newGroup: DetectionPairGroup = { id: uuid(), detectionPairs: [detectionPair] };
         this.detectionPairGroups.unshift(newGroup);
         sortProcessStore.getState().addDetectionPairGroup(newGroup);
       }
@@ -92,20 +94,30 @@ export default class SortProcessCtrl {
         if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.33 && !group?.classifying) {
           this.updateDetectionPairGroupValue(group.id, 'classifying', true);
 
-          this.classifier
-            .classify(
-              lastDetectionPair[0].imageURI,
-              lastDetectionPair[1].imageURI,
-              lastDetectionPair[0].timestamp,
-              lastDetectionPair[0].centroid.x,
-            )
-            .then((response) => {
-              this.updateDetectionPairGroupValue(group.id, 'classificationResult', response);
-              this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
-            })
-            .catch((error) => {
-              console.error(`Error classifying detection pair: ${error}`);
-            });
+          const result = await this.classifier.classify({
+            imageURI1: lastDetectionPair[0].imageURI,
+            imageURI2: lastDetectionPair[1].imageURI,
+            initialTime: lastDetectionPair[0].timestamp,
+            initialPosition: lastDetectionPair[0].centroid.x,
+            detectionDimensions: { width: lastDetectionPair[0].box.width, height: lastDetectionPair[0].box.height },
+            classificationThresholdPercentage: this.settings.classificationThresholdPercentage,
+            maxPartDimensions: this.settings.sorters.map((s) => s.maxPartDimensions),
+          });
+
+          if (result.hasOwnProperty('error')) {
+            const resultError = result as {
+              error: string;
+              reason: any;
+            };
+            const message = resultError.error + ' ' + resultError.reason;
+            console.log('skip sorting part', message);
+
+            this.updateDetectionPairGroupValue(group.id, 'skipSort', message);
+          } else {
+            // else update classificationResult and indexUsedToClassify of the group
+            this.updateDetectionPairGroupValue(group.id, 'classificationResult', result as ClassificationItem);
+            this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
+          }
         }
       }
     } catch (error) {
@@ -154,10 +166,10 @@ export default class SortProcessCtrl {
   test_loopProcessMax = 5;
   private async runProcess() {
     // testing purposes only
-    if (this.test_loopProcessCount > this.test_loopProcessMax) {
-      sortProcessStore.getState().setIsRunning(false);
-    }
-    this.test_loopProcessCount++;
+    // if (this.test_loopProcessCount > this.test_loopProcessMax) {
+    //   sortProcessStore.getState().setIsRunning(false);
+    // }
+    // this.test_loopProcessCount++;
 
     const startTime = Date.now();
     console.log('----------- Process Start ');
@@ -167,7 +179,7 @@ export default class SortProcessCtrl {
       // match detections to proper DetectionGroups
       this.matchDetectionsPairsToGroups(detectionPairs);
 
-      // classify detections past screen center
+      // classify detections past screen detection point
       await this.classifyDetections();
 
       // mark offscreen detections

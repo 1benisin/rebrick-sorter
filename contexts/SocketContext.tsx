@@ -6,6 +6,7 @@ import { createContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { LoadStatus } from '@/types/loadStatus.type';
 import useSettings from '@/hooks/useSettings';
+import { sortProcessStore } from '@/stores/sortProcessStore';
 
 type SocketContextType = {
   socket: Socket | null;
@@ -74,6 +75,11 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
 
       socketInstance.on(SocketAction.INIT_HARDWARE_SUCCESS, (succes: boolean) => {
         console.log('INIT_HARDWARE_SUCCESS result: ', succes);
+      });
+
+      socketInstance.on(SocketAction.CONVEYOR_SPEED_UPDATE, (speed: number) => {
+        console.log('CONVEYOR_SPEED_UPDATE: ', speed);
+        sortProcessStore.getState().setConveyorSpeed(speed);
       });
     }
   };
