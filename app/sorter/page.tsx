@@ -22,9 +22,6 @@ const SortPage = () => {
         </div>
 
         <div className="col-span-2 grid-cols-1 gap-1" id="video-capture-container">
-          {/* <template id="video-capture-canvas-template">
-            <canvas className="w-full max-w-full"></canvas>
-          </template> */}
           {/* I want to inject detection images here */}
         </div>
       </div>
