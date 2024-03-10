@@ -4,6 +4,7 @@ import { SortPartDto } from './sortPart.dto';
 export enum SocketAction {
   INIT_HARDWARE = 'init-hardware',
   INIT_HARDWARE_SUCCESS = 'init-hardware-success',
+  CLEAR_HARDWARE_ACTIONS = 'reset-hardware',
 
   CONVEYOR_ON_OFF = 'conveyor-on-off',
   MOVE_SORTER = 'move-sorter',

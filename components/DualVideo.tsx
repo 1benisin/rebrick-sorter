@@ -14,8 +14,10 @@ const Video = () => {
   const videoRef1 = useRef<HTMLVideoElement>(null);
   const videoRef2 = useRef<HTMLVideoElement>(null);
   const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>([]);
-  const [selectedCamera, setSelectedCamera] = useState('');
+  const [selectedCamera1, setSelectedCamera1] = useState('');
+  const [selectedCamera2, setSelectedCamera2] = useState('');
   const setVideoStreamId = sortProcessStore((state) => state.setVideoStreamId);
+  const setVideoStreamId2 = sortProcessStore((state) => state.setVideoStreamId2);
   const { settings } = useSettings();
 
   useEffect(() => {
@@ -37,40 +39,64 @@ const Video = () => {
     getCameras();
   }, []);
 
-  const selectCamera = async (cameraId: string) => {
-    if (videoRef1.current && videoRef2.current) {
+  const selectCamera1 = async (cameraId: string) => {
+    if (videoRef1.current) {
       if (cameraId.slice(0, 4) === 'test') {
         videoRef1.current.srcObject = null;
-        videoRef2.current.srcObject = null;
         videoRef1.current.src = `${TEST_VIDEO_PATH}${cameraId.slice(5)}.mp4`;
-        videoRef2.current.src = `${TEST_VIDEO_PATH}${cameraId.slice(5)}.mp4`;
         videoRef1.current.playbackRate = VIDEO_PLAYBACK_RATE;
-        videoRef2.current.playbackRate = VIDEO_PLAYBACK_RATE;
       } else {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: { deviceId: cameraId, width: { ideal: 3840, max: 3840 }, height: { ideal: 2160, max: 2160 } },
           });
           videoRef1.current.src = '';
-          videoRef2.current.src = '';
           videoRef1.current.srcObject = stream;
-          videoRef2.current.srcObject = stream;
         } catch (error) {
           console.error('Error accessing the selected camera:', error);
         }
       }
 
       videoRef1.current.onloadedmetadata = () => {
-        setSelectedCamera(cameraId);
+        setSelectedCamera1(cameraId);
         setVideoStreamId(cameraId);
         console.log('videoRef1.current.videoWidth', videoRef1.current?.videoWidth);
         console.log('videoRef1.current.videoHeight', videoRef1.current?.videoHeight);
       };
     }
   };
+  const selectCamera2 = async (cameraId: string) => {
+    if (videoRef2.current) {
+      if (cameraId.slice(0, 4) === 'test') {
+        videoRef2.current.srcObject = null;
+        videoRef2.current.src = `${TEST_VIDEO_PATH}${cameraId.slice(5)}.mp4`;
+        videoRef2.current.playbackRate = VIDEO_PLAYBACK_RATE;
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: cameraId, width: { ideal: 3840, max: 3840 }, height: { ideal: 2160, max: 2160 } },
+          });
+          videoRef2.current.src = '';
+          videoRef2.current.srcObject = stream;
+        } catch (error) {
+          console.error('Error accessing the selected camera:', error);
+        }
+      }
 
-  const handleCameraChange = async (cameraId: string) => {
-    await selectCamera(cameraId);
+      videoRef2.current.onloadedmetadata = () => {
+        setSelectedCamera2(cameraId);
+        setVideoStreamId2(cameraId);
+        console.log('videoRef2.current.videoWidth', videoRef2.current?.videoWidth);
+        console.log('videoRef2.current.videoHeight', videoRef2.current?.videoHeight);
+      };
+    }
+  };
+
+  const handleCameraChange1 = async (cameraId: string) => {
+    await selectCamera1(cameraId);
+  };
+  const handleCameraChange2 = async (cameraId: string) => {
+    await selectCamera2(cameraId);
   };
 
   if (!settings) return null;
@@ -82,7 +108,7 @@ const Video = () => {
       <div className="relative w-full h-96">
         {/* <video ref={videoRef1} id="video1" autoPlay loop playsInline muted className="mb-4 h-96 w-full absolute -translate-y-1/2 top-1/2"></video> */}
 
-        <div className="absolute overflow-hidden top-0 left-0 w-full h-2/3">
+        <div className="absolute overflow-hidden top-0 left-0 w-full h-3/5">
           <video
             ref={videoRef1}
             id="video1"
@@ -95,9 +121,9 @@ const Video = () => {
             style={{ transform: `translateY(${settings.camera1VerticalPositionPercentage}%)` }}
           ></video>
 
-          <canvas id="canvas1" className="absolute top-0 left-0 w-full h-full bg-blue-600 opacity-50"></canvas>
+          {/* <canvas id="canvas1" className="absolute top-0 left-0 w-full h-full bg-blue-600 opacity-50"></canvas> */}
         </div>
-        <div className="absolute overflow-hidden bottom-0 left-0 w-full h-1/3">
+        <div className="absolute overflow-hidden bottom-0 left-0 w-full h-2/5">
           <video
             ref={videoRef2}
             id="video2"
@@ -106,36 +132,50 @@ const Video = () => {
             playsInline
             muted
             className="top-0 left-0 w-full"
-            // translate video vertically
-            style={{ transform: `translateY(${settings.camera2VerticalPositionPercentage}%)` }}
+            // translate video vertically and flip horizontally
+            style={{ transform: `scaleX(-1) translateY(${settings.camera2VerticalPositionPercentage}%)` }}
           ></video>
-          <canvas id="canvas2" className="absolute top-0 left-0 w-full h-full bg-red-600 opacity-50"></canvas>
+          {/* <canvas id="canvas2" className="absolute top-0 left-0 w-full h-full bg-red-600 opacity-50"></canvas> */}
         </div>
       </div>
+      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera1} handleCameraChange={handleCameraChange1} />
+      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera2} handleCameraChange={handleCameraChange2} />
+    </div>
+  );
+};
 
-      <div className="flex w-full items-center text-xs pt-1">
-        <label htmlFor="cameraSelect">Select Camera:</label>
-        <Select value={selectedCamera} onValueChange={handleCameraChange}>
-          <SelectTrigger className="text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem key="placeholder" value="" className="text-xs">
-              Choose Video Source
+const VideoSourceSelect = ({
+  cameras,
+  selectedCamera,
+  handleCameraChange,
+}: {
+  cameras: { deviceId: string; label: string }[];
+  selectedCamera: string;
+  handleCameraChange: (cameraId: string) => void;
+}) => {
+  return (
+    <div className="flex w-full items-center text-xs pt-1">
+      <label htmlFor="cameraSelect">Select Camera:</label>
+      <Select value={selectedCamera} onValueChange={handleCameraChange}>
+        <SelectTrigger className="text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem key="placeholder" value="" className="text-xs">
+            Choose Video Source
+          </SelectItem>
+          {cameras.map((camera) => (
+            <SelectItem key={camera.deviceId} value={camera.deviceId} className="text-xs">
+              {camera.label || `Camera ${camera.deviceId}`}
             </SelectItem>
-            {cameras.map((camera) => (
-              <SelectItem key={camera.deviceId} value={camera.deviceId} className="text-xs">
-                {camera.label || `Camera ${camera.deviceId}`}
-              </SelectItem>
-            ))}
-            {TEST_VIDEOS.map((video) => (
-              <SelectItem key={video} value={`test-${video}`} className="text-xs">
-                Test - {video}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+          ))}
+          {TEST_VIDEOS.map((video) => (
+            <SelectItem key={video} value={`test-${video}`} className="text-xs">
+              Test - {video}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 };

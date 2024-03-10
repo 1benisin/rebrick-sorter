@@ -79,6 +79,12 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
       }
     });
 
+    // RESET_HARDWARE
+    socket.on(SocketAction.CLEAR_HARDWARE_ACTIONS, () => {
+      const hardwareController = HardwareController.getInstance();
+      hardwareController.clearActions();
+    });
+
     // CONVEYOR_ON_OFF
     socket.on(SocketAction.CONVEYOR_ON_OFF, () => {
       const hardwareController = HardwareController.getInstance();

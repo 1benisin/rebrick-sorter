@@ -26,25 +26,30 @@ const DetectionPairDisplay = () => {
 };
 
 const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
-  const classificationThresholdPercentage = settingsStore((state) => state.settings?.classificationThresholdPercentage);
+  const settings = settingsStore((state) => state.settings);
   const classification = group.classificationResult || null;
   const skipSort = group.skipSort || null;
   const skipSortReason = group.skipSortReason || null;
 
+  const calculateBGColor = (score: number) => {
+    return score < settings.classificationThresholdPercentage ? 'bg-red-500' : 'bg-green-500';
+  };
+
   return (
     <Card
-      className={`flex flex-col items-center mr-1 p-1 w-28 min-w-28 ${group.skipSortReason ? ' border-red-400 text-red-400' : ' border-emerald-400'}`}
+      className={`flex flex-col items-center mr-1 p-1 w-28 min-w-28 ${group.skipSortReason ? ' border-red-400 text-red-400 border-2' : ''}`}
     >
       {classification && (
-        <>
-          <div className="relative flex items-center w-24 h-24">
-            <img src={classification.img_url} alt={classification.name} />
-            <Badge
-              variant={`${classification.score < classificationThresholdPercentage ? 'destructive' : 'secondary'}`}
-              className="absolute top-0 right-0 text-xs"
-            >{`${(100 * classification.score).toFixed(0)}%`}</Badge>
-          </div>
-        </>
+        <div className={`relative flex items-center w-24 h-24 `}>
+          <img
+            src={classification.img_url}
+            alt={classification.name}
+            className="object-contain max-w-full max-h-full"
+          />
+          <Badge
+            className={`absolute top-0 right-0 text-xs ${calculateBGColor(classification.score)}`}
+          >{`${(100 * classification.score).toFixed(0)}%`}</Badge>
+        </div>
       )}
       {skipSortReason && <div className="text-xs text-red-700">{`${skipSortReason}: ${skipSort}`}</div>}
       {/* Display detections */}

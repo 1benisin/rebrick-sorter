@@ -5,16 +5,20 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import useSortController from '@/hooks/useSortController';
+import useSocket from '@/hooks/useSocket';
+import { SocketAction } from '@/types/socketMessage.type';
 
 const SortProcessCtrlButton = () => {
   const { isRunning } = sortProcessStore();
   const { controller } = useSortController();
+  const { socket } = useSocket();
 
   const handleStartStop = () => {
     if (!controller) return;
 
     if (isRunning) {
       controller.stop();
+      if (!!socket) socket.emit(SocketAction.CLEAR_HARDWARE_ACTIONS);
     } else {
       controller.start();
     }
