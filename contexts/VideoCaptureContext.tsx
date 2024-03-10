@@ -19,22 +19,23 @@ export const VideoCaptureProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
   const [videoCapture, setVideoCapture] = useState<DualVideoCapture | null>(null);
   const videoStreamId = sortProcessStore((state) => state.videoStreamId);
+  const videoStreamId2 = sortProcessStore((state) => state.videoStreamId2);
 
   useEffect(() => {
     setStatus(LoadStatus.Loading);
     init();
-  }, [videoStreamId]);
+  }, [videoStreamId, videoStreamId2]);
 
   const init = async () => {
     try {
-      if (!videoStreamId) {
+      if (!videoStreamId || !videoStreamId2) {
         console.log('No video stream id available.');
         setVideoCapture(null);
         setStatus(LoadStatus.Failed);
         return;
       }
       const localVideoCapture = DualVideoCapture.getInstance();
-      await localVideoCapture.init(videoStreamId);
+      await localVideoCapture.init(videoStreamId, videoStreamId2);
       setVideoCapture(localVideoCapture);
       setStatus(LoadStatus.Loaded);
       console.log('VIDEO CAPTURE INITIALIZED');

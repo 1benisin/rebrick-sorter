@@ -99,6 +99,17 @@ export default class HardwareController {
     }
   }
 
+  public clearActions() {
+    // cancel all scheduled actions
+    this.partQueue.forEach((p) => {
+      if (!!p.moveRef) clearTimeout(p.moveRef);
+      if (!!p.jetRef) clearTimeout(p.jetRef);
+    });
+    this.speedQueue.forEach((s) => {
+      if (!!s.ref) clearTimeout(s.ref);
+    });
+  }
+
   public onSpeedUpdate(callback: (speed: number) => void): void {
     this.speedUpdateCallback = callback;
   }

@@ -9,6 +9,7 @@ import { Detection } from '@/types/types';
 import { SettingsType } from '@/types/settings.type';
 
 import { v4 as uuid } from 'uuid';
+import { Socket } from 'socket.io-client';
 
 const MIN_PROCESS_LOOP_TIME = 1000;
 
@@ -105,6 +106,7 @@ export default class SortProcessCtrl {
               maxPartDimensions: this.settings.sorters.map((s) => s.maxPartDimensions),
             })
             .then(({ classification, error, reason }) => {
+              // update values for detection group
               this.updateDetectionPairGroupValue(group.id, 'skipSort', error);
               this.updateDetectionPairGroupValue(group.id, 'skipSortReason', reason);
               this.updateDetectionPairGroupValue(
@@ -113,6 +115,10 @@ export default class SortProcessCtrl {
                 classification as ClassificationItem,
               );
               this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
+              // update PPM (parts per minute) count if no skip sort error
+              if (!reason) {
+                sortProcessStore.getState().updatePPMCount();
+              }
             })
             .catch((error) => {
               console.error(`Error classifying detection pair: ${error}`);
@@ -161,15 +167,7 @@ export default class SortProcessCtrl {
     }
   }
 
-  test_loopProcessCount = 0;
-  test_loopProcessMax = 5;
   private async runProcess() {
-    // testing purposes only
-    // if (this.test_loopProcessCount > this.test_loopProcessMax) {
-    //   sortProcessStore.getState().setIsRunning(false);
-    // }
-    // this.test_loopProcessCount++;
-
     const startTime = Date.now();
     console.log('----------- Process Start ');
     try {

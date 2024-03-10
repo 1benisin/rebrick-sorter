@@ -68,7 +68,35 @@ export default class Classifier {
     response1: BrickognizeResponse,
     response2: BrickognizeResponse,
   ): ClassificationItem {
-    const allItems = [...response1.items, ...response2.items];
+    // Function to boost the top item if it significantly outscores the next one
+    const boostTopItemIfSignificant = (
+      items: ClassificationItem[],
+      scoreGapThreshold: number,
+      boostAmount: number,
+    ): ClassificationItem[] => {
+      // Clone the items array to avoid mutating the original response
+      const sortedItems = [...items].sort((a, b) => b.score - a.score);
+
+      if (sortedItems.length > 1 && sortedItems[0].score - sortedItems[1].score > scoreGapThreshold) {
+        // Boost the top item if the gap is significant
+        const boostedScore = Math.min(sortedItems[0].score + boostAmount, 1); // Ensuring the score doesn't exceed 1
+        return [{ ...sortedItems[0], score: boostedScore }, ...sortedItems.slice(1)];
+      }
+
+      return items;
+    };
+
+    // Define your thresholds and boost amount
+    const scoreGapThreshold = 0.2; // The minimum gap to consider it significant
+    const boostAmount = 0.1; // The amount to boost the top score
+
+    // Boost top item scores if they are significantly higher than the second score
+    const boostedItems1 = boostTopItemIfSignificant(response1.items, scoreGapThreshold, boostAmount);
+    const boostedItems2 = boostTopItemIfSignificant(response2.items, scoreGapThreshold, boostAmount);
+
+    // Combine the possibly boosted items from both responses
+    const allItems = [...boostedItems1, ...boostedItems2];
+
     const itemsById: Record<string, any[]> = {};
 
     // Group items by ID
@@ -124,13 +152,14 @@ export default class Classifier {
 
       // Combine the results
       const combinedResult = this.combineBrickognizeResponses(response1, response2);
+      combinedResult.score = Math.round(combinedResult.score * 100) / 100;
 
       // skip part if confidence is too low
       if (combinedResult.score < classificationThresholdPercentage) {
         return {
           classification: combinedResult,
           reason: SkipSortReason.tooLowConfidence,
-          error: (Math.round(combinedResult.score * 100) / 100).toFixed(2),
+          error: combinedResult.score.toFixed(2),
         };
       }
 

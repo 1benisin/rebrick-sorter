@@ -416,26 +416,26 @@ export default class Detector {
     ctx.drawImage(
       imageBitmap1,
       0,
-      height / 6,
+      (height / 5) * 1,
       width,
-      height * (2 / 3), // source rectangle
+      (height / 5) * 4, // source rectangle
       0,
       0,
       targetCanvas.width,
-      targetCanvas.height * (2 / 3), // destination rectangle on canvas
+      (targetCanvas.height / 5) * 3, // destination rectangle on canvas
     );
 
     // Draw the middle half of imageBitmap2 on the bottom half of the canvas
     ctx.drawImage(
       imageBitmap2,
       0,
-      height / 3,
+      (height / 10) * 3,
       width,
-      height / 3, // source rectangle
+      (height / 10) * 7, // source rectangle
       0,
-      targetCanvas.height * (2 / 3),
+      (targetCanvas.height / 5) * 3,
       targetCanvas.width,
-      targetCanvas.height / 3, // destination rectangle on canvas
+      targetCanvas.height, // destination rectangle on canvas
     );
 
     return targetCanvas;
