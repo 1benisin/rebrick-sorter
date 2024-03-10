@@ -4,10 +4,11 @@ import DualVideo from '@/components/DualVideo';
 import DetectionPairDisplay from '@/components/DetectionPairDisplay';
 import StatusIndicator from '@/components/StatusIndicator';
 import ConveyorButton from '@/components/buttons/ConveyorButton';
-import MoveSorterButton from '@/components/buttons/HomeSorterButton';
 import HomeSorterButton from '@/components/buttons/HomeSorterButton';
+import { sortProcessStore } from '@/stores/sortProcessStore';
 
 const SortPage = () => {
+  const ppmCount = sortProcessStore((state) => state.ppmCount);
   return (
     <div>
       <StatusIndicator />
@@ -16,15 +17,13 @@ const SortPage = () => {
           <SorterControllerButton />
           <ConveyorButton />
           <HomeSorterButton />
+          <div>{`${ppmCount} PPM (last 10min)`}</div>
         </div>
         <div className="w-full col-span-3">
           <DualVideo />
         </div>
 
         <div className="col-span-2 grid-cols-1 gap-1" id="video-capture-container">
-          {/* <template id="video-capture-canvas-template">
-            <canvas className="w-full max-w-full"></canvas>
-          </template> */}
           {/* I want to inject detection images here */}
         </div>
       </div>

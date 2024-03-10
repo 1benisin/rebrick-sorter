@@ -34,7 +34,7 @@ export const settingsStore = create<SettingsState>((set, get) => ({
         }
 
         set({
-          ...result.data,
+          settings: result.data,
           loaded: true,
         });
       } else {

@@ -56,7 +56,7 @@ export default class SerialPortManager {
 
   // Method to list available serial ports
   async listSerialPorts() {
-    if (process.env.ENVIRONMENT === 'DEV') {
+    if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
       return MockedPorts;
     }
     return await SerialPort.list();
@@ -71,7 +71,7 @@ export default class SerialPortManager {
     try {
       // Attempt to create the device
       let device = new ArduinoDevice(portPath);
-      if (process.env.ENVIRONMENT === 'DEV') {
+      if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
         await device.connectMock();
       } else {
         await device.connect();

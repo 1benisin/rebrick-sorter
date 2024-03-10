@@ -22,10 +22,16 @@ export interface SortProcessState {
   setVideoCaptureDimensions: (width: number, height: number) => void;
   videoStreamId: string;
   setVideoStreamId: (id: string) => void;
+  videoStreamId2: string;
+  setVideoStreamId2: (id: string) => void;
 
   // ---
   conveyorSpeed: number;
   setConveyorSpeed: (speed: number) => void;
+
+  updatePPMCount: () => void;
+  ppmCount: number;
+  ppmTimestamps: number[];
 }
 
 export const sortProcessStore = create<SortProcessState>((set) => ({
@@ -73,8 +79,28 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   setVideoCaptureDimensions: (width: number, height: number) => set({ videoCaptureDimensions: { width, height } }),
   videoStreamId: '',
   setVideoStreamId: (id: string) => set({ videoStreamId: id }),
+  videoStreamId2: '',
+  setVideoStreamId2: (id: string) => set({ videoStreamId2: id }),
 
   // ---
   conveyorSpeed: 0,
   setConveyorSpeed: (speed: number) => set({ conveyorSpeed: speed }),
+
+  // ---
+  ppmCount: 0,
+  ppmTimestamps: [],
+  updatePPMCount: () => {
+    set((state) => {
+      const timestamps = state.ppmTimestamps;
+      const now = Date.now();
+      // keep the last 30 min of timestamps
+      const updatedTimestamps = [now, ...timestamps].filter((ts) => now - ts < 10 * 60 * 1000);
+      const ppmCount =
+        updatedTimestamps.length > 1
+          ? (updatedTimestamps.length - 1) / ((now - updatedTimestamps[updatedTimestamps.length - 1]) / 60000)
+          : 0;
+
+      return { ppmCount: Math.round(ppmCount), ppmTimestamps: updatedTimestamps };
+    });
+  },
 }));

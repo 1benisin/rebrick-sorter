@@ -2,9 +2,11 @@
 
 import React from 'react';
 import { sortProcessStore } from '@/stores/sortProcessStore';
-import { DetectionPairGroup } from '@/types/detectionPairs';
+import { DetectionPairGroup, mockDetectionPairGroup } from '@/types/detectionPairs.d';
 import { v4 as uuid } from 'uuid';
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { settingsStore } from '@/stores/settingsStore';
 
 const DetectionPairDisplay = () => {
   const detectionPairGroups = sortProcessStore((state) => state.detectionPairGroups);
@@ -13,33 +15,43 @@ const DetectionPairDisplay = () => {
     <>
       <div className={`flex`} onClick={() => console.log(detectionPairGroups)}>
         {detectionPairGroups.map((group) => (
-          <DetectionRow key={group.id} group={group} />
+          <DetectionCard key={group.id} group={group} />
         ))}
+        {/* {Array.from({ length: 7 }, () => mockDetectionPairGroup).map((group) => (
+          <DetectionCard key={group.id} group={group} />
+        ))} */}
       </div>
     </>
   );
 };
 
-const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
-  const classification = group.classificationResult || undefined;
-  const skipSort = group.skipSort || undefined;
+const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
+  const settings = settingsStore((state) => state.settings);
+  const classification = group.classificationResult || null;
+  const skipSort = group.skipSort || null;
+  const skipSortReason = group.skipSortReason || null;
+
+  const calculateBGColor = (score: number) => {
+    return score < settings.classificationThresholdPercentage ? 'bg-red-500' : 'bg-green-500';
+  };
 
   return (
-    <div
-      className={`flex flex-col items-center mr-1 p-1 w-28 min-w-28 border rounded-lg ${group.offScreen == true ? ' border-gray-400 text-gray-400' : ' border-emerald-400'}`}
+    <Card
+      className={`flex flex-col items-center mr-1 p-1 w-28 min-w-28 ${group.skipSortReason ? ' border-red-400 text-red-400 border-2' : ''}`}
     >
       {classification && (
-        <>
-          <div className="relative flex items-center w-24 h-24">
-            <img src={classification.img_url} alt={classification.name} />
-            <Badge
-              variant={`${classification.score < 1 ? 'destructive' : 'secondary'}`}
-              className="absolute top-0 right-0 text-xs"
-            >{`${(100 * classification.score).toFixed(0)}%`}</Badge>
-          </div>
-        </>
+        <div className={`relative flex items-center w-24 h-24 `}>
+          <img
+            src={classification.img_url}
+            alt={classification.name}
+            className="object-contain max-w-full max-h-full"
+          />
+          <Badge
+            className={`absolute top-0 right-0 text-xs ${calculateBGColor(classification.score)}`}
+          >{`${(100 * classification.score).toFixed(0)}%`}</Badge>
+        </div>
       )}
-      {skipSort && <div className="text-xs text-red-700">{skipSort}</div>}
+      {skipSortReason && <div className="text-xs text-red-700">{`${skipSortReason}: ${skipSort}`}</div>}
       {/* Display detections */}
       <div className="flex flex-col" onClick={() => console.log('Detection Pairs: ', group.detectionPairs)}>
         {group.detectionPairs.map((pair, index) => (
@@ -88,7 +100,7 @@ const DetectionRow = ({ group }: { group: DetectionPairGroup }) => {
           <div>{classification.name}</div>
         </div>
       )}
-    </div>
+    </Card>
   );
 };
 
