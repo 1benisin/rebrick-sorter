@@ -7,6 +7,9 @@ import { SortPartDto } from '@/types/sortPart.dto';
 import { HardwareInitDto } from '@/types/hardwareInit.dto';
 import { getFormattedTime } from '@/lib/utils';
 
+// min amount conveyor speed can be slowed down from it's default speed (maximum speed): 255
+const MIN_SLOWDOWN_PERCENT = 0.4;
+
 // TODO: integreate methods to calibrate sorter travel times
 const sorterTravelTimes = [
   [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
@@ -442,10 +445,9 @@ export default class HardwareController {
   }
 
   prioritySortPartQueue() {
-    // add defaultArrivalTime if it doesn't exist
+    // Iterate through partQueue to add defaultArrivalTime if it doesn't exist
     this.partQueue.forEach((part) => {
       if (!part.defaultArrivalTime) {
-        // find arrival time with mock speedQueue with only default speed
         const arrivalTime = findTimeAfterDistance(
           part.initialTime,
           this.jetPositions[part.sorter] - part.initialPosition,
@@ -529,7 +531,7 @@ export default class HardwareController {
       });
 
       // if slowdown is more than 50% and less than 100% slow down the part
-      if (slowDownPercent > 0.5 && slowDownPercent < 1) {
+      if (slowDownPercent > MIN_SLOWDOWN_PERCENT && slowDownPercent < 1) {
         console.log('SLOW-DOWN:', arrivalTimeDelay);
         // find updated move and jet times
         const oldJetTime = jetTime;
@@ -549,7 +551,7 @@ export default class HardwareController {
       }
 
       // create and schedule part actions only if slowDownPercent is greater than .50
-      if (slowDownPercent > 0.5) {
+      if (slowDownPercent > MIN_SLOWDOWN_PERCENT) {
         this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
       }
 
