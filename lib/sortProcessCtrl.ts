@@ -11,7 +11,7 @@ import { findPositionAtTime } from '@/lib/hardware/hardwareUtils';
 
 import { v4 as uuid } from 'uuid';
 
-const MIN_PROCESS_LOOP_TIME = 8900;
+const MIN_PROCESS_LOOP_TIME = 800;
 
 export default class SortProcessCtrl {
   private static instance: SortProcessCtrl;
