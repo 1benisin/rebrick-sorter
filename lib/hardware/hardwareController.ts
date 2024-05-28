@@ -7,6 +7,9 @@ import { SortPartDto } from '@/types/sortPart.dto';
 import { HardwareInitDto } from '@/types/hardwareInit.dto';
 import { getFormattedTime } from '@/lib/utils';
 
+// min amount conveyor speed can be slowed down from it's default speed (maximum speed): 255
+const MIN_SLOWDOWN_PERCENT = 0.4;
+
 // TODO: integreate methods to calibrate sorter travel times
 const sorterTravelTimes = [
   [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
@@ -172,6 +175,7 @@ export default class HardwareController {
   }
 
   public logPartQueue() {
+    // format partQueue for logging
     const partQueue = this.partQueue.map((p) => ({
       sorter: p.sorter,
       bin: p.bin,
@@ -182,7 +186,6 @@ export default class HardwareController {
       jetTime: getFormattedTime('min', 'ms', p.jetTime),
     }));
     console.log('partQueue:', partQueue);
-    return partQueue;
   }
 
   public logSpeedQueue() {
@@ -214,10 +217,12 @@ export default class HardwareController {
     startSpeedChange,
     newArrivalTime,
     oldArrivalTime,
+    slowDownPercent,
   }: {
     startSpeedChange: number;
     newArrivalTime: number;
     oldArrivalTime: number;
+    slowDownPercent: number;
   }) {
     /* insert new speed change at beginning (startSpeedChange) and end (newArrivalTime) of slowdown
      and slow down all speed changes during slowdown by slowDownPercent */
@@ -233,13 +238,6 @@ export default class HardwareController {
 
     // start speed change now or in the future once last part at same sorter has been jetted ( startSpeedChange = lastPartJettedTime)
     startSpeedChange = Math.max(startSpeedChange, Date.now());
-
-    // find new speed percent
-    const tooSmallTimeDif = oldArrivalTime - startSpeedChange;
-    const targetTimeDif = newArrivalTime - startSpeedChange;
-    let slowDownPercent = tooSmallTimeDif / targetTimeDif;
-    // limit slowDownPercent to min of 0.20
-    slowDownPercent = Math.max(slowDownPercent, 0.2);
 
     // -- insert new speed change beginning and end of slowdown
 
@@ -447,27 +445,47 @@ export default class HardwareController {
   }
 
   prioritySortPartQueue() {
-    // add defaultArrivalTime if it doesn't exist
-    this.partQueue.map((part) => {
-      if (part.defaultArrivalTime) {
-        return part;
+    // Iterate through partQueue to add defaultArrivalTime if it doesn't exist
+    this.partQueue.forEach((part) => {
+      if (!part.defaultArrivalTime) {
+        const arrivalTime = findTimeAfterDistance(
+          part.initialTime,
+          this.jetPositions[part.sorter] - part.initialPosition,
+          [{ time: part.initialTime, speed: this.defaultConveyorSpeed, ref: setTimeout(() => {}, 0) }],
+        );
+        part.defaultArrivalTime = arrivalTime;
       }
-      // find arrival time with mock speedQueue with only default speed
-      const arrivalTime = findTimeAfterDistance(
-        part.initialTime,
-        this.jetPositions[part.sorter] - part.initialPosition,
-        [{ time: part.initialTime, speed: this.defaultConveyorSpeed, ref: setTimeout(() => {}, 0) }],
-      );
-      part.defaultArrivalTime = arrivalTime;
-      return part;
     });
 
+    // Sort partQueue by defaultArrivalTime
     this.partQueue.sort((a, b) => {
       if (a.defaultArrivalTime && b.defaultArrivalTime) {
         return a.defaultArrivalTime - b.defaultArrivalTime;
       }
       return 0;
     });
+  }
+
+  private computeSlowDownPercent({
+    jetTime,
+    startSpeedChange,
+    arrivalTimeDelay,
+  }: {
+    jetTime: number;
+    startSpeedChange: number;
+    arrivalTimeDelay: number;
+  }) {
+    // find updated move and jet times
+    const oldArrivalTime = jetTime;
+    const newArrivalTime = jetTime + arrivalTimeDelay;
+
+    startSpeedChange = Math.max(startSpeedChange, Date.now());
+
+    // find new speed percent
+    const tooSmallTimeDif = oldArrivalTime - startSpeedChange;
+    const targetTimeDif = newArrivalTime - startSpeedChange;
+    const slowDownPercent = tooSmallTimeDif / targetTimeDif;
+    return slowDownPercent;
   }
 
   // return type {sorter: string; bin: number}
@@ -482,10 +500,10 @@ export default class HardwareController {
       if (!this.initialized) {
         throw new Error('HardwareController not initialized');
       }
-      // add defaultArrivalTime and sort partQueue by defaultArrivalTime
+      // sort partQueue by arrival time to jet position using default conveyor speed
       this.prioritySortPartQueue();
-      // get the last part in the part queueue for the sorter where part.sorter === sorter
 
+      // find the previous part for the same sorter
       const prevSorterPart = this.partQueue.reduce<Part | null>((acc, p) => {
         if (p.sorter === sorter) return p;
         return acc;
@@ -505,8 +523,15 @@ export default class HardwareController {
 
       const arrivalTimeDelay = Math.max(prevSorterPart.moveFinishedTime - moveTime, 0);
 
-      // slow down conveyor if arrivalTimeDelay > 0
-      if (arrivalTimeDelay > 0) {
+      // figure out slowdown percentage
+      const slowDownPercent = this.computeSlowDownPercent({
+        jetTime,
+        startSpeedChange: prevSorterPart.jetTime,
+        arrivalTimeDelay,
+      });
+
+      // if slowdown is more than 50% and less than 100% slow down the part
+      if (slowDownPercent > MIN_SLOWDOWN_PERCENT && slowDownPercent < 1) {
         console.log('SLOW-DOWN:', arrivalTimeDelay);
         // find updated move and jet times
         const oldJetTime = jetTime;
@@ -518,14 +543,17 @@ export default class HardwareController {
           startSpeedChange: prevSorterPart.jetTime,
           newArrivalTime: jetTime,
           oldArrivalTime: oldJetTime,
+          slowDownPercent,
         });
 
         // --- reschedule part actions after slowdown
         this.rescheduleActions(prevSorterPart.jetTime, jetTime, arrivalTimeDelay);
       }
 
-      // create and schedule part actions
-      this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
+      // create and schedule part actions only if slowDownPercent is greater than .50
+      if (slowDownPercent > MIN_SLOWDOWN_PERCENT) {
+        this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
+      }
 
       this.filterQueues();
     } catch (error) {
