@@ -41,7 +41,15 @@ export const findTimeAfterDistance = (startTime: number, distance: number, speed
   return finishTime;
 };
 
-export const findPositionAtTime = (startPos: number, startTime: number, endTime: number, speedQueue: SpeedQueue) => {
+export const findPositionAtTime = (
+  startPos: number,
+  startTime: number,
+  endTime: number,
+  speedQueue: {
+    time: number;
+    speed: number;
+  }[],
+) => {
   let remainingTime = endTime - startTime;
   if (remainingTime < 0) {
     console.warn('findPositionAtTime: startTime is after endTime'); // sanity check
