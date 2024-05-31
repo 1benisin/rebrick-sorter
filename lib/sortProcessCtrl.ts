@@ -1,17 +1,17 @@
 // sortProcessController.ts
 import Detector from '@/lib/dualDetector';
-import { sortProcessStore, SortProcessState } from '@/stores/sortProcessStore';
+import { sortProcessStore } from '@/stores/sortProcessStore';
 import { alertStore } from '@/stores/alertStore';
 import Classifier from './classifier';
 import { ClassificationItem } from '@/types/detectionPairs';
 import { DetectionPairGroup } from '@/types/detectionPairs';
 import { Detection } from '@/types/types';
 import { SettingsType } from '@/types/settings.type';
+import { findPositionAtTime } from '@/lib/hardware/hardwareUtils';
 
 import { v4 as uuid } from 'uuid';
-import { Socket } from 'socket.io-client';
 
-const MIN_PROCESS_LOOP_TIME = 1000;
+const MIN_PROCESS_LOOP_TIME = 800;
 
 export default class SortProcessCtrl {
   private static instance: SortProcessCtrl;
@@ -35,10 +35,6 @@ export default class SortProcessCtrl {
 
   // a function that matches detection pairs to proper DetectionPairGroups
   private matchDetectionsPairsToGroups(detectionPairs: [Detection, Detection][]): void {
-    // const conveyorSpeed = this.settings.conveyorSpeed;
-    const conveyorSpeed = sortProcessStore.getState().conveyorSpeed;
-    console.log('Speed: ', conveyorSpeed);
-
     // loop through detectionPairs
     for (const detectionPair of detectionPairs) {
       const unmatchedDetection = detectionPair[0];
@@ -46,7 +42,7 @@ export default class SortProcessCtrl {
       let closestDistance = this.settings.detectDistanceThreshold;
       let closestGroupIndex = null;
 
-      // start form the end of the array to get the last detection
+      // start fromm the end of the array to get the last detection
       for (let i = this.detectionPairGroups.length - 1; i >= 0; i--) {
         // find the predicted centroid of the last detection in the detection group
         const [lastDetection, _] =
@@ -55,10 +51,20 @@ export default class SortProcessCtrl {
           continue;
         }
 
-        const distanceTravelled = (unmatchedDetection.timestamp - lastDetection.timestamp) * conveyorSpeed;
-        const predictedX = lastDetection.centroid.x + distanceTravelled;
+        // TODO: properly calculate distance between detections using conveyor speed logs
+        // for each speed change in the speed log that would have effected the lastDetection calculate where it would be at the unmatchedDetection.timestamp
+        const conveyorSpeedLog = sortProcessStore.getState().conveyorSpeedLog;
+        const predictedX = findPositionAtTime(
+          lastDetection.centroid.x,
+          lastDetection.timestamp,
+          unmatchedDetection.timestamp,
+          conveyorSpeedLog,
+        );
+        // const distanceTravelled = (unmatchedDetection.timestamp - lastDetection.timestamp) * conveyorSpeed;
+        // const predictedX = lastDetection.centroid.x + distanceTravelled;
         const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
 
+        // distanceBetweenDetections is less than the maximum distance threshold for a match
         if (distanceBetweenDetections < closestDistance) {
           closestDistance = distanceBetweenDetections;
           closestGroupIndex = i;

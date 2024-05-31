@@ -27,6 +27,7 @@ export interface SortProcessState {
 
   // ---
   conveyorSpeed: number;
+  conveyorSpeedLog: { time: number; speed: number }[];
   setConveyorSpeed: (speed: number) => void;
 
   updatePPMCount: () => void;
@@ -84,8 +85,14 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
 
   // ---
   conveyorSpeed: 0,
-  setConveyorSpeed: (speed: number) => set({ conveyorSpeed: speed }),
-
+  conveyorSpeedLog: [],
+  setConveyorSpeed: (speed: number) => {
+    set((state) => {
+      const now = Date.now();
+      const speedLog = [...state.conveyorSpeedLog, { time: now, speed }].filter((log) => now - log.time < 60 * 1000);
+      return { conveyorSpeed: speed, conveyorSpeedLog: speedLog };
+    });
+  },
   // ---
   ppmCount: 0,
   ppmTimestamps: [],
