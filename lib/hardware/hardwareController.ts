@@ -446,7 +446,7 @@ export default class HardwareController {
 
   prioritySortPartQueue() {
     // Iterate through partQueue to add defaultArrivalTime if it doesn't exist
-    this.partQueue.forEach((part) => {
+    this.partQueue = this.partQueue.map((part) => {
       if (!part.defaultArrivalTime) {
         const arrivalTime = findTimeAfterDistance(
           part.initialTime,
@@ -455,6 +455,7 @@ export default class HardwareController {
         );
         part.defaultArrivalTime = arrivalTime;
       }
+      return part;
     });
 
     // Sort partQueue by defaultArrivalTime
