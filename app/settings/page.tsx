@@ -15,7 +15,7 @@ const SettingsPage = () => {
     <div className="p-4">
       <StatusIndicator />
       <DualVideo />
-      <div className="flex gap-2 items-end pt-2">
+      <div className="flex items-end gap-2 pt-2">
         <CalibrationButton />
         <MoveSorterButton />
         <JetButton />

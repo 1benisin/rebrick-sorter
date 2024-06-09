@@ -14,9 +14,9 @@ export const LandingNavbar = () => {
   // const { isSignedIn } = useAuth();
 
   return (
-    <nav className="p-4 bg-transparent flex items-center justify-between">
+    <nav className="flex items-center justify-between bg-transparent p-4">
       <Link href="/" className="flex items-center">
-        <div className="relative h-8 w-8 mr-4">
+        <div className="relative mr-4 h-8 w-8">
           <Image fill alt="Logo" src="/logo.png" />
         </div>
         <h1 className={cn('text-2xl font-bold text-white', font.className)}>Rebrick</h1>

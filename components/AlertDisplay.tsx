@@ -14,25 +14,25 @@ const AlertDisplay = () => {
   }
 
   return (
-    <div className="fixed top-0 left-0 w-full z-50">
-      <div className="text-white text-sm p-2">
+    <div className="fixed left-0 top-0 z-50 w-full">
+      <div className="p-2 text-sm text-white">
         {alertList.map((alert) => (
           <Alert
-            className={`bg-white mb-2 shadow-md ${
-              alert.type === 'error' ? 'text-red-600 border-red-600' : 'text-green-600 border-green-600'
+            className={`mb-2 bg-white shadow-md ${
+              alert.type === 'error' ? 'border-red-600 text-red-600' : 'border-green-600 text-green-600'
             }`}
             key={alert.timestamp}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <AlertCircle className="h-6 w-6 mr-2" />
+                <AlertCircle className="mr-2 h-6 w-6" />
                 <div>
                   <AlertTitle className="font-bold">{alert.type.toUpperCase()}</AlertTitle>
                   <AlertDescription>{alert.message}</AlertDescription>
                 </div>
               </div>
               <Button onClick={() => clearAlertAtTimestamp(alert.timestamp)} variant="ghost" size="sm" title="Clear">
-                <XCircle className=" h-6 w-6" />
+                <XCircle className="h-6 w-6" />
               </Button>
             </div>
           </Alert>

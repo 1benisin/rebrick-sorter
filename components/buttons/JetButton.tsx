@@ -20,7 +20,7 @@ const JetButton = () => {
   };
 
   return (
-    <Card className="flex gap-3 items-end p-2">
+    <Card className="flex items-end gap-3 p-2">
       <Button onClick={handleClick}>Fire Jet</Button>
       <div className="grid gap-1">
         <Label htmlFor="jet">Jet:</Label>

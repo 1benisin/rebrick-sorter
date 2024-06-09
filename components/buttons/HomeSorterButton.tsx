@@ -20,7 +20,7 @@ const HomeSorterButton = () => {
   };
 
   return (
-    <Card className="flex gap-3 items-end p-2">
+    <Card className="flex items-end gap-3 p-2">
       <Button onClick={handleClick}>Home Sorter</Button>
       <div className="grid gap-1">
         <Label htmlFor="sorter">Sorter:</Label>

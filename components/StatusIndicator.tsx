@@ -26,16 +26,16 @@ const StatusIndicator = ({}) => {
   };
 
   return (
-    <div className="fixed flex flex-col gap-2 top-2 right-0 p-2 m-2 bg-slate-400 opacity-90 rounded-md">
+    <div className="fixed right-0 top-2 m-2 flex flex-col gap-2 rounded-md bg-slate-400 p-2 opacity-90">
       <div
-        className={cn(statusColor[settingsStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        className={cn(statusColor[settingsStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
         onClick={loadSettings}
       >
         Settings
       </div>
 
       <div
-        className={cn(statusColor[socketStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        className={cn(statusColor[socketStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
         onClick={() => {
           initializeSocket();
           console.log('SOCKET STATUS: ', { active: socket?.active, connected: socket?.connected, id: socket?.id });
@@ -45,26 +45,26 @@ const StatusIndicator = ({}) => {
       </div>
 
       <div
-        className={cn(statusColor[hardwareStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        className={cn(statusColor[hardwareStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
         onClick={initHardware}
       >
         Hardware
       </div>
 
-      <div className={cn(statusColor[cassifierStatus], 'rounded-md px-2 mx-auto w-full')}>Classifier</div>
+      <div className={cn(statusColor[cassifierStatus], 'mx-auto w-full rounded-md px-2')}>Classifier</div>
 
       <div
-        className={cn(statusColor[videoCaptureStatus], 'rounded-md px-2 mx-auto w-full cursor-pointer')}
+        className={cn(statusColor[videoCaptureStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
         onClick={initVideoCapture}
       >
         Video Capture
       </div>
 
-      <div className={cn(statusColor[detectorStatus], 'rounded-md px-2 mx-auto w-full')} onClick={reInit}>
+      <div className={cn(statusColor[detectorStatus], 'mx-auto w-full rounded-md px-2')} onClick={reInit}>
         Detector
       </div>
 
-      <div className={cn(statusColor[sortControllerStatus], 'rounded-md px-2 mx-auto w-full')}>Sorter Controller</div>
+      <div className={cn(statusColor[sortControllerStatus], 'mx-auto w-full rounded-md px-2')}>Sorter Controller</div>
 
       {socket && (
         <Button size="sm" onClick={() => socket.emit(SocketAction.LOG_PART_QUEUE)}>

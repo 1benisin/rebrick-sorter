@@ -38,7 +38,7 @@ const SettingsForm = () => {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2 pt-2">
-        <Card className="grid gap-1 grid-cols-[repeat(auto-fill,minmax(120px,1fr))] w-full p-2">
+        <Card className="grid w-full grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-1 p-2">
           <FormField
             control={form.control}
             name="conveyorSpeed"
@@ -115,7 +115,7 @@ const SettingsForm = () => {
           <SerialPortFormInput control={form.control} name="hopperFeederSerialPort" label="Hopper Feeder Serial Port" />
         </Card>
         {fields.map((field, index) => (
-          <Card key={field.id} className="flex flex-row space-x-2 p-2 items-end">
+          <Card key={field.id} className="flex flex-row items-end space-x-2 p-2">
             <FormField
               control={form.control}
               name={`sorters.${index}.name`}

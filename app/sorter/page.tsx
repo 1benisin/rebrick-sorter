@@ -19,7 +19,7 @@ const SortPage = () => {
           <HomeSorterButton />
           <div>{`${ppmCount} PPM (last 10min)`}</div>
         </div>
-        <div className="w-full col-span-3">
+        <div className="col-span-3 w-full">
           <DualVideo />
         </div>
 

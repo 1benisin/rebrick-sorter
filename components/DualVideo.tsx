@@ -102,13 +102,13 @@ const Video = () => {
   if (!settings) return null;
 
   return (
-    <div className="flex flex-col max-w-md min-w-96 mx-auto">
+    <div className="min-w-96 mx-auto flex max-w-md flex-col">
       {/* Video container with Tailwind classes to clip to bottom half */}
       {/* <div className="relative overflow-hidden h-48 w-full"> */}
-      <div className="relative w-full h-96">
+      <div className="relative h-96 w-full">
         {/* <video ref={videoRef1} id="video1" autoPlay loop playsInline muted className="mb-4 h-96 w-full absolute -translate-y-1/2 top-1/2"></video> */}
 
-        <div className="absolute overflow-hidden top-0 left-0 w-full h-3/5">
+        <div className="absolute left-0 top-0 h-3/5 w-full overflow-hidden">
           <video
             ref={videoRef1}
             id="video1"
@@ -116,14 +116,14 @@ const Video = () => {
             loop
             playsInline
             muted
-            className="top-0 left-0 w-full"
+            className="left-0 top-0 w-full"
             // translate video vertically
             style={{ transform: `translateY(${settings.camera1VerticalPositionPercentage}%)` }}
           ></video>
 
           {/* <canvas id="canvas1" className="absolute top-0 left-0 w-full h-full bg-blue-600 opacity-50"></canvas> */}
         </div>
-        <div className="absolute overflow-hidden bottom-0 left-0 w-full h-2/5">
+        <div className="absolute bottom-0 left-0 h-2/5 w-full overflow-hidden">
           <video
             ref={videoRef2}
             id="video2"
@@ -131,7 +131,7 @@ const Video = () => {
             loop
             playsInline
             muted
-            className="top-0 left-0 w-full"
+            className="left-0 top-0 w-full"
             // translate video vertically and flip horizontally
             style={{ transform: `scaleX(-1) translateY(${settings.camera2VerticalPositionPercentage}%)` }}
           ></video>
@@ -154,7 +154,7 @@ const VideoSourceSelect = ({
   handleCameraChange: (cameraId: string) => void;
 }) => {
   return (
-    <div className="flex w-full items-center text-xs pt-1">
+    <div className="flex w-full items-center pt-1 text-xs">
       <label htmlFor="cameraSelect">Select Camera:</label>
       <Select value={selectedCamera} onValueChange={handleCameraChange}>
         <SelectTrigger className="text-xs">
