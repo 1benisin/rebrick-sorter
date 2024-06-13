@@ -29,7 +29,7 @@ export default class SerialPortManager {
   ): Promise<{ port: SerialPortType; success: boolean; error?: any }[]> {
     console.log('serialPortsToConnect', serialPortsToConnect);
     const devicePromises = serialPortsToConnect.map((port) =>
-      this.connectPort(port.path)
+      this.connectPort(port)
         .then(() => ({
           port,
           success: true,
@@ -62,23 +62,23 @@ export default class SerialPortManager {
     return await SerialPort.list();
   }
 
-  private async connectPort(portPath: string): Promise<void> {
+  private async connectPort(port: SerialPortType): Promise<void> {
     // Check if the device has already been added
-    if (this.devices[portPath]) {
-      console.log(`Device for port ${portPath} already added.`);
+    if (this.devices[port.path]) {
+      console.log(`Device for port ${port.path} already added.`);
       return;
     }
     try {
       // Attempt to create the device
-      let device = new ArduinoDevice(portPath);
+      let device = new ArduinoDevice(port);
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
         await device.connectMock();
       } else {
         await device.connect();
       }
-      this.devices[portPath] = device;
+      this.devices[port.path] = device;
     } catch (error) {
-      console.error(`Error adding device for port ${portPath}:`, error);
+      console.error(`Error adding device for port ${port.path}:`, error);
       throw error;
     }
   }

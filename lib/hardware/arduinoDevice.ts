@@ -1,14 +1,54 @@
 // lib/hardware/arduinoDevice.ts
 
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
+import { SerialPortType, SerialPortNameType } from '@/types/serialPort.type';
+
+interface ArduinoConfig {
+  gridDimension: number;
+  xOffset: number;
+  yOffset: number;
+  xStepsToLast: number;
+  yStepsToLast: number;
+  acceleration: number;
+  homingSpeed: number;
+  speed: number;
+}
+
+// Default configuration object
+// TODO: remove 'Partial' when all configurations are added
+const allArduinoConfigs: Partial<Record<SerialPortNameType, ArduinoConfig>> = {
+  sorter_A: {
+    gridDimension: 12,
+    xOffset: 10,
+    yOffset: 10,
+    xStepsToLast: 6085,
+    yStepsToLast: 6100,
+    acceleration: 5000,
+    homingSpeed: 1000,
+    speed: 120,
+  },
+};
 
 export default class ArduinoDevice {
   private port: SerialPort | SerialPortMock | null = null;
   portPath: string = '';
+  portName: SerialPortNameType;
 
-  constructor(portPath: string) {
-    this.portPath = portPath;
+  constructor(port: SerialPortType) {
+    this.portPath = port.path;
+    this.portName = port.name;
   }
+
+  // Method to send configuration data to the Arduino
+  sendConfigData = (config: ArduinoConfig) => {
+    const configString = `${config.gridDimension},${config.xOffset},${config.yOffset},${config.xStepsToLast},${config.yStepsToLast},${config.acceleration},${config.homingSpeed},${config.speed}`;
+    const formattedMessage = this.constructMessage(configString);
+    this.port?.write(formattedMessage, (err) => {
+      if (err) {
+        console.error(`Error sending config data to portPath: ${this.port?.path}: `, err.message);
+      }
+    });
+  };
 
   // Static factory method
   connect = async (): Promise<void> => {
@@ -33,6 +73,14 @@ export default class ArduinoDevice {
 
       this.port.on('open', () => {
         console.log(`${this.portPath} opened`);
+        // Send configuration data
+        const config = allArduinoConfigs[this.portName];
+        if (config) {
+          this.sendConfigData(config);
+        } else {
+          console.error(`No configuration found for port name: ${this.portName}`);
+        }
+
         resolve();
       });
 
@@ -66,7 +114,13 @@ export default class ArduinoDevice {
 
       this.port.on('open', () => {
         console.log(`${this.portPath} MOCK opened`);
-        resolve();
+        // Send configuration data
+        const config = allArduinoConfigs[this.portName];
+        if (config) {
+          this.sendConfigData(config);
+        } else {
+          console.error(`No configuration found for port name: ${this.portName}`);
+        }
       });
 
       this.port.on('error', (err) => {

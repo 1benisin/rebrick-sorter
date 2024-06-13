@@ -1,4 +1,3 @@
-import exp from 'constants';
 import { z } from 'zod';
 
 // sorter names must come first because they are referenced by index else where
@@ -18,9 +17,10 @@ export const serialPortNamesArray = ['sorter_A', 'sorter_B', 'conveyor_jets', 'h
 // make a z enum from the keys of serialPortNames
 export const serialPortNameEnumSchema = z.enum(serialPortNamesArray);
 
+export type SerialPortNameType = z.infer<typeof serialPortNameEnumSchema>;
+
 export const serialPortSchema = z.object({
   name: serialPortNameEnumSchema,
   path: z.string(),
 });
-
 export type SerialPortType = z.infer<typeof serialPortSchema>;
