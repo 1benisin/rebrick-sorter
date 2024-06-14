@@ -3,7 +3,7 @@
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
 import { SerialPortType, SerialPortNameType } from '@/types/serialPort.type';
 
-interface ArduinoConfig {
+interface SorterArduinoConfig {
   gridDimension: number;
   xOffset: number;
   yOffset: number;
@@ -16,7 +16,7 @@ interface ArduinoConfig {
 
 // Default configuration object
 // TODO: remove 'Partial' when all configurations are added
-const allArduinoConfigs: Partial<Record<SerialPortNameType, ArduinoConfig>> = {
+const allArduinoConfigs: Partial<Record<SerialPortNameType, SorterArduinoConfig | {}>> = {
   sorter_A: {
     gridDimension: 12,
     xOffset: 10,
@@ -27,6 +27,18 @@ const allArduinoConfigs: Partial<Record<SerialPortNameType, ArduinoConfig>> = {
     homingSpeed: 1000,
     speed: 120,
   },
+  sorter_B: {
+    gridDimension: 16,
+    xOffset: 40,
+    yOffset: 10,
+    xStepsToLast: 7920,
+    yStepsToLast: 7820,
+    acceleration: 6500,
+    homingSpeed: 1000,
+    speed: 175,
+  },
+  conveyor_jets: {},
+  hopper_feeder: {},
 };
 
 export default class ArduinoDevice {
@@ -40,7 +52,7 @@ export default class ArduinoDevice {
   }
 
   // Method to send configuration data to the Arduino
-  sendConfigData = (config: ArduinoConfig) => {
+  sendConfigData = (config: SorterArduinoConfig) => {
     const configString = `${config.gridDimension},${config.xOffset},${config.yOffset},${config.xStepsToLast},${config.yStepsToLast},${config.acceleration},${config.homingSpeed},${config.speed}`;
     const formattedMessage = this.constructMessage(configString);
     this.port?.write(formattedMessage, (err) => {
@@ -73,14 +85,15 @@ export default class ArduinoDevice {
 
       this.port.on('open', () => {
         console.log(`${this.portPath} opened`);
-        // Send configuration data
-        const config = allArduinoConfigs[this.portName];
-        if (config) {
-          this.sendConfigData(config);
-        } else {
-          console.error(`No configuration found for port name: ${this.portName}`);
+        // Send configuration data if sorter
+        if (this.portName.includes('sorter')) {
+          const config = allArduinoConfigs[this.portName];
+          if (config) {
+            this.sendConfigData(config as SorterArduinoConfig);
+          } else {
+            console.error(`No configuration found for port name: ${this.portName}`);
+          }
         }
-
         resolve();
       });
 
@@ -117,7 +130,7 @@ export default class ArduinoDevice {
         // Send configuration data
         const config = allArduinoConfigs[this.portName];
         if (config) {
-          this.sendConfigData(config);
+          this.sendConfigData(config as SorterArduinoConfig);
         } else {
           console.error(`No configuration found for port name: ${this.portName}`);
         }
