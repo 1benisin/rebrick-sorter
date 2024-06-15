@@ -15,11 +15,11 @@ type InitSettings = {
 export default class Conveyor {
   private static instance: Conveyor;
   private serialPortManager: SerialPortManager;
-  readonly partQueue: PartQueue = [];
-  readonly speedQueue: SpeedQueue = [];
-  readonly defaultConveyorSpeed: number = 0;
-  readonly jetPositions: number[] = [];
-  readonly arduinoPath: string = '';
+  private partQueue: PartQueue = [];
+  private speedQueue: SpeedQueue = [];
+  private defaultConveyorSpeed: number = 0;
+  private jetPositions: number[] = [];
+  private arduinoPath: string = '';
   speedUpdateCallback: (speed: number) => void = () => {};
 
   constructor() {
@@ -67,6 +67,13 @@ export default class Conveyor {
     } catch (error) {
       throw new Error(`Failed to initialize hardware controller: ${error}`);
     }
+  }
+
+  get getSpeedQueue(): SpeedQueue {
+    return this.speedQueue;
+  }
+  get getJetPositions(): number[] {
+    return this.jetPositions;
   }
 
   // find the previous part for the same sorter

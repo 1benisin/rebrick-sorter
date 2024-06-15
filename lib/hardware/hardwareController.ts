@@ -127,10 +127,10 @@ export default class HardwareController {
 
   calculateTimings(sorter: number, bin: number, initialTime: number, initialPosition: number, prevSorterbin: number) {
     // distance to jet should never be negative
-    const distanceToJet = this.conveyor.jetPositions[sorter] - initialPosition;
+    const distanceToJet = this.conveyor.getJetPositions[sorter] - initialPosition;
     // jet time is the time it takes to travel the distance to the jet
     // jetTime should always be after initialTime
-    const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.conveyor.speedQueue);
+    const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.conveyor.getSpeedQueue);
 
     const travelTimeFromLastBin = getTravelTimeBetweenBins(
       sorter,
