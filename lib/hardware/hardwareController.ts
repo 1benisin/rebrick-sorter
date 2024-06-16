@@ -46,7 +46,7 @@ export default class HardwareController {
     return HardwareController.instance;
   }
 
-  async init(initSettings: HardwareInitDto): Promise<void> {
+  public async init(initSettings: HardwareInitDto): Promise<void> {
     console.log('HardwareController initializing');
     try {
       // connect serial ports
@@ -78,7 +78,7 @@ export default class HardwareController {
     }
   }
 
-  generateBinPositions = (
+  private generateBinPositions = (
     sorterDimensions: {
       gridWidth: number;
       gridHeight: number;
@@ -95,6 +95,10 @@ export default class HardwareController {
       this.sorterBinPositions.push(positions);
     }
   };
+
+  public onSpeedUpdate(callback: (speed: number) => void) {
+    this.conveyor.speedUpdateCallback = callback;
+  }
 
   public homeSorter(sorter: number) {
     console.log('homeSorter:', sorter);
@@ -125,7 +129,13 @@ export default class HardwareController {
     this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
-  calculateTimings(sorter: number, bin: number, initialTime: number, initialPosition: number, prevSorterbin: number) {
+  private calculateTimings(
+    sorter: number,
+    bin: number,
+    initialTime: number,
+    initialPosition: number,
+    prevSorterbin: number,
+  ) {
     // distance to jet should never be negative
     const distanceToJet = this.conveyor.getJetPositions[sorter] - initialPosition;
     // jet time is the time it takes to travel the distance to the jet
@@ -169,7 +179,7 @@ export default class HardwareController {
     return part;
   }
 
-  scheduleJet(jet: number, atTime?: number) {
+  private scheduleJet(jet: number, atTime?: number) {
     // no timeStamp is provided for manually requested moves
     const timeout = !atTime ? 0 : atTime - Date.now();
 
@@ -184,7 +194,7 @@ export default class HardwareController {
     }, timeout);
   }
 
-  scheduleSorterToPosition(sorter: number, bin: number, atTime?: number) {
+  private scheduleSorterToPosition(sorter: number, bin: number, atTime?: number) {
     // check to make sure serialPortNames[sorter] is a valid key
     if (!(sorter in serialPortNames)) {
       throw new Error(`sorter "${sorter}" is not a valid key in serialPortNames`);
@@ -298,4 +308,20 @@ export default class HardwareController {
       throw error;
     }
   };
+
+  public logPartQueue() {
+    this.conveyor.logPartQueue();
+  }
+
+  public logSpeedQueue() {
+    this.conveyor.logSpeedQueue();
+  }
+
+  public conveyorOnOff() {
+    this.conveyor.conveyorOnOff();
+  }
+
+  public clearActions() {
+    this.conveyor.clearActions();
+  }
 }

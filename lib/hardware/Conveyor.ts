@@ -20,7 +20,7 @@ export default class Conveyor {
   private defaultConveyorSpeed: number = 0;
   private jetPositions: number[] = [];
   private arduinoPath: string = '';
-  speedUpdateCallback: (speed: number) => void = () => {};
+  public speedUpdateCallback: (speed: number) => void = () => {};
 
   constructor() {
     this.serialPortManager = SerialPortManager.getInstance();
@@ -33,7 +33,7 @@ export default class Conveyor {
     return Conveyor.instance;
   }
 
-  init(initSettings: InitSettings) {
+  public init(initSettings: InitSettings) {
     console.log('Conveyor initializing');
     try {
       this.defaultConveyorSpeed = initSettings.defaultConveyorSpeed;
@@ -89,10 +89,6 @@ export default class Conveyor {
     return prevSorterPart;
   }
 
-  public onSpeedUpdate(callback: (speed: number) => void): void {
-    this.speedUpdateCallback = callback;
-  }
-
   public logPartQueue() {
     // format partQueue for logging
     const partQueue = this.partQueue.map((p) => ({
@@ -134,7 +130,7 @@ export default class Conveyor {
     });
   }
 
-  filterQueues(sorterBinPositions: { x: number; y: number }[][]) {
+  public filterQueues(sorterBinPositions: { x: number; y: number }[][]) {
     // -- filter partQueue
     let lastSorterPartIndexes = new Array(sorterBinPositions.length).fill(0);
     let lastPartJettedIndex = 0;
@@ -165,27 +161,7 @@ export default class Conveyor {
     this.speedQueue = this.speedQueue.slice(lastSpeedChangeIndex);
   }
 
-  scheduleConveyorSpeedChange(speed: number, atTime?: number) {
-    if (speed < 0 || speed > this.defaultConveyorSpeed) {
-      throw new Error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
-    }
-    const timeout = !atTime ? 0 : atTime - Date.now();
-
-    // normalize speed to conveyor motor speed 0-255
-    const normalizeConveyorSpeed = Math.round((speed / this.defaultConveyorSpeed) * 255);
-
-    return setTimeout(() => {
-      const arduinoDeviceCommand: ArduinoDeviceCommand = {
-        arduinoPath: this.arduinoPath,
-        command: ArduinoCommands.CONVEYOR_SPEED,
-        data: normalizeConveyorSpeed,
-      };
-      this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
-      this.speedUpdateCallback(speed);
-    }, timeout);
-  }
-
-  rescheduleActions(params: {
+  public rescheduleActions(params: {
     startOfSlowdown: number;
     endOfSlowdown: number;
     delayBy: number;
@@ -234,11 +210,11 @@ export default class Conveyor {
     });
   }
 
-  addPartToEndOfQueue(part: Part) {
+  public addPartToEndOfQueue(part: Part) {
     this.partQueue.push(part);
   }
 
-  insertSpeedChange({
+  public insertSpeedChange({
     startSpeedChange,
     newArrivalTime,
     oldArrivalTime,
@@ -310,7 +286,7 @@ export default class Conveyor {
     }
   }
 
-  prioritySortPartQueue() {
+  public prioritySortPartQueue() {
     // Iterate through partQueue to add defaultArrivalTime if it doesn't exist
     this.partQueue = this.partQueue.map((part) => {
       if (!part.defaultArrivalTime) {
@@ -331,5 +307,25 @@ export default class Conveyor {
       }
       return 0;
     });
+  }
+
+  private scheduleConveyorSpeedChange(speed: number, atTime?: number) {
+    if (speed < 0 || speed > this.defaultConveyorSpeed) {
+      throw new Error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
+    }
+    const timeout = !atTime ? 0 : atTime - Date.now();
+
+    // normalize speed to conveyor motor speed 0-255
+    const normalizeConveyorSpeed = Math.round((speed / this.defaultConveyorSpeed) * 255);
+
+    return setTimeout(() => {
+      const arduinoDeviceCommand: ArduinoDeviceCommand = {
+        arduinoPath: this.arduinoPath,
+        command: ArduinoCommands.CONVEYOR_SPEED,
+        data: normalizeConveyorSpeed,
+      };
+      this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+      this.speedUpdateCallback(speed);
+    }, timeout);
   }
 }
