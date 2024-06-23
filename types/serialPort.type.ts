@@ -2,7 +2,7 @@ import exp from 'constants';
 import { z } from 'zod';
 
 // sorter names must come first because they are referenced by index else where
-export const serialPortNames = {
+export const serialPortNames: { [key: string]: string; [key: number]: string } = {
   0: 'sorter_A',
   1: 'sorter_B',
   2: 'conveyor_jets',

@@ -10,6 +10,7 @@ type InitSettings = {
   defaultConveyorSpeed: number;
   sorterCount: number;
   jetPositions: number[];
+  arduinoPath: string;
 };
 
 export default class Conveyor {
@@ -36,8 +37,6 @@ export default class Conveyor {
   public init(initSettings: InitSettings) {
     console.log('Conveyor initializing');
     try {
-      this.defaultConveyorSpeed = initSettings.defaultConveyorSpeed;
-
       // initialize speed queue
       this.speedQueue = [{ speed: initSettings.defaultConveyorSpeed, time: Date.now(), ref: setTimeout(() => {}) }];
 
@@ -64,6 +63,8 @@ export default class Conveyor {
 
       // set jet positions
       this.jetPositions = initSettings.jetPositions;
+
+      this.arduinoPath = initSettings.arduinoPath;
     } catch (error) {
       throw new Error(`Failed to initialize hardware controller: ${error}`);
     }
@@ -111,12 +112,15 @@ export default class Conveyor {
 
   public conveyorOnOff() {
     console.log('conveyorOnOff');
+    if (!this.arduinoPath) {
+      console.error('conveyorOnOff: arduinoPath is not set');
+      return;
+    }
     const arduinoDeviceCommand: ArduinoDeviceCommand = {
       arduinoPath: this.arduinoPath,
       command: ArduinoCommands.CONVEYOR_ON_OFF,
     };
-    const serialPortManager = SerialPortManager.getInstance();
-    serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
   public clearActions() {

@@ -1,4 +1,4 @@
-import { PartQueue, SpeedQueue, Part, SpeedChange } from './hardwareTypes.d';
+import { Part } from './hardwareTypes.d';
 import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
 import SerialPortManager from './serialPortManager';
 import { ArduinoCommands, ArduinoDeviceCommand } from '@/types/arduinoCommands.type';
@@ -70,6 +70,7 @@ export default class HardwareController {
         defaultConveyorSpeed: initSettings.defaultConveyorSpeed,
         sorterCount: initSettings.sorterDimensions.length,
         jetPositions: initSettings.jetPositions,
+        arduinoPath: this.serialPorts[serialPortNames.conveyor_jets as keyof typeof serialPortNames],
       });
 
       this.initialized = true;
