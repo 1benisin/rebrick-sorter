@@ -17,13 +17,25 @@ export const ArduinoCommands = {
   FEEDER_ON_OFF: 'f', // data: null
 } as const;
 
-const commandValues = Object.values(ArduinoCommands) as [string, ...string[]];
+// Creating a union of literals from arduinoCommands values
+const arduinoCommandUnion = z.union([
+  z.literal(ArduinoCommands.RESET),
+  z.literal(ArduinoCommands.SETUP),
+  z.literal(ArduinoCommands.CONVEYOR_ON_OFF),
+  z.literal(ArduinoCommands.CONVEYOR_SPEED),
+  z.literal(ArduinoCommands.FIRE_JET),
+  z.literal(ArduinoCommands.CENTER_SORTER),
+  z.literal(ArduinoCommands.MOVE_TO_ORIGIN),
+  z.literal(ArduinoCommands.MOVE_TO_BIN),
+  z.literal(ArduinoCommands.HOPPER_ON_OFF),
+  z.literal(ArduinoCommands.FEEDER_ON_OFF),
+]);
 
 // Define the schema for ArduinoDeviceCommand
 export const ArduinoDeviceCommandSchema = z.object({
   arduinoPath: z.string(),
   // must be a ArduinoCommands value
-  command: z.enum(commandValues),
+  command: arduinoCommandUnion,
   data: z.number().optional(), // Making it optional to match @IsOptional()
 });
 

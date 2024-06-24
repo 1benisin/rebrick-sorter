@@ -1,4 +1,4 @@
-import { PartQueue, SpeedQueue, Part, SpeedChange } from './hardwareTypes.d';
+import { Part } from './hardwareTypes.d';
 import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
 import SerialPortManager from './serialPortManager';
 import { ArduinoCommands, ArduinoDeviceCommand } from '@/types/arduinoCommands.type';
@@ -6,6 +6,7 @@ import { serialPortNames } from '@/types/serialPort.type';
 import { SortPartDto } from '@/types/sortPart.dto';
 import { HardwareInitDto } from '@/types/hardwareInit.dto';
 import { getFormattedTime } from '@/lib/utils';
+import Conveyor from './Conveyor';
 
 // min amount conveyor speed can be slowed down from it's default speed (maximum speed): 255
 const MIN_SLOWDOWN_PERCENT = 0.4;
@@ -25,21 +26,17 @@ const MOVE_PAUSE_BUFFER = 1600; // time buffer for part to fall out the tube
 export default class HardwareController {
   static instance: HardwareController;
   private serialPortManager: SerialPortManager;
+  private conveyor: Conveyor;
 
   initialized: boolean = false;
 
   serialPorts: Record<string, string> = {};
-  defaultConveyorSpeed: number = 0;
   sorterTravelTimes: number[][] = [];
   sorterBinPositions: { x: number; y: number }[][] = [];
-  jetPositions: number[] = [];
-
-  partQueue: PartQueue = [];
-  speedQueue: SpeedQueue = [];
-  speedUpdateCallback: (speed: number) => void = () => {};
 
   private constructor() {
     this.serialPortManager = SerialPortManager.getInstance();
+    this.conveyor = Conveyor.getInstance();
   }
 
   static getInstance() {
@@ -49,7 +46,7 @@ export default class HardwareController {
     return HardwareController.instance;
   }
 
-  async init(initSettings: HardwareInitDto): Promise<void> {
+  public async init(initSettings: HardwareInitDto): Promise<void> {
     console.log('HardwareController initializing');
     try {
       // connect serial ports
@@ -62,39 +59,19 @@ export default class HardwareController {
         return acc;
       }, {});
 
-      // initialize speed queue
-      this.speedQueue = [];
-      this.speedQueue = [{ speed: initSettings.defaultConveyorSpeed, time: Date.now(), ref: setTimeout(() => {}) }];
-
-      // initialize part queue
-      // init the part queue with a part for every sorter
-      this.partQueue = [];
-      for (let i = 0; i < initSettings.sorterDimensions.length; i++) {
-        const part: Part = {
-          sorter: i,
-          bin: 1,
-          initialPosition: 0,
-          initialTime: Date.now(),
-          moveTime: Date.now(),
-          moveRef: undefined,
-          moveFinishedTime: Date.now(),
-          jetTime: Date.now(),
-          jetRef: undefined,
-        };
-        this.partQueue.push(part);
-      }
-
       // set sorter travel times
       this.sorterTravelTimes = sorterTravelTimes;
 
       // generate sorter bin positions
       this.generateBinPositions(initSettings.sorterDimensions);
 
-      // set conveyor speed
-      this.defaultConveyorSpeed = initSettings.defaultConveyorSpeed;
-
-      // set jet positions
-      this.jetPositions = initSettings.jetPositions;
+      // initialize conveyor
+      this.conveyor.init({
+        defaultConveyorSpeed: initSettings.defaultConveyorSpeed,
+        sorterCount: initSettings.sorterDimensions.length,
+        jetPositions: initSettings.jetPositions,
+        arduinoPath: this.serialPorts[serialPortNames.conveyor_jets as keyof typeof serialPortNames],
+      });
 
       this.initialized = true;
     } catch (error) {
@@ -102,22 +79,7 @@ export default class HardwareController {
     }
   }
 
-  public clearActions() {
-    // cancel all scheduled actions
-    this.partQueue.forEach((p) => {
-      if (!!p.moveRef) clearTimeout(p.moveRef);
-      if (!!p.jetRef) clearTimeout(p.jetRef);
-    });
-    this.speedQueue.forEach((s) => {
-      if (!!s.ref) clearTimeout(s.ref);
-    });
-  }
-
-  public onSpeedUpdate(callback: (speed: number) => void): void {
-    this.speedUpdateCallback = callback;
-  }
-
-  generateBinPositions = (
+  private generateBinPositions = (
     sorterDimensions: {
       gridWidth: number;
       gridHeight: number;
@@ -134,6 +96,10 @@ export default class HardwareController {
       this.sorterBinPositions.push(positions);
     }
   };
+
+  public onSpeedUpdate(callback: (speed: number) => void) {
+    this.conveyor.speedUpdateCallback = callback;
+  }
 
   public homeSorter(sorter: number) {
     console.log('homeSorter:', sorter);
@@ -164,42 +130,18 @@ export default class HardwareController {
     this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
-  public conveyorOnOff() {
-    console.log('conveyorOnOff');
-    const arduinoDeviceCommand: ArduinoDeviceCommand = {
-      arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
-      command: ArduinoCommands.CONVEYOR_ON_OFF,
-    };
-    const serialPortManager = SerialPortManager.getInstance();
-    serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
-  }
-
-  public logPartQueue() {
-    // format partQueue for logging
-    const partQueue = this.partQueue.map((p) => ({
-      sorter: p.sorter,
-      bin: p.bin,
-      initialPosition: p.initialPosition,
-      initialTime: getFormattedTime('min', 'ms', p.initialTime),
-      moveTime: getFormattedTime('min', 'ms', p.moveTime),
-      moveFinishedTime: getFormattedTime('min', 'ms', p.moveFinishedTime),
-      jetTime: getFormattedTime('min', 'ms', p.jetTime),
-    }));
-    console.log('partQueue:', partQueue);
-  }
-
-  public logSpeedQueue() {
-    const speedQueue = this.speedQueue.map((s) => ({ speed: s.speed, time: getFormattedTime('min', 'ms', s.time) }));
-    console.log('speedQueue:', speedQueue);
-    return speedQueue;
-  }
-
-  calculateTimings(sorter: number, bin: number, initialTime: number, initialPosition: number, prevSorterbin: number) {
+  private calculateTimings(
+    sorter: number,
+    bin: number,
+    initialTime: number,
+    initialPosition: number,
+    prevSorterbin: number,
+  ) {
     // distance to jet should never be negative
-    const distanceToJet = this.jetPositions[sorter] - initialPosition;
+    const distanceToJet = this.conveyor.getJetPositions[sorter] - initialPosition;
     // jet time is the time it takes to travel the distance to the jet
     // jetTime should always be after initialTime
-    const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.speedQueue);
+    const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.conveyor.getSpeedQueue);
 
     const travelTimeFromLastBin = getTravelTimeBetweenBins(
       sorter,
@@ -211,78 +153,6 @@ export default class HardwareController {
     // sorter should have enough travel time to reach the bin before the jet is fired
     const moveTime = Math.max(jetTime + FALL_TIME - travelTimeFromLastBin, 1);
     return { moveTime, jetTime, travelTimeFromLastBin };
-  }
-
-  insertSpeedChange({
-    startSpeedChange,
-    newArrivalTime,
-    oldArrivalTime,
-    slowDownPercent,
-  }: {
-    startSpeedChange: number;
-    newArrivalTime: number;
-    oldArrivalTime: number;
-    slowDownPercent: number;
-  }) {
-    /* insert new speed change at beginning (startSpeedChange) and end (newArrivalTime) of slowdown
-     and slow down all speed changes during slowdown by slowDownPercent */
-    if (newArrivalTime < Date.now() || oldArrivalTime < Date.now())
-      console.error(
-        `insertSpeedChange: time is in the past: ${Date.now()}, ${startSpeedChange}, ${newArrivalTime}, ${oldArrivalTime}`,
-      );
-    // 5506, 4605.7515, 8515.7515, 7582.505
-    if (startSpeedChange > newArrivalTime)
-      console.error(`insertSpeedChange: startSpeedChange > newArrivalTime: ${startSpeedChange}, ${newArrivalTime}`);
-    if (oldArrivalTime > newArrivalTime)
-      console.error(`insertSpeedChange: oldArrivalTime > newArrivalTime: ${oldArrivalTime}, ${newArrivalTime}`);
-
-    // start speed change now or in the future once last part at same sorter has been jetted ( startSpeedChange = lastPartJettedTime)
-    startSpeedChange = Math.max(startSpeedChange, Date.now());
-
-    // -- insert new speed change beginning and end of slowdown
-
-    // --- previous speed change before slowdown
-    const prevSpeedChangeIndex = this.speedQueue.reduce((acc, s, i) => {
-      if (s.time < startSpeedChange) return i;
-      return acc;
-    }, 0);
-    const prevSpeed = this.speedQueue[prevSpeedChangeIndex].speed;
-    // schedule new speed change
-    const startSpeedRef = this.scheduleConveyorSpeedChange(prevSpeed, startSpeedChange);
-    // insert new speed change into speed queue in cronological order
-    this.speedQueue.splice(prevSpeedChangeIndex + 1, 0, {
-      speed: prevSpeed,
-      time: startSpeedChange,
-      ref: startSpeedRef,
-    });
-
-    // --- last speed before the end of slowdow will be the next speed
-    const nextSpeedChangeIndex = this.speedQueue.reduce((acc, s, i) => {
-      if (s.time < newArrivalTime) return i;
-      return acc;
-    }, 0);
-    const nextSpeed = this.speedQueue[nextSpeedChangeIndex].speed;
-    // schedule new speed change
-    const endSpeedRef = this.scheduleConveyorSpeedChange(nextSpeed, newArrivalTime);
-    // insert new speed change into speed queue in cronological order
-    this.speedQueue.splice(nextSpeedChangeIndex + 1, 0, {
-      speed: nextSpeed,
-      time: newArrivalTime,
-      ref: endSpeedRef,
-    });
-
-    // -- reschedule all speed changes during slowdown by slowDownPercent
-    for (let i = prevSpeedChangeIndex + 1; i <= nextSpeedChangeIndex; i++) {
-      const s: SpeedChange = this.speedQueue[i];
-      if (!!s.ref) clearTimeout(s.ref);
-      const newSpeed = s.speed * slowDownPercent;
-      const newSpeedRef = this.scheduleConveyorSpeedChange(newSpeed, s.time);
-      this.speedQueue[i] = {
-        speed: newSpeed,
-        time: s.time,
-        ref: newSpeedRef,
-      };
-    }
   }
 
   private createAndSchedulePart(
@@ -306,83 +176,11 @@ export default class HardwareController {
       jetRef: this.scheduleJet(sorter, jetTime),
     };
 
-    this.partQueue.push(part);
+    this.conveyor.addPartToEndOfQueue(part);
     return part;
   }
 
-  rescheduleActions(startOfSlowdown: number, endOfSlowdown: number, delayBy: number) {
-    this.partQueue = this.partQueue.map((p, i) => {
-      if (!p.moveTime || !p.moveFinishedTime || !p.jetTime) {
-        console.error('rescheduleActions: p.moveTime, p.moveFinishedTime, p.jetTime is undefined');
-        return p;
-      }
-      // -- move
-      if (p.moveTime > startOfSlowdown) {
-        // if action happens during slowdown
-        let moveDelayBy = delayBy;
-        if (p.moveTime < endOfSlowdown) {
-          // how much of slowdown time has passed
-          moveDelayBy *= (p.moveTime - startOfSlowdown) / (endOfSlowdown - startOfSlowdown);
-        }
-        if (p.moveRef) clearTimeout(p.moveRef);
-        const newMoveTime = p.moveTime + moveDelayBy;
-        const newMoveRef = this.scheduleSorterToPosition(p.sorter, p.bin, newMoveTime);
-        const newMoveFinishedTime = p.moveFinishedTime + moveDelayBy;
-        p.moveRef = newMoveRef;
-        p.moveTime = newMoveTime;
-        p.moveFinishedTime = newMoveFinishedTime;
-      }
-      // -- jet
-      if (p.jetTime > startOfSlowdown) {
-        // if action happens during slowdown
-        let jetDelayBy = delayBy;
-        if (p.jetTime < endOfSlowdown) {
-          // how much of slowdown time has passed
-          jetDelayBy *= (p.jetTime - startOfSlowdown) / (endOfSlowdown - startOfSlowdown);
-        }
-        if (p.jetRef) clearTimeout(p.jetRef);
-        const newJetTime = p.jetTime + jetDelayBy;
-        const newJetRef = this.scheduleJet(p.sorter, newJetTime);
-        p.jetRef = newJetRef;
-        p.jetTime = newJetTime;
-      }
-
-      return p;
-    });
-  }
-
-  filterQueues() {
-    // -- filter partQueue
-    let lastSorterPartIndexes = new Array(this.sorterBinPositions.length).fill(0);
-    let lastPartJettedIndex = 0;
-    // get index of last part for each sorter
-    // and index of last part jetted
-    this.partQueue.forEach((p, i) => {
-      lastSorterPartIndexes[p.sorter] = i;
-      if (!!p.jetTime && p.jetTime < Date.now()) lastPartJettedIndex = i;
-    });
-    // slice partQueue to keep all parts that haven't been jetted yet
-    // and to keep at least one part for each sorter
-    const sliceIndex = Math.min(...lastSorterPartIndexes, lastPartJettedIndex);
-    this.partQueue = this.partQueue.slice(sliceIndex);
-
-    // -- filter speedQueue
-    // get the time of the earliest part in the partQueue
-    const earliestPartTime = this.partQueue.reduce((acc, p) => {
-      if (p.initialTime < acc) return p.initialTime;
-      return acc;
-    }, Date.now());
-
-    // find the speed change that happened just before the earliest part time
-    const lastSpeedChangeIndex = this.speedQueue.reduce((acc, s, i) => {
-      if (s.time < earliestPartTime) return i;
-      return acc;
-    }, 0);
-
-    this.speedQueue = this.speedQueue.slice(lastSpeedChangeIndex);
-  }
-
-  scheduleJet(jet: number, atTime?: number) {
+  private scheduleJet(jet: number, atTime?: number) {
     // no timeStamp is provided for manually requested moves
     const timeout = !atTime ? 0 : atTime - Date.now();
 
@@ -397,7 +195,7 @@ export default class HardwareController {
     }, timeout);
   }
 
-  scheduleSorterToPosition(sorter: number, bin: number, atTime?: number) {
+  private scheduleSorterToPosition(sorter: number, bin: number, atTime?: number) {
     // check to make sure serialPortNames[sorter] is a valid key
     if (!(sorter in serialPortNames)) {
       throw new Error(`sorter "${sorter}" is not a valid key in serialPortNames`);
@@ -415,56 +213,6 @@ export default class HardwareController {
       };
       this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
     }, timeout);
-  }
-
-  scheduleConveyorSpeedChange(speed: number, atTime?: number) {
-    if (speed < 0 || speed > this.defaultConveyorSpeed) {
-      throw new Error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
-    }
-    const timeout = !atTime ? 0 : atTime - Date.now();
-
-    // normalize spped to conveyor motor speed 0-255
-    const normalizeConveyorSpeed = Math.round((speed / this.defaultConveyorSpeed) * 255);
-
-    return setTimeout(() => {
-      console.log(
-        getFormattedTime('min', 'ms'),
-        '- speed Changed:',
-        speed,
-        normalizeConveyorSpeed,
-        getFormattedTime('min', 'ms', atTime),
-      );
-      const arduinoDeviceCommand: ArduinoDeviceCommand = {
-        arduinoPath: this.serialPorts[serialPortNames.conveyor_jets],
-        command: ArduinoCommands.CONVEYOR_SPEED,
-        data: normalizeConveyorSpeed,
-      };
-      this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
-      this.speedUpdateCallback(speed);
-    }, timeout);
-  }
-
-  prioritySortPartQueue() {
-    // Iterate through partQueue to add defaultArrivalTime if it doesn't exist
-    this.partQueue = this.partQueue.map((part) => {
-      if (!part.defaultArrivalTime) {
-        const arrivalTime = findTimeAfterDistance(
-          part.initialTime,
-          this.jetPositions[part.sorter] - part.initialPosition,
-          [{ time: part.initialTime, speed: this.defaultConveyorSpeed, ref: setTimeout(() => {}, 0) }],
-        );
-        part.defaultArrivalTime = arrivalTime;
-      }
-      return part;
-    });
-
-    // Sort partQueue by defaultArrivalTime
-    this.partQueue.sort((a, b) => {
-      if (a.defaultArrivalTime && b.defaultArrivalTime) {
-        return a.defaultArrivalTime - b.defaultArrivalTime;
-      }
-      return 0;
-    });
   }
 
   private computeSlowDownPercent({
@@ -502,17 +250,10 @@ export default class HardwareController {
         throw new Error('HardwareController not initialized');
       }
       // sort partQueue by arrival time to jet position using default conveyor speed
-      this.prioritySortPartQueue();
+      this.conveyor.prioritySortPartQueue();
 
       // find the previous part for the same sorter
-      const prevSorterPart = this.partQueue.reduce<Part | null>((acc, p) => {
-        if (p.sorter === sorter) return p;
-        return acc;
-      }, null);
-      // prevSorterPart should never be empty. We initialize the partQueue with a part for every sorter
-      if (!prevSorterPart) {
-        throw new Error('sortPart: prevSorterPart is empty for sorter: ' + sorter);
-      }
+      const prevSorterPart = this.conveyor.findPreviousPart(sorter);
 
       let { moveTime, jetTime, travelTimeFromLastBin } = this.calculateTimings(
         sorter,
@@ -540,7 +281,7 @@ export default class HardwareController {
         jetTime += arrivalTimeDelay;
 
         // --- insert speed change
-        this.insertSpeedChange({
+        this.conveyor.insertSpeedChange({
           startSpeedChange: prevSorterPart.jetTime,
           newArrivalTime: jetTime,
           oldArrivalTime: oldJetTime,
@@ -548,7 +289,13 @@ export default class HardwareController {
         });
 
         // --- reschedule part actions after slowdown
-        this.rescheduleActions(prevSorterPart.jetTime, jetTime, arrivalTimeDelay);
+        this.conveyor.rescheduleActions({
+          startOfSlowdown: prevSorterPart.jetTime,
+          endOfSlowdown: jetTime,
+          delayBy: arrivalTimeDelay,
+          scheduleJet: this.scheduleJet,
+          scheduleSorterToPosition: this.scheduleSorterToPosition,
+        });
       }
 
       // create and schedule part actions only if slowDownPercent is greater than .50
@@ -556,10 +303,26 @@ export default class HardwareController {
         this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
       }
 
-      this.filterQueues();
+      this.conveyor.filterQueues(this.sorterBinPositions);
     } catch (error) {
       console.error('sortPart error:', error);
       throw error;
     }
   };
+
+  public logPartQueue() {
+    this.conveyor.logPartQueue();
+  }
+
+  public logSpeedQueue() {
+    this.conveyor.logSpeedQueue();
+  }
+
+  public conveyorOnOff() {
+    this.conveyor.conveyorOnOff();
+  }
+
+  public clearActions() {
+    this.conveyor.clearActions();
+  }
 }
