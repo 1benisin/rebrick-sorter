@@ -1,10 +1,12 @@
+// lib/hardware/control/Conveyor.ts
+
 // lib/hardware/Conveyor.ts
 
-import { PartQueue, SpeedQueue, Part, SpeedChange } from './hardwareTypes.d';
+import { PartQueue, SpeedQueue, Part, SpeedChange } from '../types/hardware.type';
 import { ArduinoCommands, ArduinoDeviceCommand } from '@/types/arduinoCommands.type';
-import SerialPortManager from './serialPortManager';
+import SerialPortManager from '../communication/communication-manager';
 import { getFormattedTime } from '@/lib/utils';
-import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
+import { findTimeAfterDistance, getTravelTimeBetweenBins } from '../utils/utils';
 
 type InitSettings = {
   defaultConveyorSpeed: number;

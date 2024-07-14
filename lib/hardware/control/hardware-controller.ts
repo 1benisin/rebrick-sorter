@@ -1,6 +1,8 @@
-import { Part } from './hardwareTypes.d';
-import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
-import SerialPortManager from './serialPortManager';
+// lib/hardware/control/hardware-controller.ts
+
+import { Part } from '../types/hardware.type';
+import { findTimeAfterDistance, getTravelTimeBetweenBins } from '../utils/utils';
+import SerialPortManager from '../communication/communication-manager';
 import { ArduinoCommands, ArduinoDeviceCommand } from '@/types/arduinoCommands.type';
 import { serialPortNames } from '@/types/serialPort.type';
 import { SortPartDto } from '@/types/sortPart.dto';

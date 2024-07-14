@@ -1,3 +1,5 @@
+// lib/hardware/communication/arduino-device.ts
+
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
 
 export default class ArduinoDevice {

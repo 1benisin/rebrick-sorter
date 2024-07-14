@@ -1,3 +1,5 @@
+// types/hardwareInit.dto.ts
+
 import { z } from 'zod';
 import { serialPortSchema } from './serialPort.type';
 

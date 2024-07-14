@@ -1,3 +1,5 @@
+// hooks/useHardware.ts
+
 import { useContext } from 'react';
 import { HardwareContext } from '@/contexts/HardwareContext';
 

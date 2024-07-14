@@ -1,3 +1,5 @@
+// components/DualVideo.tsx
+
 // video.tsx:
 'use client';
 

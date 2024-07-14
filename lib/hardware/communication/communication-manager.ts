@@ -1,4 +1,5 @@
-import ArduinoDevice from './arduinoDevice';
+// lib/hardware/communication/communication-manager.ts
+import ArduinoDevice from './arduino-device';
 import { SerialPort, SerialPortMock } from 'serialport';
 import { ArduinoDeviceCommand } from '@/types/arduinoCommands.type';
 import { SerialPortType } from '@/types/serialPort.type';
@@ -9,19 +10,19 @@ const MockedPorts = [
   { name: 'conveyor_jets', path: '/dev/tty.usbmodem1401' },
   { name: 'hopper_feeder', path: '/dev/tty.usbserial-130' },
 ];
-export default class SerialPortManager {
-  private static instance: SerialPortManager;
+export default class CommunicationManager {
+  private static instance: CommunicationManager;
   private devices: Record<string, ArduinoDevice> = {};
 
   // Private constructor to prevent direct instantiation
   private constructor() {}
 
   // Method to get the singleton instance
-  static getInstance(): SerialPortManager {
-    if (!SerialPortManager.instance) {
-      SerialPortManager.instance = new SerialPortManager();
+  static getInstance(): CommunicationManager {
+    if (!CommunicationManager.instance) {
+      CommunicationManager.instance = new CommunicationManager();
     }
-    return SerialPortManager.instance;
+    return CommunicationManager.instance;
   }
 
   async connectPorts(

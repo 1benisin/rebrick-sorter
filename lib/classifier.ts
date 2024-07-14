@@ -1,3 +1,5 @@
+// lib/classifier.ts
+
 // Classifier.ts
 
 import axios, { AxiosResponse } from 'axios';
@@ -10,7 +12,6 @@ import { storage } from '@/services/firebase';
 import { Socket } from 'socket.io-client';
 import { SocketAction } from '@/types/socketMessage.type';
 import { SkipSortReason } from '@/types/detectionPairs.d';
-import { settingsStore } from '@/stores/settingsStore';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -195,7 +196,6 @@ export default class Classifier {
         sorter: binPosition.sorter,
       };
 
-      // axios.post('/api/hardware/sort', data);
       this.socket.emit(SocketAction.SORT_PART, data);
 
       return { classification: combinedResult };

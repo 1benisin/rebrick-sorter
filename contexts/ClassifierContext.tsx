@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { createContext, ReactNode, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useEffect, useState, useCallback } from 'react';
 import { LoadStatus } from '@/types/loadStatus.type';
 import Classifier from '@/lib/classifier';
 import useSocket from '@/hooks/useSocket';
@@ -24,14 +24,9 @@ export const ClassifierProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
   const { socket, status: socketStatus } = useSocket();
 
-  useEffect(() => {
-    setStatus(LoadStatus.Loading); // Set status to Loading when the effect runs
-    init();
-  }, [socket?.connected]); // Re-run the effect if socket or connection status changes
-
-  const init = async () => {
+  const init = useCallback(async () => {
     try {
-      if (!socket?.connected) {
+      if (socketStatus === LoadStatus.Failed || !socket) {
         setStatus(LoadStatus.Failed);
         setLocalClassifier(null);
         console.log('Socket not connected. Cannot initialize Classifier.');
@@ -48,7 +43,12 @@ export const ClassifierProvider = ({ children }: { children: ReactNode }) => {
       setStatus(LoadStatus.Failed); // Set status to Failed in case of an error
       setLocalClassifier(null);
     }
-  };
+  }, [socket, socketStatus]);
+
+  useEffect(() => {
+    setStatus(LoadStatus.Loading); // Set status to Loading when the effect runs
+    init();
+  }, [init]); // Re-run the effect if socket or connection status changes
 
   return (
     <ClassifierContext.Provider value={{ classifier: localClassifier, status, init }}>

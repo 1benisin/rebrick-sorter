@@ -1,3 +1,5 @@
+// components/DetectionPairDisplay.tsx
+
 // DetectionDisplay.jsx
 
 import React from 'react';

@@ -1,3 +1,5 @@
+// types/socketMessage.type.ts
+
 import { HardwareInitDto } from './hardwareInit.dto';
 import { SortPartDto } from './sortPart.dto';
 

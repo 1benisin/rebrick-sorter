@@ -1,3 +1,5 @@
+// lib/hardware/types/hardware.type.ts
+
 export type Part = {
   sorter: number;
   bin: number;

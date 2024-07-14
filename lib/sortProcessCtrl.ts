@@ -1,3 +1,5 @@
+// lib/sortProcessCtrl.ts
+
 // sortProcessController.ts
 import Detector from '@/lib/dualDetector';
 import { sortProcessStore } from '@/stores/sortProcessStore';
@@ -7,7 +9,7 @@ import { ClassificationItem } from '@/types/detectionPairs';
 import { DetectionPairGroup } from '@/types/detectionPairs';
 import { Detection } from '@/types/types';
 import { SettingsType } from '@/types/settings.type';
-import { findPositionAtTime } from '@/lib/hardware/hardwareUtils';
+import { findPositionAtTime } from '@/lib/hardware/utils/utils';
 
 import { v4 as uuid } from 'uuid';
 

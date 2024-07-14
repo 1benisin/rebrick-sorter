@@ -1,3 +1,5 @@
+// app/settings/page.tsx
+
 // settings/page.tsx
 'use client';
 

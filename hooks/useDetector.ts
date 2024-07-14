@@ -1,3 +1,5 @@
+// hooks/useDetector.ts
+
 import { useContext } from 'react';
 import { DetectorContext } from '@/contexts/DetectorContext';
 

@@ -2,7 +2,7 @@
 'use client';
 
 import { SocketAction } from '@/types/socketMessage.type';
-import { createContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { LoadStatus } from '@/types/loadStatus.type';
 import useSettings from '@/hooks/useSettings';
@@ -26,20 +26,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
   const { settings, status: settingsStatus } = useSettings();
 
-  useEffect(() => {
-    console.log('SocketProvider rendered');
-    init();
-
-    return () => {
-      console.log('SocketProvider cleanup');
-      if (socketInstance) {
-        console.log('disconnecting socket');
-        socketInstance.disconnect();
-      }
-    };
-  }, [settings]);
-
-  const init = async () => {
+  const init = useCallback(async () => {
     console.log('Initializing socket', socketInstance, settingsStatus);
     if (!socketInstance && settingsStatus === LoadStatus.Loaded) {
       socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL!, {
@@ -82,7 +69,20 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         sortProcessStore.getState().setConveyorSpeed(speed);
       });
     }
-  };
+  }, [settingsStatus]);
+
+  useEffect(() => {
+    console.log('SocketProvider rendered');
+    init();
+
+    return () => {
+      console.log('SocketProvider cleanup');
+      if (socketInstance) {
+        console.log('disconnecting socket');
+        socketInstance.disconnect();
+      }
+    };
+  }, [settings, init]);
 
   return <SocketContext.Provider value={{ socket: socketInstance, status, init }}>{children}</SocketContext.Provider>;
 };

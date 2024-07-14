@@ -5,7 +5,7 @@ import { NextApiRequest } from 'next';
 import { Server as ServerIO } from 'socket.io';
 import { SocketAction } from '@/types/socketMessage.type';
 import { hardwareInitSchema } from '@/types/hardwareInit.dto';
-import HardwareController from '@/lib/hardware/hardwareController';
+import HardwareController from '@/lib/hardware/control/hardware-controller';
 import { sortPartSchema } from '@/types/sortPart.dto';
 import { NextApiResponseServerIo } from '@/types/nextApiResponseServerIo.type';
 
@@ -15,12 +15,16 @@ export const config = {
   },
 };
 
+// get the singleton instance of the SerialPortManager
+const hardwareController = HardwareController.getInstance();
+
 const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
   if (res.socket.server.io) {
     console.log('IO Already set up');
     res.end();
     return;
   }
+
   const httpServer: NetServer = res.socket.server as any;
   const io = new ServerIO(httpServer, {
     path: '/api/socket/io',
@@ -55,8 +59,6 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
 
         const hardwareSettings = hardwareInitSchema.parse(data);
 
-        // get the singleton instance of the SerialPortManager
-        const hardwareController = HardwareController.getInstance();
         hardwareController
           .init(hardwareSettings)
           .then(() => {
@@ -81,13 +83,11 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
 
     // RESET_HARDWARE
     socket.on(SocketAction.CLEAR_HARDWARE_ACTIONS, () => {
-      const hardwareController = HardwareController.getInstance();
       hardwareController.clearActions();
     });
 
     // CONVEYOR_ON_OFF
     socket.on(SocketAction.CONVEYOR_ON_OFF, () => {
-      const hardwareController = HardwareController.getInstance();
       hardwareController.conveyorOnOff();
     });
 
@@ -95,7 +95,6 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
     socket.on(SocketAction.SORT_PART, (data) => {
       try {
         const sortPartDto = sortPartSchema.parse(data);
-        const hardwareController = HardwareController.getInstance();
 
         hardwareController.sortPart(sortPartDto);
         io.emit(SocketAction.SORT_PART_SUCCESS, true);
@@ -108,7 +107,6 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
     // LOG_PART_QUEUE
     socket.on(SocketAction.LOG_PART_QUEUE, () => {
       console.log('LOG_PART_QUEUE');
-      const hardwareController = HardwareController.getInstance();
       const partQueue = hardwareController.logPartQueue();
       io.emit(SocketAction.LOG_PART_QUEUE_SUCCESS, partQueue);
     });
@@ -116,7 +114,6 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
     // LOG_SPEED_QUEUE
     socket.on(SocketAction.LOG_SPEED_QUEUE, () => {
       console.log('LOG_SPEED_QUEUE');
-      const hardwareController = HardwareController.getInstance();
       const speedQueue = hardwareController.logSpeedQueue();
       io.emit(SocketAction.LOG_SPEED_QUEUE_SUCCESS, speedQueue);
     });
@@ -124,21 +121,18 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
     // MOVE_SORTER
     socket.on(SocketAction.MOVE_SORTER, ({ sorter, bin }: { sorter: number; bin: number }) => {
       console.log('MOVE_SORTER', sorter, bin);
-      const hardwareController = HardwareController.getInstance();
       hardwareController.moveSorter({ sorter, bin });
     });
 
     // HOME_SORTER
     socket.on(SocketAction.HOME_SORTER, (sorter: number) => {
       console.log('HOME_SORTER', sorter);
-      const hardwareController = HardwareController.getInstance();
       hardwareController.homeSorter(sorter);
     });
 
     // FIRE_JET
     socket.on(SocketAction.FIRE_JET, (sorter: number) => {
       console.log('FIRE_JET', sorter);
-      const hardwareController = HardwareController.getInstance();
       hardwareController.fireJet(sorter);
     });
   });

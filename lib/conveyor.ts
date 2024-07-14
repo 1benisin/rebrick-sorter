@@ -1,3 +1,5 @@
+// lib/conveyor.ts
+
 // Conveyor.ts
 // import { Detection } from "./sortProcessCtrl";
 

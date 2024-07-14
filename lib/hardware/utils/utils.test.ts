@@ -1,5 +1,7 @@
-import { SpeedQueue } from './hardwareTypes';
-import { findTimeAfterDistance, findPositionAtTime } from './hardwareUtils';
+// lib/hardware/utils/utils.test.ts
+
+import { SpeedQueue } from '../types/hardware.type';
+import { findTimeAfterDistance, findPositionAtTime } from './utils';
 
 describe('findTimeAfterDistance function', () => {
   it('returns the start time when distance is zero', () => {
