@@ -1,3 +1,5 @@
+// services/firebase.ts
+
 // lib/firebase.ts
 
 import { initializeApp } from 'firebase/app';

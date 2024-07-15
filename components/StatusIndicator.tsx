@@ -1,3 +1,5 @@
+// components/StatusIndicator.tsx
+
 // Import React and necessary hooks
 import useClassifier from '@/hooks/useClassifier';
 import useDetector from '@/hooks/useDetector';

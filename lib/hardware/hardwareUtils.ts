@@ -1,3 +1,5 @@
+// lib/hardware/hardwareUtils.ts
+
 import { SpeedQueue } from './hardwareTypes.d';
 
 // find the timestamp when part has taveled a certain distance

@@ -1,3 +1,5 @@
+// app/sorter/page.tsx
+
 'use client';
 import SorterControllerButton from '@/components/buttons/SortProcessCtrlButton';
 import DualVideo from '@/components/DualVideo';

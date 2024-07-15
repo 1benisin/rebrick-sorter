@@ -1,3 +1,5 @@
+// stores/settingsStore.ts
+
 // settingsStore.ts
 
 import { create } from 'zustand';

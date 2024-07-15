@@ -1,3 +1,5 @@
+// app/api/hardware/init/route.ts
+
 // /api/arduino/route.ts
 
 import { NextResponse } from 'next/server';

@@ -1,3 +1,5 @@
+// types/types.ts
+
 import { z } from 'zod';
 
 export const brickognizeResponseSchema = z.object({

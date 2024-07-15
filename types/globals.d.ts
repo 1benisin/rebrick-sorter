@@ -1,3 +1,5 @@
+// types/globals.d.ts
+
 import { Interface } from 'readline';
 
 declare global {

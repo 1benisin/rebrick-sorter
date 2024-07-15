@@ -1,3 +1,5 @@
+// app/api/hardware/serialport/route.ts
+
 // /api/hardware/serialport/route.ts
 
 import { NextResponse } from 'next/server';

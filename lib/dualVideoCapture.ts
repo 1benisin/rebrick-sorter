@@ -1,3 +1,5 @@
+// lib/dualVideoCapture.ts
+
 // dualVideoCapture.ts
 
 import { sortProcessStore } from '@/stores/sortProcessStore';

@@ -1,3 +1,5 @@
+// contexts/RootProvider.tsx
+
 'use client';
 
 import { SocketProvider } from '@/contexts/SocketContext';

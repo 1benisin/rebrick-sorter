@@ -1,3 +1,5 @@
+// lib/hardware/hardwareUtils.test.ts
+
 import { SpeedQueue } from './hardwareTypes';
 import { findTimeAfterDistance, findPositionAtTime } from './hardwareUtils';
 

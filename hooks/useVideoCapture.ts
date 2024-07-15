@@ -1,3 +1,5 @@
+// hooks/useVideoCapture.ts
+
 import { useContext } from 'react';
 import { VideoCaptureContext } from '@/contexts/VideoCaptureContext';
 

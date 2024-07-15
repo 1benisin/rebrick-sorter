@@ -1,3 +1,5 @@
+// types/detectionPairs.d.ts
+
 import { BrickognizeResponse } from './types';
 import { Detection } from './types';
 

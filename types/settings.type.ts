@@ -1,3 +1,5 @@
+// types/settings.type.ts
+
 import { z } from 'zod';
 import { serialPortNameEnumSchema } from './serialPort.type';
 

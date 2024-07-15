@@ -1,3 +1,5 @@
+// stores/sortProcessStore.ts
+
 // sortProcessStore.ts
 import { create } from 'zustand';
 import { DetectionPairGroup, DetectionPair } from '@/types/detectionPairs';

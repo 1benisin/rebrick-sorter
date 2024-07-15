@@ -1,3 +1,5 @@
+// app/test/page.tsx
+
 'use client';
 import { Button } from '@/components/ui/button';
 import useSocket from '@/hooks/useSocket';
