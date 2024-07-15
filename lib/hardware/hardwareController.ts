@@ -1,3 +1,5 @@
+// lib/hardware/hardwareController.ts
+
 import { Part } from './hardwareTypes.d';
 import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
 import SerialPortManager from './serialPortManager';

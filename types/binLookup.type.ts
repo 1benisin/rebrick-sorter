@@ -1,3 +1,5 @@
+// types/binLookup.type.ts
+
 import { z } from 'zod';
 
 export const binLookupSchema = z.record(

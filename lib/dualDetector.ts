@@ -1,3 +1,5 @@
+// lib/dualDetector.ts
+
 // detection-model.ts
 
 import * as automl from '@tensorflow/tfjs-automl';

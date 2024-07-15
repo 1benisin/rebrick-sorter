@@ -1,3 +1,5 @@
+// types/serialPort.type.ts
+
 import exp from 'constants';
 import { z } from 'zod';
 

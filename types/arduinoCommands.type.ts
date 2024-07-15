@@ -1,3 +1,5 @@
+// types/arduinoCommands.type.ts
+
 import { z } from 'zod';
 
 export const ArduinoCommands = {

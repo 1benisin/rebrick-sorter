@@ -1,3 +1,5 @@
+// components/buttons/ConveyorButton.tsx
+
 // sorterControllerButton.jsx
 'use client';
 

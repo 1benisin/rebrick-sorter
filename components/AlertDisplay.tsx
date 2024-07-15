@@ -1,3 +1,5 @@
+// components/AlertDisplay.tsx
+
 // AlertDisplay.tsx
 'use client';
 import { AlertCircle, XCircle } from 'lucide-react';

@@ -1,3 +1,5 @@
+// components/SettingsForm.tsx
+
 // In your settings/page.tsx
 'use client';
 

@@ -1,3 +1,5 @@
+// components/ui/empty.tsx
+
 import Image from 'next/image';
 
 interface EmptyProps {

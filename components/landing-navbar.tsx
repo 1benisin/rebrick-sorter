@@ -1,3 +1,5 @@
+// components/landing-navbar.tsx
+
 'use client';
 
 import { Montserrat } from 'next/font/google';

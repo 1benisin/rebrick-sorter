@@ -1,3 +1,5 @@
+// hooks/useSettings.ts
+
 import { useContext } from 'react';
 import { SettingsContext } from '@/contexts/SettingsContext';
 

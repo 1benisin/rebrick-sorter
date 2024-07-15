@@ -1,3 +1,5 @@
+// types/sortPart.dto.ts
+
 import { z } from 'zod';
 
 export const sortPartSchema = z.object({

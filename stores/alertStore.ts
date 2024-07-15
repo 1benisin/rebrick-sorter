@@ -1,3 +1,5 @@
+// stores/alertStore.ts
+
 // AlertStore.ts
 import { create } from 'zustand';
 import { Alert } from '@/types/types';

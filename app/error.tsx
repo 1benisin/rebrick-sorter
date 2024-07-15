@@ -1,3 +1,5 @@
+// app/error.tsx
+
 'use client';
 
 import { Empty } from '@/components/ui/empty';
