@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import useSocket from '@/hooks/useSocket';
+import { useSocket } from '@/hooks/useSocket';
 import { SocketAction } from '@/types/socketMessage.type';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';

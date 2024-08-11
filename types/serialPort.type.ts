@@ -1,7 +1,8 @@
 // types/serialPort.type.ts
 
-import exp from 'constants';
 import { z } from 'zod';
+
+export type SerialPortName = 'sorter_A' | 'sorter_B' | 'conveyor_jets' | 'hopper_feeder';
 
 // sorter names must come first because they are referenced by index else where
 export const serialPortNames: { [key: string]: string; [key: number]: string } = {

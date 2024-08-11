@@ -1,6 +1,9 @@
+// components/Navbar.tsx
+
 // components/navbar.tsx
 
 'use client';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';

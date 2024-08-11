@@ -1,21 +1,18 @@
 // components/buttons/CalibrationButton.tsx
 
-// sorterControllerButton.jsx
 'use client';
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import useDetector from '@/hooks/useDetector';
+import serviceManager from '@/lib/services/ServiceManager';
+import { ServiceName } from '@/lib/services/Service.interface';
 
 const CalibrationButton = () => {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationResult, setCalibrationResult] = useState<number | null>(null);
-  const { detector } = useDetector();
 
   const handleCalibrate = async () => {
-    if (!detector) {
-      return;
-    }
+    const detector = serviceManager.getService(ServiceName.DETECTOR);
     setIsCalibrating(true);
     await detector.calibrateConveyorSpeed().then((result) => {
       setIsCalibrating(false);

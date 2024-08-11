@@ -21,12 +21,13 @@ export const settingsSchema = z.object({
     .number()
     .min(1, { message: 'Detect distance threshold must be greater than 0' })
     .default(1),
-  conveyorJetsSerialPort: z.string().min(1).default('default'),
-  hopperFeederSerialPort: z.string().min(1).default('default'),
+  conveyorJetsSerialPort: z.string().default(''),
+  hopperFeederSerialPort: z.string().default(''),
   classificationThresholdPercentage: z.coerce.number().min(0).max(2).default(1),
   camera1VerticalPositionPercentage: z.coerce.number().default(1),
   camera2VerticalPositionPercentage: z.coerce.number().default(-35),
-  // Add array of serters
+  videoStreamId1: z.string().default(''),
+  videoStreamId2: z.string().default(''),
   sorters: z.array(sorterSettingsSchema).default([]),
 });
 

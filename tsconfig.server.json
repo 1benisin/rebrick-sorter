@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "outDir": ".dist",
+    "noEmit": false,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "isolatedModules": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "target": "es6",
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "server.ts",
+    "server/**/*.ts",
+    "types/arduinoCommands.type.ts",
+    "types/serialPort.type.ts",
+    "types/sortPart.dto.ts",
+    "types/hardwareInit.dto.ts",
+    "lib/utils.ts"
+  ],
+  "exclude": ["node_modules"]
+}
