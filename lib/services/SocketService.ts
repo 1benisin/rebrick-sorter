@@ -1,12 +1,10 @@
 // lib/services/SocketService.ts
 
-// services/SocketService.ts
 
 import { io, Socket } from 'socket.io-client';
 import { Service, ServiceState } from './Service.interface';
 import { SocketAction } from '@/types/socketMessage.type';
 import { sortProcessStore } from '@/stores/sortProcessStore';
-import serviceManager from './ServiceManager';
 
 class SocketService implements Service {
   private socket: Socket | null = null;
@@ -16,7 +14,11 @@ class SocketService implements Service {
   public async init(): Promise<void> {
     this.state = ServiceState.INITIALIZING;
     try {
-      this.socket = io();
+      this.socket = io('http://localhost:3000', {
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+      });
 
       return new Promise<void>((resolve, reject) => {
         this.socket?.on('connect', () => {
@@ -31,7 +33,7 @@ class SocketService implements Service {
           this.state = ServiceState.FAILED;
         });
         this.socket?.on('connect_error', (error: Error) => {
-          console.log('Socket disconnected');
+          console.log('Socket connect error:', error);
           this.state = ServiceState.FAILED;
           reject(error);
         });

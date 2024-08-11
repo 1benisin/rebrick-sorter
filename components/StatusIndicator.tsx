@@ -1,6 +1,6 @@
 // components/StatusIndicator.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import serviceManager from '@/lib/services/ServiceManager';
 import { ServiceName, ServiceState } from '@/lib/services/Service.interface';
@@ -17,24 +17,24 @@ const StatusIndicator = () => {
     [ServiceState.FAILED]: 'bg-red-700',
   } as const;
 
-  const updateServiceStates = () => {
+  const updateServiceStates = useCallback(() => {
     const newStates = {} as Record<ServiceName, ServiceState>;
     Object.values(ServiceName).forEach((serviceName) => {
       newStates[serviceName] = serviceManager.getServiceState(serviceName);
     });
     setServiceStates(newStates);
-  };
+  },[]);
 
   useEffect(() => {
     updateServiceStates();
     const interval = setInterval(updateServiceStates, 10000); // every 10 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [updateServiceStates]);
 
   const handleServiceInit = (serviceName: ServiceName) => {
     const service = serviceManager.getService(serviceName);
     if (service && typeof service.init === 'function') {
-      console.log(`Initializing ${serviceName}`);
+      console.log(`ReInitializing ${serviceName} from status indicator`);
       service.init();
     }
   };
