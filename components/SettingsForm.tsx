@@ -1,6 +1,5 @@
 // components/SettingsForm.tsx
 
-// In your settings/page.tsx
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';

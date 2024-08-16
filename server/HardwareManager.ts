@@ -1,15 +1,16 @@
 // server/hardwareController.ts
 
-import { Part } from './hardwareTypes.d';
+import { Part } from './hardwareTypes';
 import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
-import SerialPortManager from './serialPortManager';
+import arduinoDeviceManager from './ArduinoDeviceManager';
 import { ArduinoCommands, ArduinoDeviceCommand } from '../types/arduinoCommands.type';
 import { serialPortNames } from '../types/serialPort.type';
 import { SortPartDto } from '../types/sortPart.dto';
 import { HardwareInitDto } from '../types/hardwareInit.dto';
 import { getFormattedTime } from '../lib/utils';
 import Conveyor from './Conveyor';
-import { BackToFrontEvents, eventHub, FrontToBackEvents } from './eventHub';
+import eventHub from './eventHub';
+import { BackToFrontEvents, FrontToBackEvents } from '../types/socketMessage.type';
 
 // min amount conveyor speed can be slowed down from it's default speed (maximum speed): 255
 const MIN_SLOWDOWN_PERCENT = 0.4;
@@ -26,31 +27,37 @@ const sorterTravelTimes = [
 const FALL_TIME = 800; // time it takes to fall down the tube
 const MOVE_PAUSE_BUFFER = 1600; // time buffer for part to fall out the tube
 
-class HardwareController {
-  static instance: HardwareController;
-  private serialPortManager: SerialPortManager;
+class HardwareManager {
+  private static instance: HardwareManager;
+  protected initialized: boolean = false;
+  protected initializationPromise: Promise<void> | null = null;
   private conveyor: Conveyor;
-
-  initialized: boolean = false;
-  private initializationPromise: Promise<void> | null = null;
 
   serialPorts: Record<string, string> = {};
   sorterTravelTimes: number[][] = [];
   sorterBinPositions: { x: number; y: number }[][] = [];
 
-  constructor() {
-    this.serialPortManager = SerialPortManager.getInstance();
+  private constructor() {
     this.conveyor = Conveyor.getInstance();
+    // setup event listeners
+    eventHub.onEvent(FrontToBackEvents.SORT_PART, this.sortPart.bind(this));
   }
 
-  public async init(initSettings: HardwareInitDto): Promise<void> {
+  static getInstance(): HardwareManager {
+    if (!HardwareManager.instance) {
+      HardwareManager.instance = new HardwareManager();
+    }
+    return HardwareManager.instance;
+  }
+
+  public async init(initSettings: any): Promise<void> {
     if (this.initialized) {
-      console.log('HardwareController is already initialized');
+      console.log(`${this.constructor.name} is already initialized`);
       return;
     }
 
     if (this.initializationPromise) {
-      console.log('HardwareController initialization is already in progress');
+      console.log(`${this.constructor.name} initialization is already in progress`);
       return this.initializationPromise;
     }
 
@@ -58,16 +65,37 @@ class HardwareController {
 
     try {
       await this.initializationPromise;
+      this.initialized = true;
     } finally {
       this.initializationPromise = null;
     }
   }
 
+  private async reinit(initSettings: HardwareInitDto): Promise<void> {
+    // Reset initialization state
+    this.initialized = false;
+    this.initializationPromise = null;
+
+    // Disconnect existing serial ports
+    await arduinoDeviceManager.disconnectAllDevices();
+
+    // Clear existing data
+    this.serialPorts = {};
+    this.sorterTravelTimes = [];
+    this.sorterBinPositions = [];
+
+    // Reinitialize conveyor
+    await this.conveyor.deinit();
+
+    // Call initializeInternal with new settings
+    await this.initializeInternal(initSettings);
+  }
+
   private async initializeInternal(initSettings: HardwareInitDto): Promise<void> {
-    console.log('HardwareController initializing');
+    console.log('HardwareManager initializing');
     try {
       // connect serial ports
-      const connectionStatuses = await this.serialPortManager.connectPorts(initSettings.serialPorts);
+      const connectionStatuses = await arduinoDeviceManager.connectAllDevices(initSettings.serialPorts);
       const isEveryPortConnected = connectionStatuses.every((status) => status.success);
       if (!isEveryPortConnected) {
         throw new Error(`Failed to connect to serial ports: ${connectionStatuses}`);
@@ -93,19 +121,11 @@ class HardwareController {
       });
 
       this.initialized = true;
-      // Register for function calls for events from frontend
-      eventHub.onEvent(FrontToBackEvents.SORT_PART, this.sortPart.bind(this));
-      eventHub.onEvent(FrontToBackEvents.LOG_PART_QUEUE, this.logPartQueue.bind(this));
-      eventHub.onEvent(FrontToBackEvents.LOG_SPEED_QUEUE, this.logSpeedQueue.bind(this));
-      eventHub.onEvent(FrontToBackEvents.CONVEYOR_ON_OFF, this.conveyorOnOff.bind(this));
-      eventHub.onEvent(FrontToBackEvents.HOME_SORTER, this.homeSorter.bind(this));
-
-
       // Emit success event
       eventHub.emitEvent(BackToFrontEvents.INIT_HARDWARE_SUCCESS, { success: true });
     } catch (error) {
       this.initialized = false;
-      eventHub.emitEvent(BackToFrontEvents.INIT_HARDWARE_SUCCESS, { success: false, error: error.message });
+      eventHub.emitEvent(BackToFrontEvents.INIT_HARDWARE_SUCCESS, { success: false });
     }
   }
 
@@ -133,7 +153,7 @@ class HardwareController {
       arduinoPath: this.serialPorts[serialPortNames[sorter as keyof typeof serialPortNames]],
       command: ArduinoCommands.MOVE_TO_ORIGIN,
     };
-    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+    arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
   public fireJet(sorter: number) {
@@ -143,7 +163,7 @@ class HardwareController {
       command: ArduinoCommands.FIRE_JET,
       data: sorter,
     };
-    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+    arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
   public moveSorter({ sorter, bin }: { sorter: number; bin: number }) {
@@ -153,7 +173,7 @@ class HardwareController {
       command: ArduinoCommands.MOVE_TO_BIN,
       data: bin,
     };
-    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+    arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
   private calculateTimings(
@@ -217,7 +237,7 @@ class HardwareController {
         command: ArduinoCommands.FIRE_JET,
         data: jet,
       };
-      this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+      arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
     }, timeout);
   }
 
@@ -237,7 +257,7 @@ class HardwareController {
         command: ArduinoCommands.MOVE_TO_BIN,
         data: bin,
       };
-      this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+      arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
     }, timeout);
   }
 
@@ -273,7 +293,7 @@ class HardwareController {
     });
     try {
       if (!this.initialized) {
-        throw new Error('HardwareController not initialized');
+        throw new Error('HardwareManager not initialized');
       }
       // sort partQueue by arrival time to jet position using default conveyor speed
       this.conveyor.prioritySortPartQueue();
@@ -353,5 +373,5 @@ class HardwareController {
   }
 }
 
-const hardwareController = new HardwareController();
-export default hardwareController;
+const hardwareManager = HardwareManager.getInstance();
+export default hardwareManager;

@@ -1,9 +1,8 @@
 // lib/services/SocketService.ts
 
-
 import { io, Socket } from 'socket.io-client';
 import { Service, ServiceState } from './Service.interface';
-import { SocketAction } from '@/types/socketMessage.type';
+import { BackToFrontEvents, SocketAction } from '@/types/socketMessage.type';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 
 class SocketService implements Service {
@@ -17,7 +16,7 @@ class SocketService implements Service {
       this.socket = io('http://localhost:3000', {
         reconnection: true,
         reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionDelay: 1000,
       });
 
       return new Promise<void>((resolve, reject) => {
@@ -48,21 +47,25 @@ class SocketService implements Service {
   private setupEventListeners(): void {
     if (!this.socket) return;
 
-    this.socket.on(SocketAction.LOG_PART_QUEUE_SUCCESS, (data: any) => {
+    this.socket.on(BackToFrontEvents.LOG_PART_QUEUE_SUCCESS, (data: any) => {
       console.log('Part Queue: ', data);
     });
 
-    this.socket.on(SocketAction.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
+    this.socket.on(BackToFrontEvents.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
       console.log('Speed Queue: ', data);
     });
 
-    this.socket.on(SocketAction.INIT_HARDWARE_SUCCESS, (success: boolean) => {
+    this.socket.on(BackToFrontEvents.INIT_HARDWARE_SUCCESS, (success: boolean) => {
       console.log('INIT_HARDWARE_SUCCESS result: ', success);
     });
 
-    this.socket.on(SocketAction.CONVEYOR_SPEED_UPDATE, (speed: number) => {
+    this.socket.on(BackToFrontEvents.CONVEYOR_SPEED_UPDATE, (speed: number) => {
       console.log('CONVEYOR_SPEED_UPDATE: ', speed);
       sortProcessStore.getState().setConveyorSpeed(speed);
+    });
+
+    this.socket.on(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, (ports: string[]) => {
+      sortProcessStore.getState().setSerialPorts(ports);
     });
   }
 
