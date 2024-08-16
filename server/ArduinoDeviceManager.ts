@@ -6,29 +6,34 @@ import ArduinoDevice from './arduinoDevice';
 import { SerialPort, SerialPortMock } from 'serialport';
 import { ArduinoDeviceCommand } from '../types/arduinoCommands.type';
 import { SerialPortType } from '../types/serialPort.type';
+import eventHub from './eventHub';
+import { BackToFrontEvents, FrontToBackEvents } from '../types/socketMessage.type';
 
 const MockedPorts = [
-  { name: 'sorter_A', path: '/dev/tty.usbmodem1101' },
-  { name: 'sorter_B', path: '/dev/tty.usbmodem1201' },
-  { name: 'conveyor_jets', path: '/dev/tty.usbmodem1401' },
-  { name: 'hopper_feeder', path: '/dev/tty.usbserial-130' },
+  '/dev/tty.usbmodem1101',
+  '/dev/tty.usbmodem1201',
+  '/dev/tty.usbmodem1401',
+  '/dev/tty.usbserial-130',
 ];
-export default class SerialPortManager {
-  private static instance: SerialPortManager;
+
+class ArduinoDeviceManager {
+  private static instance: ArduinoDeviceManager;
   private devices: Record<string, ArduinoDevice> = {};
 
   // Private constructor to prevent direct instantiation
-  private constructor() {}
-
-  // Method to get the singleton instance
-  static getInstance(): SerialPortManager {
-    if (!SerialPortManager.instance) {
-      SerialPortManager.instance = new SerialPortManager();
-    }
-    return SerialPortManager.instance;
+  private constructor() {
+    eventHub.onEvent(FrontToBackEvents.LIST_SERIAL_PORTS, this.listSerialPorts);
   }
 
-  async connectPorts(
+  // Method to get the singleton instance
+  static getInstance(): ArduinoDeviceManager {
+    if (!ArduinoDeviceManager.instance) {
+      ArduinoDeviceManager.instance = new ArduinoDeviceManager();
+    }
+    return ArduinoDeviceManager.instance;
+  }
+
+  async connectAllDevices(
     serialPortsToConnect: SerialPortType[],
   ): Promise<{ port: SerialPortType; success: boolean; error?: any }[]> {
     console.log('serialPortsToConnect', serialPortsToConnect);
@@ -49,6 +54,23 @@ export default class SerialPortManager {
     return await Promise.all(devicePromises);
   }
 
+  public async disconnectAllDevices(): Promise<void> {
+    const disconnectPromises = Object.entries(this.devices).map(async ([portPath, device]) => {
+      try {
+        await device.disconnect();
+        console.log(`Successfully disconnected device on port ${portPath}`);
+      } catch (error) {
+        console.error(`Error disconnecting device on port ${portPath}:`, error);
+      }
+    });
+
+    await Promise.all(disconnectPromises);
+
+    // Clear the devices object
+    this.devices = {};
+    console.log('All devices have been disconnected and removed from the manager');
+  }
+
   getAllDeviceStatus() {
     return Object.keys(this.devices).map((portName) => {
       return {
@@ -61,9 +83,12 @@ export default class SerialPortManager {
   // Method to list available serial ports
   async listSerialPorts() {
     if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
-      return MockedPorts;
+      eventHub.emit(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, MockedPorts);
+      return;
     }
-    return await SerialPort.list();
+    const ports = await SerialPort.list();
+    const portPaths = ports.map((port) => port.path);
+    eventHub.emit(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, portPaths);
   }
 
   private async connectPort(portPath: string): Promise<void> {
@@ -107,3 +132,6 @@ export default class SerialPortManager {
     }
   }
 }
+
+const arduinoDeviceManager = ArduinoDeviceManager.getInstance();
+export default arduinoDeviceManager;

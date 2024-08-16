@@ -6,7 +6,7 @@ import { DetectionPairGroup, DetectionPair } from '@/types/detectionPairs';
 
 const MAX_DETECTION_GROUPS = 10;
 
-export interface SortProcessState {
+export type SortProcessState = {
   isRunning: boolean;
   setIsRunning: (isRunning: boolean) => void;
   // ---
@@ -35,7 +35,11 @@ export interface SortProcessState {
   updatePPMCount: () => void;
   ppmCount: number;
   ppmTimestamps: number[];
-}
+
+  // ---
+  serialPorts: string[];
+  setSerialPorts: (ports: string[]) => void;
+};
 
 export const sortProcessStore = create<SortProcessState>((set) => ({
   isRunning: false,
@@ -112,4 +116,8 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
       return { ppmCount: Math.round(ppmCount), ppmTimestamps: updatedTimestamps };
     });
   },
+
+  // ---
+  serialPorts: [],
+  setSerialPorts: (ports: string[]) => set({ serialPorts: ports }),
 }));

@@ -1,13 +1,12 @@
 // server/Conveyor.ts
 
-// lib/hardware/Conveyor.ts
-
 import { PartQueue, SpeedQueue, Part, SpeedChange } from './hardwareTypes.d';
 import { ArduinoCommands, ArduinoDeviceCommand } from '../types/arduinoCommands.type';
-import SerialPortManager from './serialPortManager';
+import arduinoDeviceManager from './ArduinoDeviceManager';
 import { getFormattedTime } from '../lib/utils';
-import { findTimeAfterDistance, getTravelTimeBetweenBins } from './hardwareUtils';
-import { BackToFrontEvents, eventHub } from './eventHub';
+import { findTimeAfterDistance } from './hardwareUtils';
+import eventHub from './eventHub';
+import { BackToFrontEvents, FrontToBackEvents } from '../types/socketMessage.type';
 
 type InitSettings = {
   defaultConveyorSpeed: number;
@@ -18,7 +17,6 @@ type InitSettings = {
 
 export default class Conveyor {
   private static instance: Conveyor;
-  private serialPortManager: SerialPortManager;
   private partQueue: PartQueue = [];
   private speedQueue: SpeedQueue = [];
   private defaultConveyorSpeed: number = 0;
@@ -26,7 +24,11 @@ export default class Conveyor {
   private arduinoPath: string = '';
 
   constructor() {
-    this.serialPortManager = SerialPortManager.getInstance();
+    // setup event listeners
+    eventHub.onEvent(FrontToBackEvents.LOG_PART_QUEUE, this.logPartQueue.bind(this));
+    eventHub.onEvent(FrontToBackEvents.LOG_SPEED_QUEUE, this.logSpeedQueue.bind(this));
+    eventHub.onEvent(FrontToBackEvents.CONVEYOR_ON_OFF, this.conveyorOnOff.bind(this));
+    eventHub.onEvent(FrontToBackEvents.CLEAR_HARDWARE_ACTIONS, this.clearActions.bind(this));
   }
 
   static getInstance() {
@@ -69,6 +71,41 @@ export default class Conveyor {
       this.arduinoPath = initSettings.arduinoPath;
     } catch (error) {
       throw new Error(`Failed to initialize hardware controller: ${error}`);
+    }
+  }
+
+  public deinit() {
+    console.log('Conveyor deinitializing');
+    try {
+      // Clear all timeouts in the speed queue
+      this.speedQueue.forEach((speedChange) => {
+        if (speedChange.ref) {
+          clearTimeout(speedChange.ref);
+        }
+      });
+
+      // Clear all timeouts in the part queue
+      this.partQueue.forEach((part) => {
+        if (part.moveRef) {
+          clearTimeout(part.moveRef);
+        }
+        if (part.jetRef) {
+          clearTimeout(part.jetRef);
+        }
+      });
+
+      // Reset queues
+      this.speedQueue = [];
+      this.partQueue = [];
+
+      // Reset other properties
+      this.defaultConveyorSpeed = 0;
+      this.jetPositions = [];
+      this.arduinoPath = '';
+
+      console.log('Conveyor deinitialized successfully');
+    } catch (error) {
+      console.error(`Failed to deinitialize Conveyor: ${error}`);
     }
   }
 
@@ -125,7 +162,7 @@ export default class Conveyor {
       arduinoPath: this.arduinoPath,
       command: ArduinoCommands.CONVEYOR_ON_OFF,
     };
-    this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+    arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
   }
 
   public clearActions() {
@@ -333,7 +370,7 @@ export default class Conveyor {
         command: ArduinoCommands.CONVEYOR_SPEED,
         data: normalizeConveyorSpeed,
       };
-      this.serialPortManager.sendCommandToDevice(arduinoDeviceCommand);
+      arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
 
       eventHub.emitEvent(BackToFrontEvents.CONVEYOR_SPEED_UPDATE, { speed });
     }, timeout);

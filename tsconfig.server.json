@@ -1,5 +1,4 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
     "outDir": ".dist",
@@ -24,6 +23,7 @@
     "types/serialPort.type.ts",
     "types/sortPart.dto.ts",
     "types/hardwareInit.dto.ts",
+    "types/socketMessage.type.ts",
     "lib/utils.ts"
   ],
   "exclude": ["node_modules"]
