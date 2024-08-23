@@ -58,7 +58,7 @@ class SortProcessControllerService implements Service {
       const unmatchedDetection = detectionPair[0];
       // find the index of the detection group whose last detection centroid is closest unmatchedDetection centroid
       const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-      let closestDistance = settingsService.getStaleSettings().detectDistanceThreshold;
+      let closestDistance = settingsService.getSettings().detectDistanceThreshold;
       let closestGroupIndex = null;
 
       // start fromm the end of the array to get the last detection
@@ -121,7 +121,7 @@ class SortProcessControllerService implements Service {
           this.updateDetectionPairGroupValue(group.id, 'classifying', true);
 
           const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-          const settings = settingsService.getStaleSettings();
+          const settings = settingsService.getSettings();
           const classifier = serviceManager.getService(ServiceName.CLASSIFIER);
 
           classifier
@@ -186,7 +186,7 @@ class SortProcessControllerService implements Service {
       // find the predicted centroid of the last detection in the detection group
 
       const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-      const { conveyorSpeed } = settingsService.getStaleSettings();
+      const { conveyorSpeed } = settingsService.getSettings();
 
       const distanceTravelled = (Date.now() - lastPair[0].timestamp) * conveyorSpeed;
       const predictedX = lastPair[0].centroid.x + distanceTravelled;

@@ -6,10 +6,10 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSocket } from '@/hooks/useSocket';
-import { SocketAction } from '@/types/socketMessage.type';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { AllEvents } from '@/types/socketMessage.type';
 
 const MoveSorterButton = () => {
   const [sorter, setSorter] = useState('0');
@@ -18,8 +18,8 @@ const MoveSorterButton = () => {
 
   const handleClick = async () => {
     if (!socket) return;
-    console.log(SocketAction.MOVE_SORTER, { sorter, bin });
-    socket.emit(SocketAction.MOVE_SORTER, { sorter, bin });
+    console.log(AllEvents.MOVE_SORTER, { sorter, bin });
+    socket.emit(AllEvents.MOVE_SORTER, { sorter, bin });
   };
 
   return (

@@ -5,9 +5,9 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { SocketAction } from '@/types/socketMessage.type';
 import serviceManager from '@/lib/services/ServiceManager';
 import { ServiceName } from '@/lib/services/Service.interface';
+import { AllEvents } from '@/types/socketMessage.type';
 
 const CalibrationButton = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -16,7 +16,7 @@ const CalibrationButton = () => {
     const socket = serviceManager.getService(ServiceName.SOCKET);
     if (!socket) return;
     setIsRunning((prev) => !prev);
-    socket.emit(SocketAction.CONVEYOR_ON_OFF);
+    socket.emit(AllEvents.CONVEYOR_ON_OFF);
   };
 
   return (

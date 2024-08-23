@@ -9,10 +9,10 @@ import { SortPartDto } from '@/types/sortPart.dto';
 import { BinLookupType, binLookupSchema } from '@/types/binLookup.type';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
-import { SocketAction } from '@/types/socketMessage.type';
 import { SkipSortReason } from '@/types/detectionPairs.d';
 import { Service, ServiceName, ServiceState } from './Service.interface';
 import serviceManager from './ServiceManager';
+import { AllEvents } from '@/types/socketMessage.type';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -199,7 +199,7 @@ class ClassifierService implements Service {
       };
 
       const socketService = serviceManager.getService(ServiceName.SOCKET);
-      socketService.emit(SocketAction.SORT_PART, data);
+      socketService.emit(AllEvents.SORT_PART, data);
 
       return { classification: combinedResult };
     } catch (error) {

@@ -30,29 +30,6 @@ const SerialPortFormInput: React.FC<SerialPortFormInputProps> = ({ control, name
     socket.emit(FrontToBackEvents.LIST_SERIAL_PORTS);
   }, [socket]);
 
-  // useEffect(() => {
-  //   const fetchSerialPorts = async () => {
-  //     try {
-
-  //   const socket = serviceManager.getService(ServiceName.SOCKET);
-
-  //       const response = await fetch('/api/hardware/serialport');
-  //       const data = await response.json();
-
-  //       // validate array of strings with zod
-  //       const arduinoPortType = z.array(z.string());
-  //       arduinoPortType.parse(data);
-  //       setPorts(data);
-  //     } catch (error) {
-  //       console.error(error);
-  //     }
-  //   };
-
-  //   fetchSerialPorts();
-  // }, []);
-
-  // if (!serialPorts.length) return null;
-
   return (
     <FormField
       control={control}

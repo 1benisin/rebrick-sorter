@@ -1,7 +1,7 @@
 // lib/services/SettingsService.ts
 
 import { Service, ServiceState } from './Service.interface';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { settingsSchema, SettingsType } from '@/types/settings.type';
 import { z } from 'zod';
@@ -24,12 +24,38 @@ class SettingsService implements Service {
     }
 
     try {
-      await this.fetchSettings();
+      this.setupSettingsListener();
       this.state = ServiceState.INITIALIZED;
     } catch (error) {
       this.state = ServiceState.FAILED;
-      throw error;
+      console.error('---Error initializing settings service:', error);
     }
+  }
+
+  private setupSettingsListener(): void {
+    if (!this.userId) {
+      throw new Error('User ID is not set');
+    }
+
+    const settingsRef = doc(db, 'settings', this.userId);
+
+    onSnapshot(
+      settingsRef,
+      (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          try {
+            const data = docSnapshot.data();
+            const result = settingsSchema.parse(data);
+            this.settings = result;
+          } catch (error) {
+            console.error('Error parsing settings:', error);
+          }
+        }
+      },
+      (error) => {
+        console.error('Error fetching settings from DB:', error);
+      },
+    );
   }
 
   getStatus(): ServiceState {
@@ -52,40 +78,11 @@ class SettingsService implements Service {
     }
   }
 
-  getStaleSettings(): SettingsType {
+  getSettings(): SettingsType {
     if (this.settings) {
       return this.settings;
     }
     throw new Error('Settings not loaded');
-  }
-
-  async fetchSettings(): Promise<SettingsType> {
-    try {
-      if (!this.userId) {
-        throw new Error('User ID is not set');
-      }
-
-      const settingsRef = doc(db, 'settings', this.userId);
-      const docSnapshot = await getDoc(settingsRef);
-
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-
-        const result = settingsSchema.parse(data);
-
-        this.settings = result;
-        return result;
-      }
-      throw new Error('Settings not found');
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        console.error('---Error parsing settings:', error);
-        throw new Error('Failed to parse settings');
-      } else {
-        console.error('Error fetching settings:', error);
-        throw new Error('Failed to fetch settings');
-      }
-    }
   }
 }
 

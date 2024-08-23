@@ -2,7 +2,7 @@
 
 import { io, Socket } from 'socket.io-client';
 import { Service, ServiceState } from './Service.interface';
-import { BackToFrontEvents, SocketAction } from '@/types/socketMessage.type';
+import { AllEvents } from '@/types/socketMessage.type';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 
 class SocketService implements Service {
@@ -47,24 +47,24 @@ class SocketService implements Service {
   private setupEventListeners(): void {
     if (!this.socket) return;
 
-    this.socket.on(BackToFrontEvents.LOG_PART_QUEUE_SUCCESS, (data: any) => {
+    this.socket.on(AllEvents.LOG_PART_QUEUE_SUCCESS, (data: any) => {
       console.log('Part Queue: ', data);
     });
 
-    this.socket.on(BackToFrontEvents.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
+    this.socket.on(AllEvents.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
       console.log('Speed Queue: ', data);
     });
 
-    this.socket.on(BackToFrontEvents.INIT_HARDWARE_SUCCESS, (success: boolean) => {
+    this.socket.on(AllEvents.INIT_HARDWARE_SUCCESS, (success: boolean) => {
       console.log('INIT_HARDWARE_SUCCESS result: ', success);
     });
 
-    this.socket.on(BackToFrontEvents.CONVEYOR_SPEED_UPDATE, (speed: number) => {
+    this.socket.on(AllEvents.CONVEYOR_SPEED_UPDATE, (speed: number) => {
       console.log('CONVEYOR_SPEED_UPDATE: ', speed);
       sortProcessStore.getState().setConveyorSpeed(speed);
     });
 
-    this.socket.on(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, (ports: string[]) => {
+    this.socket.on(AllEvents.LIST_SERIAL_PORTS_SUCCESS, (ports: string[]) => {
       sortProcessStore.getState().setSerialPorts(ports);
     });
   }

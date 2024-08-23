@@ -2,9 +2,9 @@
 
 import { Service, ServiceName, ServiceState } from './Service.interface';
 import { HardwareInitDto } from '@/types/hardwareInit.dto';
-import { SocketAction } from '@/types/socketMessage.type';
 import { SerialPortName } from '@/types/serialPort.type';
 import serviceManager from './ServiceManager';
+import { AllEvents } from '@/types/socketMessage.type';
 
 class HardwareService implements Service {
   private status: ServiceState = ServiceState.UNINITIALIZED;
@@ -15,7 +15,7 @@ class HardwareService implements Service {
     try {
       this.status = ServiceState.INITIALIZING;
       const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-      const settings = await settingsService.fetchSettings();
+      const settings = settingsService.getSettings();
       const socketService = serviceManager.getService(ServiceName.SOCKET);
       const socket = socketService.getSocket();
 
@@ -46,7 +46,7 @@ class HardwareService implements Service {
         jetPositions: settings.sorters.map((sorter) => sorter.jetPosition),
       };
 
-      socket.on(SocketAction.INIT_HARDWARE_SUCCESS, (success) => {
+      socket.on(AllEvents.INIT_HARDWARE_SUCCESS, (success) => {
         if (success) {
           this.status = ServiceState.INITIALIZED;
         } else {
@@ -54,7 +54,7 @@ class HardwareService implements Service {
         }
       });
 
-      socket.emit(SocketAction.INIT_HARDWARE, hardwareSettings);
+      socket.emit(AllEvents.INIT_HARDWARE, hardwareSettings);
     } catch (error) {
       this.status = ServiceState.FAILED;
       console.error('Error initializing hardware:', error);
