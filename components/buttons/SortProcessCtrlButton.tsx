@@ -5,9 +5,9 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { sortProcessStore } from '@/stores/sortProcessStore';
-import { SocketAction } from '@/types/socketMessage.type';
 import serviceManager from '@/lib/services/ServiceManager';
 import { ServiceName } from '@/lib/services/Service.interface';
+import { AllEvents } from '@/types/socketMessage.type';
 
 const SortProcessCtrlButton = () => {
   const { isRunning } = sortProcessStore();
@@ -19,7 +19,7 @@ const SortProcessCtrlButton = () => {
     if (isRunning) {
       sorterService.stop();
       const socket = serviceManager.getService(ServiceName.SOCKET);
-      if (!!socket) socket.emit(SocketAction.CLEAR_HARDWARE_ACTIONS);
+      if (!!socket) socket.emit(AllEvents.CLEAR_HARDWARE_ACTIONS);
     } else {
       sorterService.start();
     }

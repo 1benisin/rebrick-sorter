@@ -5,7 +5,7 @@
 import { Button } from '@/components/ui/button';
 import { ServiceName } from '@/lib/services/Service.interface';
 import serviceManager from '@/lib/services/ServiceManager';
-import { SocketAction } from '@/types/socketMessage.type';
+import { AllEvents } from '@/types/socketMessage.type';
 import { SortPartDto } from '@/types/sortPart.dto';
 
 const FakeSortPartButton = () => {
@@ -21,7 +21,7 @@ const FakeSortPartButton = () => {
       sorter: Math.floor(Math.random() * 3),
     };
 
-    socket.emit(SocketAction.SORT_PART, fakePayload);
+    socket.emit(AllEvents.SORT_PART, fakePayload);
   };
 
   return <Button onClick={handleClick}>Sort Part</Button>;

@@ -106,13 +106,6 @@ const Video = () => {
     }
   }, [settings?.videoStreamId1, settings?.videoStreamId2, selectCamera1, selectCamera2, isLoading, error]);
 
-  const handleCameraChange1 = async (cameraId: string) => {
-    await selectCamera1(cameraId);
-  };
-  const handleCameraChange2 = async (cameraId: string) => {
-    await selectCamera2(cameraId);
-  };
-
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
   if (!settings) return null;
@@ -148,8 +141,8 @@ const Video = () => {
           ></video>
         </div>
       </div>
-      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera1} handleCameraChange={handleCameraChange1} />
-      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera2} handleCameraChange={handleCameraChange2} />
+      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera1} handleCameraChange={selectCamera1} />
+      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera2} handleCameraChange={selectCamera2} />
     </div>
   );
 };

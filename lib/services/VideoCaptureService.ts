@@ -19,7 +19,7 @@ class VideoCaptureService implements Service {
     try {
       // check if dependency is initialized
       const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-      const settings = await settingsService.fetchSettings();
+      const settings = settingsService.getSettings();
       if (settingsService.getStatus() !== ServiceState.INITIALIZED || !settings) {
         console.log('----settings', settingsService.getStatus(), settings);
         this.status = ServiceState.UNINITIALIZED;

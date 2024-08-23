@@ -6,10 +6,10 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSocket } from '@/hooks/useSocket';
-import { SocketAction } from '@/types/socketMessage.type';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { AllEvents } from '@/types/socketMessage.type';
 
 const JetButton = () => {
   const [jet, setJet] = useState('0');
@@ -17,8 +17,8 @@ const JetButton = () => {
 
   const handleClick = async () => {
     if (!socket) return;
-    console.log(SocketAction.FIRE_JET, jet);
-    socket.emit(SocketAction.FIRE_JET, jet);
+    console.log(AllEvents.FIRE_JET, jet);
+    socket.emit(AllEvents.FIRE_JET, jet);
   };
 
   return (

@@ -10,7 +10,7 @@ import { HardwareInitDto } from '../types/hardwareInit.dto';
 import { getFormattedTime } from '../lib/utils';
 import Conveyor from './Conveyor';
 import eventHub from './eventHub';
-import { BackToFrontEvents, FrontToBackEvents } from '../types/socketMessage.type';
+import { AllEvents } from '../types/socketMessage.type';
 
 // min amount conveyor speed can be slowed down from it's default speed (maximum speed): 255
 const MIN_SLOWDOWN_PERCENT = 0.4;
@@ -40,7 +40,8 @@ class HardwareManager {
   private constructor() {
     this.conveyor = Conveyor.getInstance();
     // setup event listeners
-    eventHub.onEvent(FrontToBackEvents.SORT_PART, this.sortPart.bind(this));
+    eventHub.onEvent(AllEvents.SORT_PART, this.sortPart.bind(this));
+    eventHub.onEvent(AllEvents.HOME_SORTER, this.homeSorter.bind(this));
   }
 
   static getInstance(): HardwareManager {
@@ -122,10 +123,10 @@ class HardwareManager {
 
       this.initialized = true;
       // Emit success event
-      eventHub.emitEvent(BackToFrontEvents.INIT_HARDWARE_SUCCESS, { success: true });
+      eventHub.emitEvent(AllEvents.INIT_HARDWARE_SUCCESS, { success: true });
     } catch (error) {
       this.initialized = false;
-      eventHub.emitEvent(BackToFrontEvents.INIT_HARDWARE_SUCCESS, { success: false });
+      eventHub.emitEvent(AllEvents.INIT_HARDWARE_SUCCESS, { success: false });
     }
   }
 

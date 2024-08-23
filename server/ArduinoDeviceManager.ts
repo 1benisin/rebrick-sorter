@@ -7,7 +7,7 @@ import { SerialPort, SerialPortMock } from 'serialport';
 import { ArduinoDeviceCommand } from '../types/arduinoCommands.type';
 import { SerialPortType } from '../types/serialPort.type';
 import eventHub from './eventHub';
-import { BackToFrontEvents, FrontToBackEvents } from '../types/socketMessage.type';
+import { AllEvents, BackToFrontEvents } from '../types/socketMessage.type';
 
 const MockedPorts = [
   '/dev/tty.usbmodem1101',
@@ -22,7 +22,7 @@ class ArduinoDeviceManager {
 
   // Private constructor to prevent direct instantiation
   private constructor() {
-    eventHub.onEvent(FrontToBackEvents.LIST_SERIAL_PORTS, this.listSerialPorts);
+    eventHub.onEvent(AllEvents.LIST_SERIAL_PORTS, this.listSerialPorts);
   }
 
   // Method to get the singleton instance
