@@ -51,7 +51,7 @@ class HardwareManager {
     return HardwareManager.instance;
   }
 
-  public async init(initSettings: any): Promise<void> {
+  public async init(initSettings: HardwareInitDto): Promise<void> {
     if (this.initialized) {
       console.log(`${this.constructor.name} is already initialized`);
       return;
