@@ -163,6 +163,7 @@ export default class Conveyor {
       command: ArduinoCommands.CONVEYOR_ON_OFF,
     };
     arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
+    this.scheduleConveyorSpeedChange(this.defaultConveyorSpeed);
   }
 
   public clearActions() {
