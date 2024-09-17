@@ -8,7 +8,7 @@ import { DetectionPairGroup, mockDetectionPairGroup } from '@/types/detectionPai
 import { v4 as uuid } from 'uuid';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { settingsStore } from '@/stores/settingsStore';
+import { useSettings } from '@/hooks/useSettings';
 
 const DetectionPairDisplay = () => {
   const detectionPairGroups = sortProcessStore((state) => state.detectionPairGroups);
@@ -28,10 +28,14 @@ const DetectionPairDisplay = () => {
 };
 
 const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
-  const settings = settingsStore((state) => state.settings);
+  const { settings } = useSettings();
   const classification = group.classificationResult || null;
   const skipSort = group.skipSort || null;
   const skipSortReason = group.skipSortReason || null;
+
+  if (!settings) {
+    return <div>Loading Settings...</div>;
+  }
 
   const calculateBGColor = (score: number) => {
     return score < settings.classificationThresholdPercentage ? 'bg-red-500' : 'bg-green-500';

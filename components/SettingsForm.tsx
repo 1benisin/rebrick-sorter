@@ -1,6 +1,5 @@
 // components/SettingsForm.tsx
 
-// In your settings/page.tsx
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,7 +8,7 @@ import { settingsSchema, SettingsType, sorterSettingsSchema } from '@/types/sett
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import useSettings from '@/hooks/useSettings';
+import { useSettings } from '@/hooks/useSettings';
 import SerialPortFormInput from '@/components/SerialPortFormInput';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { serialPortNamesArray } from '@/types/serialPort.type';

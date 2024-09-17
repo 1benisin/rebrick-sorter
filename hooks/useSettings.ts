@@ -1,84 +1,83 @@
 // hooks/useSettings.ts
 
-import { useContext } from 'react';
-import { SettingsContext } from '@/contexts/SettingsContext';
+import { useState, useEffect, useCallback } from 'react';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { settingsSchema, SettingsType } from '@/types/settings.type';
 
-const useSettings = () => {
-  const context = useContext(SettingsContext);
-  if (context === undefined) {
-    throw new Error('useSettings must be used within a SettingsProvider');
-  }
-  return context;
+type UseSettingsReturn = {
+  settings: SettingsType | null;
+  isLoading: boolean;
+  error: string | null;
+  saveSettings: (newSettings: SettingsType) => Promise<void>;
 };
 
-export default useSettings;
+export function useSettings(): UseSettingsReturn {
+  const [settings, setSettings] = useState<SettingsType | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-// // Import necessary hooks and Firebase functions
-// 'use client';
-// import { useState, useEffect } from 'react';
-// import { doc, getDoc, setDoc } from 'firebase/firestore';
-// import { db } from '@/services/firebase';
-// import { settingsSchema, SettingsType } from '@/types/settings.type';
-// import { alertStore } from '@/stores/alertStore';
+  useEffect(() => {
+    const userId = process.env.NEXT_PUBLIC_USER;
+    if (!userId) {
+      setError('User ID is not set');
+      setIsLoading(false);
+      return;
+    }
 
-// enum LoadStatus {
-//   Loading = 'loading',
-//   Loaded = 'loaded',
-//   Failed = 'failed',
-// }
+    const settingsRef = doc(db, 'settings', userId);
 
-// const useSettings = () => {
-//   // settings can be null, so we use the type assertion to tell TypeScript that it's not null
-//   const [settings, setSettings] = useState<SettingsType | null>(null);
-//   const [status, setStatus] = useState<LoadStatus>(LoadStatus.Loading);
+    const unsubscribe = onSnapshot(
+      settingsRef,
+      (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          try {
+            const data = docSnapshot.data();
+            let result = settingsSchema.parse(data);
 
-//   useEffect(() => {
-//     loadSettings();
-//   }, []);
+            setSettings(result);
+            setError(null);
+          } catch (error) {
+            console.error('Error parsing settings:', error);
+            setError('Failed to parse settings');
+          }
+        } else {
+          setError('No settings document found');
+        }
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching settings:', err);
+        setError('Failed to fetch settings');
+        setIsLoading(false);
+      },
+    );
 
-//   const loadSettings = async () => {
-//     console.log('Loading settings...');
-//     setStatus(LoadStatus.Loading);
-//     try {
-//       const docRef = doc(db, 'settings', process.env.NEXT_PUBLIC_USER as string);
-//       const docSnap = await getDoc(docRef);
+    // Cleanup function to unsubscribe from Firestore when the component unmounts
+    return () => unsubscribe();
+  }, []);
 
-//       if (!docSnap.exists()) throw new Error('No settings document in DB!');
-//       const data = docSnap.data();
-//       const result = settingsSchema.parse(data);
+  const saveSettings = useCallback(async (newSettings: SettingsType) => {
+    const userId = process.env.NEXT_PUBLIC_USER;
+    if (!userId) {
+      throw new Error('User ID is not set');
+    }
 
-//       setSettings(result);
-//       setStatus(LoadStatus.Loaded);
-//     } catch (error) {
-//       setStatus(LoadStatus.Failed);
-//       console.error('Error fetching settings:', error);
-//     }
-//   };
+    try {
+      const result = settingsSchema.parse(newSettings);
+      const settingsRef = doc(db, 'settings', userId);
+      await setDoc(settingsRef, result, { merge: true });
+      // Note: We don't need to manually update the state here as the onSnapshot listener will handle that
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      throw new Error('Failed to save settings');
+    }
+  }, []);
 
-//   const saveSettings = async (state: SettingsType) => {
-//     try {
-//       const result = settingsSchema.parse(state);
-
-//       const docRef = doc(db, 'settings', process.env.NEXT_PUBLIC_USER as string);
-//       await setDoc(docRef, result, { merge: true });
-
-//       // Assuming you have a global alert store or a way to show notifications
-//       alertStore.getState().addAlert({
-//         type: 'update',
-//         message: 'Settings saved successfully',
-//         timestamp: Date.now(),
-//       });
-//     } catch (error) {
-//       alertStore.getState().addAlert({
-//         type: 'error',
-//         message: 'Failed to save settings',
-//         timestamp: Date.now(),
-//       });
-//       console.error('Error saving settings:', error);
-//     }
-//   };
-
-//   return { loadSettings, saveSettings, settings, status };
-// };
-
-// export default useSettings;
+  return {
+    settings,
+    isLoading,
+    error,
+    saveSettings,
+  };
+}

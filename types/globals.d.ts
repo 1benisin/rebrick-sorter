@@ -8,8 +8,9 @@ declare global {
     takePhoto(): Promise<Blob>;
     grabFrame(): Promise<ImageBitmap>;
   }
-  interface HTMLVideoElement_extended extends HTMLVideoElement {
-    captureStream(): MediaStream;
+
+  interface HTMLVideoElement {
+    captureStream(frameRate?: number): MediaStream;
     videoTracks: MediaStreamTrack[];
   }
 }

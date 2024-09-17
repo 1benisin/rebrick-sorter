@@ -8,6 +8,7 @@ import StatusIndicator from '@/components/StatusIndicator';
 import ConveyorButton from '@/components/buttons/ConveyorButton';
 import HomeSorterButton from '@/components/buttons/HomeSorterButton';
 import { sortProcessStore } from '@/stores/sortProcessStore';
+import FakeSortPartButton from '@/components/buttons/FakeSortPartButton';
 
 const SortPage = () => {
   const ppmCount = sortProcessStore((state) => state.ppmCount);
@@ -19,6 +20,7 @@ const SortPage = () => {
           <SorterControllerButton />
           <ConveyorButton />
           <HomeSorterButton />
+          <FakeSortPartButton />
           <div>{`${ppmCount} PPM (last 10min)`}</div>
         </div>
         <div className="col-span-3 w-full">

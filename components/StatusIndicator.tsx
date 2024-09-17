@@ -1,83 +1,55 @@
 // components/StatusIndicator.tsx
 
-// Import React and necessary hooks
-import useClassifier from '@/hooks/useClassifier';
-import useDetector from '@/hooks/useDetector';
-import useHardware from '@/hooks/useHardware';
-import useSettings from '@/hooks/useSettings';
-import useSocket from '@/hooks/useSocket';
-import useSortController from '@/hooks/useSortController';
-import useVideoCapture from '@/hooks/useVideoCapture';
+import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Button } from './ui/button';
-import { SocketAction } from '@/types/socketMessage.type';
+import serviceManager from '@/lib/services/ServiceManager';
+import { ServiceName, ServiceState } from '@/lib/services/Service.interface';
 
-const StatusIndicator = ({}) => {
-  const { status: cassifierStatus } = useClassifier();
-  const { status: detectorStatus, reInit } = useDetector();
-  const { status: hardwareStatus, init: initHardware } = useHardware();
-  const { status: settingsStatus, loadSettings } = useSettings();
-  const { socket, status: socketStatus, init: initializeSocket } = useSocket();
-  const { status: videoCaptureStatus, init: initVideoCapture } = useVideoCapture();
-  const { status: sortControllerStatus } = useSortController();
+const StatusIndicator = () => {
+  const [serviceStates, setServiceStates] = useState<Record<ServiceName, ServiceState>>(
+    {} as Record<ServiceName, ServiceState>,
+  );
 
-  const statusColor = {
-    loading: 'bg-yellow-700', // Yellow for loading
-    loaded: 'bg-green-700', // Green for loaded
-    failed: 'bg-red-700', // Red for failed
+  const serviceStateColor = {
+    [ServiceState.INITIALIZING]: 'bg-yellow-700',
+    [ServiceState.INITIALIZED]: 'bg-green-700',
+    [ServiceState.UNINITIALIZED]: 'bg-gray-500',
+    [ServiceState.FAILED]: 'bg-red-700',
+  } as const;
+
+  const updateServiceStates = useCallback(() => {
+    const newStates = {} as Record<ServiceName, ServiceState>;
+    Object.values(ServiceName).forEach((serviceName) => {
+      newStates[serviceName] = serviceManager.getServiceState(serviceName);
+    });
+    setServiceStates(newStates);
+  },[]);
+
+  useEffect(() => {
+    updateServiceStates();
+    const interval = setInterval(updateServiceStates, 10000); // every 10 seconds
+    return () => clearInterval(interval);
+  }, [updateServiceStates]);
+
+  const handleServiceInit = (serviceName: ServiceName) => {
+    const service = serviceManager.getService(serviceName);
+    if (service && typeof service.init === 'function') {
+      console.log(`ReInitializing ${serviceName} from status indicator`);
+      service.init();
+    }
   };
 
   return (
     <div className="fixed right-0 top-2 m-2 flex flex-col gap-2 rounded-md bg-slate-400 p-2 opacity-90">
-      <div
-        className={cn(statusColor[settingsStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
-        onClick={loadSettings}
-      >
-        Settings
-      </div>
-
-      <div
-        className={cn(statusColor[socketStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
-        onClick={() => {
-          initializeSocket();
-          console.log('SOCKET STATUS: ', { active: socket?.active, connected: socket?.connected, id: socket?.id });
-        }}
-      >
-        Socket
-      </div>
-
-      <div
-        className={cn(statusColor[hardwareStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
-        onClick={initHardware}
-      >
-        Hardware
-      </div>
-
-      <div className={cn(statusColor[cassifierStatus], 'mx-auto w-full rounded-md px-2')}>Classifier</div>
-
-      <div
-        className={cn(statusColor[videoCaptureStatus], 'mx-auto w-full cursor-pointer rounded-md px-2')}
-        onClick={initVideoCapture}
-      >
-        Video Capture
-      </div>
-
-      <div className={cn(statusColor[detectorStatus], 'mx-auto w-full rounded-md px-2')} onClick={reInit}>
-        Detector
-      </div>
-
-      <div className={cn(statusColor[sortControllerStatus], 'mx-auto w-full rounded-md px-2')}>Sorter Controller</div>
-
-      {socket && (
-        <Button size="sm" onClick={() => socket.emit(SocketAction.LOG_PART_QUEUE)}>
-          Log Part Queue
-        </Button>
-      )}
-      {socket && (
-        <Button size="sm" variant="outline" onClick={() => socket.emit(SocketAction.LOG_SPEED_QUEUE)}>
-          Log Speed Queue
-        </Button>
-      )}
+      {Object.entries(serviceStates).map(([serviceName, state]) => (
+        <div
+          key={serviceName}
+          className={cn(serviceStateColor[state], 'mx-auto w-full cursor-pointer rounded-md px-2')}
+          onClick={() => handleServiceInit(serviceName as ServiceName)}
+        >
+          {serviceName}
+        </div>
+      ))}
     </div>
   );
 };
