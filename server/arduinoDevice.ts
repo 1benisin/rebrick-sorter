@@ -1,15 +1,16 @@
 // server/arduinoDevice.ts
 
-// lib/hardware/arduinoDevice.ts
-
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
+import { ConveyorJetsSettings, DeviceSettings, HopperFeederSettings, SorterSettings } from './arduinoSettings.type';
 
 export default class ArduinoDevice {
   private port: SerialPort | SerialPortMock | null = null;
   portPath: string = '';
+  settings: DeviceSettings;
 
-  constructor(portPath: string) {
+  constructor(portPath: string, settings: DeviceSettings) {
     this.portPath = portPath;
+    this.settings = settings;
   }
 
   // Static factory method
@@ -115,15 +116,6 @@ export default class ArduinoDevice {
     return this.port.isOpen;
   };
 
-  // Method to handle incoming data from the Arduino
-  handleData = (data: string) => {
-    if (!this.port) {
-      console.error('No port to handle data from');
-      return;
-    }
-    console.log(`Data received from ${this.port.path}:`, data);
-  };
-
   // Method to send a command to the Arduino
   sendCommand = (command: string, data?: number) => {
     if (!this.port) {
@@ -137,5 +129,52 @@ export default class ArduinoDevice {
         console.error(`Error sending message: ${message} - to portPath: ${this.port?.path}: `, err.message);
       }
     });
+  };
+
+  // Method to handle incoming data from the Arduino
+  handleData = (data: string) => {
+    if (!this.port) {
+      console.error('No port to handle data from');
+      return;
+    }
+    console.log(`Data received from ${this.port.path}:`, data);
+
+    if (data.includes('Ready')) {
+      let settingsMessage = '';
+
+      if (this.settings.deviceType === 'sorter') {
+        const sorterSettings = this.settings as SorterSettings;
+        const settingsValues = [
+          sorterSettings.GRID_DIMENSION,
+          sorterSettings.X_OFFSET,
+          sorterSettings.Y_OFFSET,
+          sorterSettings.X_STEPS_TO_LAST,
+          sorterSettings.Y_STEPS_TO_LAST,
+          sorterSettings.ACCELERATION,
+          sorterSettings.HOMING_SPEED,
+          sorterSettings.SPEED,
+        ];
+        settingsMessage = 's,' + settingsValues.join(',');
+      } else if (this.settings.deviceType === 'conveyor_jets') {
+        const conveyorSettings = this.settings as ConveyorJetsSettings;
+        const settingsValues = [conveyorSettings.JET_FIRE_TIME];
+        settingsMessage = 's,' + settingsValues.join(',');
+      } else if (this.settings.deviceType === 'hopper_feeder') {
+        const hopperSettings = this.settings as HopperFeederSettings;
+        const settingsValues = [
+          hopperSettings.hopperStepsPerAction,
+          hopperSettings.hopperActionInterval,
+          hopperSettings.motorSpeed,
+          hopperSettings.ACCELERATION,
+          hopperSettings.SPEED,
+        ];
+        settingsMessage = 's,' + settingsValues.join(',');
+      } else {
+        console.error(`Unknown device type for ${this.port?.path}`);
+        return;
+      }
+
+      this.sendCommand(settingsMessage);
+    }
   };
 }
