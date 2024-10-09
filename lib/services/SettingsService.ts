@@ -1,10 +1,9 @@
 // lib/services/SettingsService.ts
 
 import { Service, ServiceState } from './Service.interface';
-import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { settingsSchema, SettingsType } from '@/types/settings.type';
-import { z } from 'zod';
 
 class SettingsService implements Service {
   private state: ServiceState = ServiceState.UNINITIALIZED;

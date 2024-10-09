@@ -6,7 +6,7 @@ import arduinoDeviceManager from './ArduinoDeviceManager';
 import { getFormattedTime } from '../lib/utils';
 import { findTimeAfterDistance } from './hardwareUtils';
 import eventHub from './eventHub';
-import { BackToFrontEvents, FrontToBackEvents } from '../types/socketMessage.type';
+import { BackToFrontEvents, FrontToBackEvents, AllEvents } from '../types/socketMessage.type';
 
 type InitSettings = {
   defaultConveyorSpeed: number;
@@ -163,7 +163,7 @@ export default class Conveyor {
       command: ArduinoCommands.CONVEYOR_ON_OFF,
     };
     arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
-    this.scheduleConveyorSpeedChange(this.defaultConveyorSpeed);
+    // this.scheduleConveyorSpeedChange(this.defaultConveyorSpeed);
   }
 
   public clearActions() {
