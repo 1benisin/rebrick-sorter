@@ -76,6 +76,7 @@ const Video = () => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter((device) => device.kind === 'videoinput');
+        console.log('videoDevices', videoDevices);
         setCameras(
           videoDevices.map((device) => ({
             deviceId: device.deviceId,
@@ -169,7 +170,7 @@ const VideoSourceSelect = ({
           </SelectItem>
           {cameras.map((camera) => (
             <SelectItem key={camera.deviceId} value={camera.deviceId} className="text-xs">
-              {camera.label || `Camera ${camera.deviceId}`}
+              {`Camera ${camera.deviceId.slice(-10)}`}
             </SelectItem>
           ))}
         </SelectContent>

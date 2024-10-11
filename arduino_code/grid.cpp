@@ -39,13 +39,13 @@ bool moveCompleteSent = true; // flag to indicate that a move complete "MC" mess
 bool homing = false; // flag to indicate that the sorter is currently homing
 bool settingsInitialized = false; // flag to indicate settings have been received
 
-typedef struct {
-  int x;
-  int y;
-} binLoc;
+// Remove binLoc struct and binLocations array
+// typedef struct {
+//   int x;
+//   int y;
+// } binLoc;
 
-binLoc binLocations[MAX_GRID_DIMENSION * MAX_GRID_DIMENSION] = {};
-
+// binLoc binLocations[MAX_GRID_DIMENSION * MAX_GRID_DIMENSION] = {};
 
 // ___________________________ STEPPER LIBRARY FUNCTIONS ___________________________
 
@@ -111,8 +111,10 @@ void moveSorterToPosition(int xPos, int yPos, bool blocking = false) {
 }
 
 void moveToBin(int binNum, bool blocking = false) {
-  int xPos = binLocations[binNum-1].x; // -1 because bin numbers start at 1 but array starts at 0
-  int yPos = binLocations[binNum-1].y;
+  int xIndex = (binNum - 1) / settings.GRID_DIMENSION;
+  int yIndex = (binNum - 1) % settings.GRID_DIMENSION;
+  int xPos = xIndex * xStepsPerBin + settings.X_OFFSET;
+  int yPos = yIndex * yStepsPerBin + settings.Y_OFFSET;
   xStepper->moveTo(xPos, blocking);
   yStepper->moveTo(yPos, blocking);
 }
@@ -145,17 +147,17 @@ void processSettings(char *message) {
     xStepsPerBin = (settings.X_STEPS_TO_LAST - settings.X_OFFSET) / (settings.GRID_DIMENSION -1);
     yStepsPerBin = (settings.Y_STEPS_TO_LAST - settings.Y_OFFSET) / (settings.GRID_DIMENSION -1);
 
-    // Populate bin location array
-    int binNum = 1;
-    for (int x = 0; x < settings.GRID_DIMENSION; x++) {
-      for (int y = 0; y < settings.GRID_DIMENSION; y++) {
-        if (binNum - 1 < MAX_GRID_DIMENSION * MAX_GRID_DIMENSION) {
-          binLocations[binNum-1].x = (x * xStepsPerBin) + settings.X_OFFSET;
-          binLocations[binNum-1].y = (y * yStepsPerBin) + settings.Y_OFFSET;
-          binNum++;
-        }
-      }
-    }
+    // Remove population of binLocations
+    // int binNum = 1;
+    // for (int x = 0; x < settings.GRID_DIMENSION; x++) {
+    //   for (int y = 0; y < settings.GRID_DIMENSION; y++) {
+    //     if (binNum - 1 < MAX_GRID_DIMENSION * MAX_GRID_DIMENSION) {
+    //       binLocations[binNum-1].x = (x * xStepsPerBin) + settings.X_OFFSET;
+    //       binLocations[binNum-1].y = (y * yStepsPerBin) + settings.Y_OFFSET;
+    //       binNum++;
+    //     }
+    //   }
+    // }
 
     // Update stepper settings
     xStepper->setAcceleration(settings.ACCELERATION);
@@ -181,7 +183,6 @@ void processMessage(char *message) {
       processSettings(message);
       break;
 
-
     // MOVE SORTER
     case 'm': {
       char buffer[4];
@@ -191,7 +192,7 @@ void processMessage(char *message) {
       buffer[3] = '\0';
 
       int binNum = atoi(buffer);
-      binNum = constrain(binNum, 1, GRID_DIMENSION * GRID_DIMENSION); // prevent out of bounds bin number
+      binNum = constrain(binNum, 1, settings.GRID_DIMENSION * settings.GRID_DIMENSION); // prevent out of bounds bin number
       
       if (curBin != binNum) { // if not at bin already 
         // make move
@@ -201,11 +202,10 @@ void processMessage(char *message) {
       moveCompleteSent = false;
       break;
     }
-    
-    
+
     // MOVE TO CENTER
     case 'h': { 
-      int centerBin = GRID_DIMENSION * GRID_DIMENSION / 2 -  GRID_DIMENSION / 2;
+      int centerBin = ((settings.GRID_DIMENSION * settings.GRID_DIMENSION) + 1) / 2;
       Serial.print("centerBin: ");
       print(centerBin);
       moveToBin(centerBin);
@@ -215,9 +215,9 @@ void processMessage(char *message) {
     // HOMING PROCEDURE
     case 'a': {
       homing = true;
-      xStepper->setSpeedInUs(HOMING_SPEED);
+      xStepper->setSpeedInUs(settings.HOMING_SPEED);
       xStepper->runBackward();
-      yStepper->setSpeedInUs(HOMING_SPEED);
+      yStepper->setSpeedInUs(settings.HOMING_SPEED);
       yStepper->runBackward();
       break;
     }
@@ -293,8 +293,8 @@ void loop() {
   if (homing && !digitalRead(X_STOP_PIN)) {
     xStepper->forceStop();
     xStepper->setCurrentPosition(0);
-    xStepper->setSpeedInUs(SPEED);
-    xStepper->moveTo(X_OFFSET, true);
+    xStepper->setSpeedInUs(settings.SPEED);
+    xStepper->moveTo(settings.X_OFFSET, true);
     // if other motor is done moving home, set homing to false
     if (!yStepper->isRunning()) {
       homing = false;
@@ -305,8 +305,8 @@ void loop() {
   if (homing && !digitalRead(Y_STOP_PIN)) {
     yStepper->forceStop();
     yStepper->setCurrentPosition(0);
-    yStepper->setSpeedInUs(SPEED);
-    yStepper->moveTo(Y_OFFSET, true);
+    yStepper->setSpeedInUs(settings.SPEED);
+    yStepper->moveTo(settings.Y_OFFSET, true);
     // if other motor is done moving home, set homing to false
     if (!xStepper->isRunning()) {
       homing = false;
