@@ -188,7 +188,9 @@ class HardwareManager {
     const distanceToJet = this.conveyor.getJetPositions[sorter] - initialPosition;
     // jet time is the time it takes to travel the distance to the jet
     // jetTime should always be after initialTime
-    const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.conveyor.getSpeedQueue);
+    // const jetTime = findTimeAfterDistance(initialTime, distanceToJet, this.conveyor.getSpeedQueue);
+    //
+    const jetTime = this.conveyor.defaultConveyorSpeed * distanceToJet + initialTime;
 
     const travelTimeFromLastBin = getTravelTimeBetweenBins(
       sorter,
@@ -296,10 +298,12 @@ class HardwareManager {
       if (!this.initialized) {
         throw new Error('HardwareManager not initialized');
       }
-      // sort partQueue by arrival time to jet position using default conveyor speed
-      this.conveyor.prioritySortPartQueue();
+      // --  if the assigned sorter is finished with last move
 
-      // find the previous part for the same sorter
+      // // sort partQueue by arrival time to jet position using default conveyor speed
+      // this.conveyor.prioritySortPartQueue();
+
+      // // find the previous part for the same sorter
       const prevSorterPart = this.conveyor.findPreviousPart(sorter);
 
       let { moveTime, jetTime, travelTimeFromLastBin } = this.calculateTimings(
@@ -310,45 +314,45 @@ class HardwareManager {
         prevSorterPart.bin,
       );
 
-      const arrivalTimeDelay = Math.max(prevSorterPart.moveFinishedTime - moveTime, 0);
+      // const arrivalTimeDelay = Math.max(prevSorterPart.moveFinishedTime - moveTime, 0);
 
-      // figure out slowdown percentage
-      const slowDownPercent = this.computeSlowDownPercent({
-        jetTime,
-        startSpeedChange: prevSorterPart.jetTime,
-        arrivalTimeDelay,
-      });
+      // // figure out slowdown percentage
+      // const slowDownPercent = this.computeSlowDownPercent({
+      //   jetTime,
+      //   startSpeedChange: prevSorterPart.jetTime,
+      //   arrivalTimeDelay,
+      // });
 
-      // if slowdown is more than 50% and less than 100% slow down the part
-      if (slowDownPercent > MIN_SLOWDOWN_PERCENT && slowDownPercent < 1) {
-        console.log('SLOW-DOWN:', arrivalTimeDelay);
-        // find updated move and jet times
-        const oldJetTime = jetTime;
-        moveTime += arrivalTimeDelay;
-        jetTime += arrivalTimeDelay;
+      // // if slowdown is more than 50% and less than 100% slow down the part
+      // if (slowDownPercent > MIN_SLOWDOWN_PERCENT && slowDownPercent < 1) {
+      //   console.log('SLOW-DOWN:', arrivalTimeDelay);
+      //   // find updated move and jet times
+      //   const oldJetTime = jetTime;
+      //   moveTime += arrivalTimeDelay;
+      //   jetTime += arrivalTimeDelay;
 
-        // --- insert speed change
-        this.conveyor.insertSpeedChange({
-          startSpeedChange: prevSorterPart.jetTime,
-          newArrivalTime: jetTime,
-          oldArrivalTime: oldJetTime,
-          slowDownPercent,
-        });
+      //   // --- insert speed change
+      //   this.conveyor.insertSpeedChange({
+      //     startSpeedChange: prevSorterPart.jetTime,
+      //     newArrivalTime: jetTime,
+      //     oldArrivalTime: oldJetTime,
+      //     slowDownPercent,
+      //   });
 
-        // --- reschedule part actions after slowdown
-        this.conveyor.rescheduleActions({
-          startOfSlowdown: prevSorterPart.jetTime,
-          endOfSlowdown: jetTime,
-          delayBy: arrivalTimeDelay,
-          scheduleJet: this.scheduleJet,
-          scheduleSorterToPosition: this.scheduleSorterToPosition,
-        });
-      }
+      //   // --- reschedule part actions after slowdown
+      //   this.conveyor.rescheduleActions({
+      //     startOfSlowdown: prevSorterPart.jetTime,
+      //     endOfSlowdown: jetTime,
+      //     delayBy: arrivalTimeDelay,
+      //     scheduleJet: this.scheduleJet,
+      //     scheduleSorterToPosition: this.scheduleSorterToPosition,
+      //   });
+      // }
 
-      // create and schedule part actions only if slowDownPercent is greater than .50
-      if (slowDownPercent > MIN_SLOWDOWN_PERCENT) {
-        this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
-      }
+      // // create and schedule part actions only if slowDownPercent is greater than .50
+      // if (slowDownPercent > MIN_SLOWDOWN_PERCENT) {
+      this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
+      // }
 
       this.conveyor.filterQueues(this.sorterBinPositions);
     } catch (error) {

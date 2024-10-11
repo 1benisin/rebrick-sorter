@@ -19,7 +19,7 @@ export default class Conveyor {
   private static instance: Conveyor;
   private partQueue: PartQueue = [];
   private speedQueue: SpeedQueue = [];
-  private defaultConveyorSpeed: number = 0;
+  public defaultConveyorSpeed: number = 0;
   private jetPositions: number[] = [];
   private arduinoPath: string = '';
 
