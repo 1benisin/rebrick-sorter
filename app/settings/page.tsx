@@ -5,7 +5,7 @@
 
 import SettingsForm from '@/components/SettingsForm';
 import CalibrationButton from '@/components/buttons/CalibrationButton';
-import DualVideo from '@/components/DualVideo';
+import DualVideo from '@/components/DualVideo2';
 import StatusIndicator from '@/components/StatusIndicator';
 import ConveyorButton from '@/components/buttons/ConveyorButton';
 import MoveSorterButton from '@/components/buttons/MoverSorterButton';

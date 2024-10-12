@@ -2,7 +2,7 @@
 
 'use client';
 import SorterControllerButton from '@/components/buttons/SortProcessCtrlButton';
-import DualVideo from '@/components/DualVideo';
+import DualVideo from '@/components/DualVideo2';
 import DetectionPairDisplay from '@/components/DetectionPairDisplay';
 import StatusIndicator from '@/components/StatusIndicator';
 import ConveyorButton from '@/components/buttons/ConveyorButton';

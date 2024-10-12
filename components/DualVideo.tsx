@@ -42,7 +42,7 @@ const Video = () => {
         };
       }
     },
-    [settings, saveSettings],
+    [saveSettings, settings],
   );
 
   const selectCamera2 = useCallback(
@@ -85,15 +85,15 @@ const Video = () => {
 
         // Automatically assign cameras based on settings
         if (settings?.videoStreamId1) {
-          const camera1 = videoDevices.find((device) => device.deviceId === settings.videoStreamId1);
-          if (camera1) {
-            await selectCamera1(camera1.deviceId);
+          const deviceExists = cameras.some((camera) => camera.deviceId === settings.videoStreamId1);
+          if (deviceExists) {
+            await selectCamera1(settings?.videoStreamId1);
           }
         }
         if (settings?.videoStreamId2) {
-          const camera2 = videoDevices.find((device) => device.deviceId === settings.videoStreamId2);
-          if (camera2) {
-            await selectCamera2(camera2.deviceId);
+          const deviceExists = cameras.some((camera) => camera.deviceId === settings.videoStreamId2);
+          if (deviceExists) {
+            await selectCamera2(settings.videoStreamId2);
           }
         }
       } catch (error) {
@@ -104,7 +104,7 @@ const Video = () => {
     if (!isLoading && !error) {
       getCameras();
     }
-  }, [settings?.videoStreamId1, settings?.videoStreamId2, selectCamera1, selectCamera2, isLoading, error]);
+  }, [settings?.videoStreamId1, settings?.videoStreamId2, selectCamera1, selectCamera2, isLoading, error, cameras]);
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;

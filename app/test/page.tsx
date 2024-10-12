@@ -2,11 +2,13 @@
 
 'use client';
 
-import { useSocket } from '@/hooks/useSocket';
-import StatusIndicator from '@/components/StatusIndicator';
+import DualVideo from '@/components/DualVideo2';
 
 export default function Test() {
-  const { status, socket, transport } = useSocket();
-
-  return <StatusIndicator />;
+  return (
+    <div className="App">
+      <h1>Video Device Selector</h1>
+      <DualVideo />
+    </div>
+  );
 }
