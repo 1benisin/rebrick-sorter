@@ -18,13 +18,14 @@ type InitSettings = {
   arduinoPath: string;
 };
 
-export default class Conveyor {
+export class Conveyor {
   private static instance: Conveyor;
   private arduinoPath: string = '';
   private partQueue: PartQueue = [];
 
   constructor() {
     // setup event listeners
+    console.log('Conveyor Constructing');
     eventHub.onEvent(AllEvents.SORT_PART, this.sortPart);
     eventHub.onEvent(AllEvents.CONVEYOR_ON_OFF, this.conveyorOnOff);
   }
@@ -72,6 +73,16 @@ export default class Conveyor {
         initialPosition,
         prevSorterPart?.bin || 1,
       );
+
+      // if moveTime is before current time or previous part moveFinishedTime, skip Part
+      if (moveTime < Date.now()) {
+        console.log('---SORT PART: moveTime is in the past');
+        return;
+      }
+      if (prevSorterPart && moveTime < prevSorterPart.moveFinishedTime) {
+        console.log('---SORT PART: moveTime is before previous part moveFinishedTime');
+        return;
+      }
 
       this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
     } catch (error) {
@@ -132,3 +143,6 @@ export default class Conveyor {
     // this.scheduleConveyorSpeedChange(this.defaultConveyorSpeed);
   };
 }
+
+const conveyor = Conveyor.getInstance();
+export default conveyor;

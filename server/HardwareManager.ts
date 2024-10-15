@@ -4,7 +4,7 @@ import { getTravelTimeBetweenBins } from './hardwareUtils';
 import arduinoDeviceManager from './ArduinoDeviceManager';
 import { ArduinoCommands, ArduinoDeviceCommand } from '../types/arduinoCommands.type';
 import { serialPortNames } from '../types/serialPort.type';
-import Conveyor from './Conveyor';
+import conveyor, { Conveyor } from './Conveyor';
 import eventHub from './eventHub';
 import { AllEvents } from '../types/socketMessage.type';
 import { settingsSchema, SettingsType } from '../types/settings.type';
@@ -38,11 +38,15 @@ class HardwareManager {
   sorterBinPositions: { x: number; y: number }[][] = [];
 
   private constructor() {
-    this.conveyor = Conveyor.getInstance();
+    this.conveyor = conveyor;
+    this.conveyorSpeed = 0;
+    this.jetPositions = [];
     // setup event listeners
     eventHub.onEvent(AllEvents.HOME_SORTER, this.homeSorter);
     eventHub.onEvent(AllEvents.FIRE_JET, this.fireJet);
     eventHub.onEvent(AllEvents.MOVE_SORTER, this.moveSorter);
+    eventHub.onEvent(AllEvents.SCHEDULE_SORTER_MOVE, this.scheduleSorterMove);
+    eventHub.onEvent(AllEvents.SCHEDULE_JET_FIRE, this.scheduleJetFire);
   }
 
   static getInstance(): HardwareManager {
@@ -53,10 +57,10 @@ class HardwareManager {
   }
 
   public async init(): Promise<void> {
-    if (this.initialized) {
-      console.log(`${this.constructor.name} is already initialized`);
-      return;
-    }
+    // if (this.initialized) {
+    //   console.log(`${this.constructor.name} is already initialized`);
+    //   return;
+    // }
 
     if (this.initializationPromise) {
       console.log(`${this.constructor.name} initialization is already in progress`);
@@ -160,6 +164,19 @@ class HardwareManager {
     );
     // sorter should have enough travel time to reach the bin before the jet is fired
     const moveTime = Math.max(jetTime + FALL_TIME - travelTimeFromLastBin, 1);
+
+    console.log('---calculateTimings:', {
+      conveyorSpeed: this.conveyorSpeed,
+      distanceToJet,
+      jetTime,
+      travelTimeFromLastBin,
+      moveTime,
+      sorter,
+      bin,
+      initialTime,
+      initialPosition,
+      prevSorterbin,
+    });
     return { moveTime, jetTime, travelTimeFromLastBin };
   };
 
@@ -208,6 +225,22 @@ class HardwareManager {
       data: bin,
     };
     arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
+  };
+
+  public scheduleSorterMove = ({ sorter, bin, moveTime }: { sorter: number; bin: number; moveTime: number }) => {
+    console.log('scheduleSorterMove:', sorter, bin, moveTime);
+    const delay = moveTime - Date.now();
+    setTimeout(() => {
+      this.moveSorter({ sorter, bin });
+    }, delay);
+  };
+
+  public scheduleJetFire = ({ sorter, jetTime }: { sorter: number; jetTime: number }) => {
+    console.log('scheduleJetFire:', sorter, jetTime);
+    const delay = jetTime - Date.now();
+    setTimeout(() => {
+      this.fireJet({ sorter });
+    }, delay);
   };
 }
 

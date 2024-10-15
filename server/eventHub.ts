@@ -23,6 +23,7 @@ class EventHub extends EventEmitter {
   }
 
   emitEvent<K extends keyof EventPayloads>(event: K, data: EventPayloads[K]): void {
+    console.log(`---Emitting event: ${event}`, data);
     this.emit(event, data);
   }
 

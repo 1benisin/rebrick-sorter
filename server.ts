@@ -7,6 +7,7 @@ const envPath = path.resolve(__dirname, '../.env.local');
 console.log('--- envPath', envPath);
 dotenv.config({ path: envPath });
 
+import hardwareManager from './server/HardwareManager';
 import { createServer } from 'http';
 import next from 'next';
 import { Socket, Server as SocketIOServer } from 'socket.io';
@@ -34,7 +35,7 @@ app.prepare().then(async () => {
     });
   };
 
-  const setupSocketListeners = (socket: any) => {
+  const setupSocketListeners = (socket: Socket) => {
     console.log('New client connected');
     // Disconnect the previous socket if it exists
     if (currentSocket) {
@@ -75,7 +76,10 @@ app.prepare().then(async () => {
     });
   };
 
-  io.on('connection', setupSocketListeners);
+  io.on('connection', (socket) => {
+    setupSocketListeners(socket);
+    hardwareManager.init();
+  });
 
   httpServer
     .once('error', (err) => {

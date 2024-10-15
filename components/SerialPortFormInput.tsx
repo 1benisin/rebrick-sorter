@@ -27,7 +27,7 @@ const SerialPortFormInput: React.FC<SerialPortFormInputProps> = ({ control, name
   useEffect(() => {
     // trigger the event to backend to list serial ports.
     // which triggers frontend LIST_SERIAL_PORTs_SUCCESS event and saves port paths to sortProcessStore serialPorts variable
-    socket.emit(FrontToBackEvents.LIST_SERIAL_PORTS);
+    socket.emit(FrontToBackEvents.LIST_SERIAL_PORTS, undefined);
   }, [socket]);
 
   return (

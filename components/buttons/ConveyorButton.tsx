@@ -16,7 +16,7 @@ const CalibrationButton = () => {
     const socket = serviceManager.getService(ServiceName.SOCKET);
     if (!socket) return;
     setIsRunning((prev) => !prev);
-    socket.emit(AllEvents.CONVEYOR_ON_OFF);
+    socket.emit(AllEvents.CONVEYOR_ON_OFF, undefined);
   };
 
   return (
