@@ -1,6 +1,4 @@
-// server/hardwareTypes.d.ts
-
-// lib/hardware/hardwareTypes.d.ts
+// /types/hardwareTypes.d.ts
 
 export type Part = {
   sorter: number;

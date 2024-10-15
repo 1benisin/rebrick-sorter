@@ -1,7 +1,7 @@
 // server/eventHub.ts
 
 import { EventEmitter } from 'events';
-import { AllEvents, AllEventsType } from '../types/socketMessage.type';
+import { AllEvents, AllEventsType, EventPayloads } from '../types/socketMessage.type';
 
 class EventHub extends EventEmitter {
   constructor() {
@@ -22,24 +22,24 @@ class EventHub extends EventEmitter {
     });
   }
 
-  emitEvent(event: AllEventsType, data: any): void {
+  emitEvent<K extends keyof EventPayloads>(event: K, data: EventPayloads[K]): void {
     this.emit(event, data);
   }
 
-  onEvent(event: AllEventsType, listener: (...args: any[]) => void): void {
+  onEvent<K extends keyof EventPayloads>(event: K, listener: (data: EventPayloads[K]) => void): void {
     this.on(event, listener);
   }
 
-  offListener(event: AllEventsType, listener: (...args: any[]) => void): void {
+  offListener<K extends keyof EventPayloads>(event: K, listener: (data: EventPayloads[K]) => void): void {
     this.removeListener(event, listener);
   }
 
-  offEvent(event: AllEventsType): void {
+  offEvent<K extends keyof EventPayloads>(event: K): void {
     this.removeAllListeners(event);
   }
 
   offAllEvents(): void {
-    Object.values(AllEvents).forEach((event) => {
+    (Object.values(AllEvents) as Array<keyof EventPayloads>).forEach((event) => {
       this.removeAllListeners(event);
     });
   }

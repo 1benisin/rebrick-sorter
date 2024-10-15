@@ -1,10 +1,16 @@
 // server.ts
 
+import path from 'path';
+import dotenv from 'dotenv';
+
+const envPath = path.resolve(__dirname, '../.env.local');
+console.log('--- envPath', envPath);
+dotenv.config({ path: envPath });
+
 import { createServer } from 'http';
 import next from 'next';
 import { Socket, Server as SocketIOServer } from 'socket.io';
 import eventHub from './server/eventHub';
-import hardwareManager from './server/HardwareManager';
 import { BackToFrontEvents, FrontToBackEvents } from './types/socketMessage.type';
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -57,16 +63,6 @@ app.prepare().then(async () => {
         console.log(`---F->B: ${event}`, data);
         eventHub.emitEvent(event, data);
       });
-    });
-
-    socket.on(FrontToBackEvents.INIT_HARDWARE, async (data: any) => {
-      console.log(`---F->B: ${FrontToBackEvents.INIT_HARDWARE}`, data);
-      try {
-        await hardwareManager.init(data);
-        // The success event will be emitted by the hardwareManager itself
-      } catch (error) {
-        console.error('---Failed to initialize hardware:', error);
-      }
     });
 
     // Handle client disconnection

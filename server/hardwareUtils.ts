@@ -2,7 +2,7 @@
 
 // lib/hardware/hardwareUtils.ts
 
-import { SpeedQueue } from './hardwareTypes.d';
+import { SpeedQueue } from '../types/hardwareTypes.d';
 
 // find the timestamp when part has taveled a certain distance
 export const findTimeAfterDistance = (startTime: number, distance: number, speedQueue: SpeedQueue) => {
