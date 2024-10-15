@@ -9,10 +9,10 @@ import { AllEvents, BackToFrontEvents } from '../types/socketMessage.type';
 import { DeviceSettings } from './arduinoSettings.type';
 
 const MockedPorts = [
-  '/dev/tty.usbmodem1101',
-  '/dev/tty.usbmodem1201',
-  '/dev/tty.usbmodem1401',
-  '/dev/tty.usbserial-130',
+  '/dev/tty.usbmodem1101', // sorter_A
+  '/dev/tty.usbmodem1201', // sorter_B
+  '/dev/tty.usbmodem1401', // conveyor_jets
+  '/dev/tty.usbserial-130', // hopper_feeder
 ];
 
 // Define settings for each device

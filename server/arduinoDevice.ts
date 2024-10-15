@@ -155,20 +155,6 @@ export default class ArduinoDevice {
           sorterSettings.SPEED,
         ];
         settingsMessage = 's,' + settingsValues.join(',');
-      } else if (this.settings.deviceType === 'conveyor_jets') {
-        const conveyorSettings = this.settings as ConveyorJetsSettings;
-        const settingsValues = [conveyorSettings.JET_FIRE_TIME];
-        settingsMessage = 's,' + settingsValues.join(',');
-      } else if (this.settings.deviceType === 'hopper_feeder') {
-        const hopperSettings = this.settings as HopperFeederSettings;
-        const settingsValues = [
-          hopperSettings.hopperStepsPerAction,
-          hopperSettings.hopperActionInterval,
-          hopperSettings.motorSpeed,
-          hopperSettings.ACCELERATION,
-          hopperSettings.SPEED,
-        ];
-        settingsMessage = 's,' + settingsValues.join(',');
       } else {
         console.error(`Unknown device type for ${this.port?.path}`);
         return;
