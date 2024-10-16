@@ -23,7 +23,7 @@ const StatusIndicator = () => {
       newStates[serviceName] = serviceManager.getServiceState(serviceName);
     });
     setServiceStates(newStates);
-  },[]);
+  }, []);
 
   useEffect(() => {
     updateServiceStates();

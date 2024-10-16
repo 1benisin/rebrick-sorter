@@ -31,16 +31,14 @@ class HardwareManager {
   protected initialized: boolean = false;
   protected initializationPromise: Promise<void> | null = null;
   private conveyor: Conveyor;
-  private jetPositions: number[];
-  private conveyorSpeed: number;
+  private jetPositions: number[] = [];
+  private conveyorSpeed: number = 0;
   serialPorts: Record<string, string> = {};
   sorterTravelTimes: number[][] = [];
   sorterBinPositions: { x: number; y: number }[][] = [];
 
   private constructor() {
     this.conveyor = conveyor;
-    this.conveyorSpeed = 0;
-    this.jetPositions = [];
     // setup event listeners
     eventHub.onEvent(AllEvents.HOME_SORTER, this.homeSorter);
     eventHub.onEvent(AllEvents.FIRE_JET, this.fireJet);
@@ -56,50 +54,56 @@ class HardwareManager {
     return HardwareManager.instance;
   }
 
-  public async init(): Promise<void> {
-    // if (this.initialized) {
-    //   console.log(`${this.constructor.name} is already initialized`);
-    //   return;
-    // }
+  // public async init(): Promise<void> {
+  //   if (this.initialized) {
+  //     console.log(`${this.constructor.name} is already initialized`);
+  //     return;
+  //   }
 
-    if (this.initializationPromise) {
-      console.log(`${this.constructor.name} initialization is already in progress`);
-      return this.initializationPromise;
+  //   if (this.initializationPromise) {
+  //     console.log(`${this.constructor.name} initialization is already in progress`);
+  //     return this.initializationPromise;
+  //   }
+
+  //   this.initializationPromise = this.initializeInternal();
+
+  //   try {
+  //     await this.initializationPromise;
+  //     this.initialized = true;
+  //   } finally {
+  //     this.initializationPromise = null;
+  //   }
+  // }
+
+  // public reinit = () => {
+  //   this.initialized = false;
+  //   this.initializationPromise = null;
+  //   this.init();
+  // };
+
+  private fetchSettings = async () => {
+    // get settings from firebase
+    let initSettings: SettingsType;
+    const settingsRef = doc(db, 'settings', 'dev-user');
+    const settinsSnapshot = await getDoc(settingsRef);
+    if (settinsSnapshot.exists()) {
+      const settingsData = settinsSnapshot.data();
+      initSettings = settingsSchema.parse(settingsData);
+    } else {
+      throw new Error('Settings document does not exist');
     }
-
-    this.initializationPromise = this.initializeInternal();
-
-    try {
-      await this.initializationPromise;
-      this.initialized = true;
-    } finally {
-      this.initializationPromise = null;
-    }
-  }
-
-  public reinit = () => {
-    this.initialized = false;
-    this.initializationPromise = null;
-    this.init();
+    console.log('---initSettings:', initSettings);
+    return initSettings;
   };
 
-  private initializeInternal = async () => {
+  private init = async () => {
     console.log('HardwareManager initializing');
     try {
-      // get settings from firebase
-      let initSettings: SettingsType;
-      const settingsRef = doc(db, 'settings', 'dev-user');
-      const settinsSnapshot = await getDoc(settingsRef);
-      if (settinsSnapshot.exists()) {
-        const settingsData = settinsSnapshot.data();
-        initSettings = settingsSchema.parse(settingsData);
-      } else {
-        throw new Error('Settings document does not exist');
-      }
-      console.log('---initSettings:', initSettings);
+      const initSettings = await this.fetchSettings();
 
       this.conveyorSpeed = initSettings.conveyorSpeed;
       this.jetPositions = initSettings.sorters.map((sorter) => sorter.jetPosition);
+      this.sorterTravelTimes = sorterTravelTimes;
 
       // connect serial ports
       let serialPorts = initSettings.sorters.map((sorter) => ({
@@ -119,9 +123,6 @@ class HardwareManager {
         acc[port.name] = port.path;
         return acc;
       }, {});
-
-      // set sorter travel times
-      this.sorterTravelTimes = sorterTravelTimes;
 
       // generate sorter bin positions
       this.generateBinPositions(initSettings.sorters);
