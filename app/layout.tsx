@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import AlertDisplay from '@/components/AlertDisplay';
 import ServiceInitializer from '@/components/ServiceInitializer';
-import NavBar from '@/components/Navbar';
+import NavBar from '@/components/navbar';
 
 const font = Inter({ subsets: ['latin'] });
 

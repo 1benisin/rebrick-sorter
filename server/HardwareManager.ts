@@ -96,7 +96,7 @@ class HardwareManager {
     return initSettings;
   };
 
-  private init = async () => {
+  public init = async () => {
     console.log('HardwareManager initializing');
     try {
       const initSettings = await this.fetchSettings();
