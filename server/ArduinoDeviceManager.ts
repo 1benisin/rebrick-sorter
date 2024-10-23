@@ -1,5 +1,3 @@
-// server/serialPortManager.ts
-
 import ArduinoDevice from './arduinoDevice';
 import { SerialPort } from 'serialport';
 import { ArduinoDeviceCommand } from '../types/arduinoCommands.type';
@@ -27,6 +25,7 @@ const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
     ACCELERATION: 6500,
     HOMING_SPEED: 1000,
     SPEED: 175,
+    ROW_MAJOR_ORDER: false,
   },
   sorter_B: {
     deviceType: 'sorter',
@@ -38,6 +37,7 @@ const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
     ACCELERATION: 5000,
     HOMING_SPEED: 1000,
     SPEED: 120,
+    ROW_MAJOR_ORDER: true,
   },
   conveyor_jets: {
     deviceType: 'conveyor_jets',

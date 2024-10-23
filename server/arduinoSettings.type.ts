@@ -16,6 +16,7 @@ export interface SorterSettings extends BaseSettings {
   ACCELERATION: number;
   HOMING_SPEED: number;
   SPEED: number;
+  ROW_MAJOR_ORDER: boolean;
 }
 
 export interface ConveyorJetsSettings extends BaseSettings {

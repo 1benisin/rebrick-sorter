@@ -27,6 +27,7 @@ typedef struct {
   int ACCELERATION;
   int HOMING_SPEED;
   int SPEED;
+  bool ROW_MAJOR_ORDER; 
 } DeviceSettings;
 
 DeviceSettings settings;
@@ -111,19 +112,28 @@ void moveSorterToPosition(int xPos, int yPos, bool blocking = false) {
 }
 
 void moveToBin(int binNum, bool blocking = false) {
-  int xIndex = (binNum - 1) / settings.GRID_DIMENSION;
-  int yIndex = (binNum - 1) % settings.GRID_DIMENSION;
+  int xIndex, yIndex;
+  if (settings.ROW_MAJOR_ORDER) {
+    // Row-major order (rows first)
+    xIndex = (binNum - 1) % settings.GRID_DIMENSION;
+    yIndex = (binNum - 1) / settings.GRID_DIMENSION;
+  } else {
+    // Column-major order (columns first)
+    xIndex = (binNum - 1) / settings.GRID_DIMENSION;
+    yIndex = (binNum - 1) % settings.GRID_DIMENSION;
+  }
   int xPos = xIndex * xStepsPerBin + settings.X_OFFSET;
   int yPos = yIndex * yStepsPerBin + settings.Y_OFFSET;
   xStepper->moveTo(xPos, blocking);
   yStepper->moveTo(yPos, blocking);
 }
 
+
 void processSettings(char *message) {
   // Parse settings from message
-  // Expected format: 's,<GRID_DIMENSION>,<X_OFFSET>,<Y_OFFSET>,<X_STEPS_TO_LAST>,<Y_STEPS_TO_LAST>,<ACCELERATION>,<HOMING_SPEED>,<SPEED>'
+  // Expected format: 's,<GRID_DIMENSION>,<X_OFFSET>,<Y_OFFSET>,<X_STEPS_TO_LAST>,<Y_STEPS_TO_LAST>,<ACCELERATION>,<HOMING_SPEED>,<SPEED>,<ROW_MAJOR_ORDER>'
   char *token;
-  int values[10]; // assuming we have up to 10 settings
+  int values[10]; // Adjusted for 9 settings
   int valueIndex = 0;
 
   // Skip 's,' and start tokenizing
@@ -133,7 +143,7 @@ void processSettings(char *message) {
     token = strtok(NULL, ",");
   }
 
-  if (valueIndex >= 8) { // Ensure we have all required settings
+  if (valueIndex >= 9) { // Ensure we have all required settings
     settings.GRID_DIMENSION = values[0];
     settings.X_OFFSET = values[1];
     settings.Y_OFFSET = values[2];
@@ -142,22 +152,11 @@ void processSettings(char *message) {
     settings.ACCELERATION = values[5];
     settings.HOMING_SPEED = values[6];
     settings.SPEED = values[7];
+    settings.ROW_MAJOR_ORDER = (values[8] != 0); // Convert to boolean
 
     // Recalculate steps per bin
     xStepsPerBin = (settings.X_STEPS_TO_LAST - settings.X_OFFSET) / (settings.GRID_DIMENSION -1);
     yStepsPerBin = (settings.Y_STEPS_TO_LAST - settings.Y_OFFSET) / (settings.GRID_DIMENSION -1);
-
-    // Remove population of binLocations
-    // int binNum = 1;
-    // for (int x = 0; x < settings.GRID_DIMENSION; x++) {
-    //   for (int y = 0; y < settings.GRID_DIMENSION; y++) {
-    //     if (binNum - 1 < MAX_GRID_DIMENSION * MAX_GRID_DIMENSION) {
-    //       binLocations[binNum-1].x = (x * xStepsPerBin) + settings.X_OFFSET;
-    //       binLocations[binNum-1].y = (y * yStepsPerBin) + settings.Y_OFFSET;
-    //       binNum++;
-    //     }
-    //   }
-    // }
 
     // Update stepper settings
     xStepper->setAcceleration(settings.ACCELERATION);
@@ -171,6 +170,7 @@ void processSettings(char *message) {
     print("Error: Not enough settings provided");
   }
 }
+
 
 void processMessage(char *message) {
   if (!settingsInitialized && message[0] != 's') {
@@ -206,11 +206,15 @@ void processMessage(char *message) {
     // MOVE TO CENTER
     case 'h': { 
       int centerBin = ((settings.GRID_DIMENSION * settings.GRID_DIMENSION) + 1) / 2;
+      if (settings.ROW_MAJOR_ORDER) {
+        // Adjust center bin for row-major order if necessary
+      }
       Serial.print("centerBin: ");
       print(centerBin);
       moveToBin(centerBin);
       break;
     }
+
 
     // HOMING PROCEDURE
     case 'a': {

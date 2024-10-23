@@ -122,7 +122,7 @@ export default class ArduinoDevice {
       console.error('No port to handle data from');
       return;
     }
-    const message = data ? `${command}${data}` : command;
+    const message = data !== undefined ? `${command}${data}` : command;
     const formattedMessage = this.constructMessage(message);
     this.port.write(formattedMessage, (err) => {
       if (err) {
@@ -153,6 +153,7 @@ export default class ArduinoDevice {
           sorterSettings.ACCELERATION,
           sorterSettings.HOMING_SPEED,
           sorterSettings.SPEED,
+          sorterSettings.ROW_MAJOR_ORDER ? 1 : 0,
         ];
         settingsMessage = 's,' + settingsValues.join(',');
       } else {
