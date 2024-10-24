@@ -17,18 +17,6 @@ const MockedPorts = [
 const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
   sorter_A: {
     deviceType: 'sorter',
-    GRID_DIMENSION: 16,
-    X_OFFSET: 40,
-    Y_OFFSET: 10,
-    X_STEPS_TO_LAST: 7920,
-    Y_STEPS_TO_LAST: 7820,
-    ACCELERATION: 6500,
-    HOMING_SPEED: 1000,
-    SPEED: 175,
-    ROW_MAJOR_ORDER: false,
-  },
-  sorter_B: {
-    deviceType: 'sorter',
     GRID_DIMENSION: 12,
     X_OFFSET: 10,
     Y_OFFSET: 10,
@@ -38,6 +26,18 @@ const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
     HOMING_SPEED: 1000,
     SPEED: 120,
     ROW_MAJOR_ORDER: true,
+  },
+  sorter_B: {
+    deviceType: 'sorter',
+    GRID_DIMENSION: 16,
+    X_OFFSET: 40,
+    Y_OFFSET: 10,
+    X_STEPS_TO_LAST: 7920,
+    Y_STEPS_TO_LAST: 7820,
+    ACCELERATION: 6500,
+    HOMING_SPEED: 1000,
+    SPEED: 175,
+    ROW_MAJOR_ORDER: false,
   },
   conveyor_jets: {
     deviceType: 'conveyor_jets',

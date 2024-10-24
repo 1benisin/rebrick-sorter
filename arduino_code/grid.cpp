@@ -290,6 +290,7 @@ void loop() {
   // Check if the move is complete and send a message if it is
   if (!moveCompleteSent && !xStepper->isRunning() && !yStepper->isRunning()) {
     print("MC"); // Send message over serial
+    print(curBin);
     moveCompleteSent = true; // Set the flag to indicate that the message has been sent
   }
 
