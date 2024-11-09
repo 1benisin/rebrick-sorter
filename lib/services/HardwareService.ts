@@ -1,8 +1,6 @@
 // lib/services/HardwareService.ts
 
 import { Service, ServiceName, ServiceState } from './Service.interface';
-import { HardwareInitDto } from '@/types/hardwareInit.dto';
-import { SerialPortName } from '@/types/serialPort.type';
 import serviceManager from './ServiceManager';
 import { AllEvents } from '@/types/socketMessage.type';
 
