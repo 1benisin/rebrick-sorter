@@ -113,11 +113,15 @@ class HardwareManager {
       serialPorts.push({ name: 'conveyor_jets', path: initSettings.conveyorJetsSerialPort });
       serialPorts.push({ name: 'hopper_feeder', path: initSettings.hopperFeederSerialPort });
 
+      console.log('---serialPorts:', serialPorts);
       const connectionStatuses = await arduinoDeviceManager.connectAllDevices(serialPorts);
+      console.log('---connectionStatuses:', connectionStatuses);
       const isEveryPortConnected = connectionStatuses.every((status) => status.success);
-      if (!isEveryPortConnected) {
-        throw new Error(`Failed to connect to serial ports: ${connectionStatuses}`);
-      }
+      console.log('---isEveryPortConnected:', isEveryPortConnected);
+      // if (!isEveryPortConnected) {
+      //   console.error(`---Failed to connect to serial ports: ${connectionStatuses}`);
+      //   throw new Error(`Failed to connect to serial ports: ${connectionStatuses}`);
+      // }
 
       this.serialPorts = serialPorts.reduce((acc: Record<string, string>, port) => {
         acc[port.name] = port.path;
@@ -201,6 +205,7 @@ class HardwareManager {
 
   public homeSorter = ({ sorter }: { sorter: number }) => {
     console.log('homeSorter:', sorter);
+
     const arduinoDeviceCommand: ArduinoDeviceCommand = {
       arduinoPath: this.serialPorts[serialPortNames[sorter as keyof typeof serialPortNames]],
       command: ArduinoCommands.MOVE_TO_ORIGIN,
