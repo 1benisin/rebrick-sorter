@@ -19,7 +19,7 @@ const MoveSorterButton = () => {
   const handleClick = async () => {
     if (!socket) return;
     console.log(AllEvents.MOVE_SORTER, { sorter, bin });
-    socket.emit(AllEvents.MOVE_SORTER, { sorter, bin });
+    socket.emit(AllEvents.MOVE_SORTER, { sorter: parseInt(sorter), bin: parseInt(bin) });
   };
 
   return (

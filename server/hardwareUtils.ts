@@ -2,7 +2,7 @@
 
 // lib/hardware/hardwareUtils.ts
 
-import { SpeedQueue } from './hardwareTypes.d';
+import { SpeedQueue } from '../types/hardwareTypes.d';
 
 // find the timestamp when part has taveled a certain distance
 export const findTimeAfterDistance = (startTime: number, distance: number, speedQueue: SpeedQueue) => {
@@ -43,48 +43,6 @@ export const findTimeAfterDistance = (startTime: number, distance: number, speed
     remainingDistance -= distanceTraveled;
   }
   return finishTime;
-};
-
-export const findPositionAtTime = (
-  startPos: number,
-  startTime: number,
-  endTime: number,
-  speedQueue: {
-    time: number;
-    speed: number;
-  }[],
-) => {
-  let remainingTime = endTime - startTime;
-  if (remainingTime < 0) {
-    console.warn('findPositionAtTime: startTime is after endTime'); // sanity check
-    return startPos;
-  }
-  let endPos = startPos;
-
-  for (let i = 0; i < speedQueue.length; i++) {
-    // exit condition
-    if (remainingTime <= 1) break;
-
-    const { speed, time: speedStart } = speedQueue[i];
-    let { time: speedEnd } = speedQueue[i + 1] || {};
-
-    // if no next speed change use 5 minutes from now as the end time
-    speedEnd = speedEnd || Date.now() + 5 * 60 * 1000;
-
-    // use later start time
-    const start = speedStart > startTime ? speedStart : startTime;
-
-    let timeTraveled = speedEnd - start;
-    // if speed ended before the start time of the part timeTraveled will be negative
-    // -clamp the time traveled to 0 cause it has no effect on the position
-    timeTraveled = timeTraveled < 0 ? 0 : timeTraveled > remainingTime ? remainingTime : timeTraveled;
-    let distanceTraveled = timeTraveled * speed;
-
-    remainingTime -= timeTraveled;
-    endPos += distanceTraveled;
-  }
-
-  return endPos;
 };
 
 // find travel time between last bin and next bin

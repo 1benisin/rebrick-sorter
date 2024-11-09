@@ -29,23 +29,6 @@ class HardwareService implements Service {
         return;
       }
 
-      const hardwareSettings: HardwareInitDto = {
-        defaultConveyorSpeed: settings.conveyorSpeed,
-        serialPorts: [
-          ...settings.sorters.map((sorter) => ({
-            name: sorter.name as SerialPortName,
-            path: sorter.serialPort,
-          })),
-          { name: 'conveyor_jets' as SerialPortName, path: settings.conveyorJetsSerialPort },
-          { name: 'hopper_feeder' as SerialPortName, path: settings.hopperFeederSerialPort },
-        ],
-        sorterDimensions: settings.sorters.map((sorter) => ({
-          gridWidth: sorter.gridWidth,
-          gridHeight: sorter.gridHeight,
-        })),
-        jetPositions: settings.sorters.map((sorter) => sorter.jetPosition),
-      };
-
       socket.on(AllEvents.INIT_HARDWARE_SUCCESS, (success) => {
         if (success) {
           this.status = ServiceState.INITIALIZED;
@@ -53,8 +36,6 @@ class HardwareService implements Service {
           this.status = ServiceState.FAILED;
         }
       });
-
-      socket.emit(AllEvents.INIT_HARDWARE, hardwareSettings);
     } catch (error) {
       this.status = ServiceState.FAILED;
       console.error('Error initializing hardware:', error);

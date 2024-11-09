@@ -26,8 +26,8 @@ export const settingsSchema = z.object({
   classificationThresholdPercentage: z.coerce.number().min(0).max(2).default(1),
   camera1VerticalPositionPercentage: z.coerce.number().default(1),
   camera2VerticalPositionPercentage: z.coerce.number().default(-35),
-  videoStreamId1: z.string().default(''),
-  videoStreamId2: z.string().default(''),
+  videoStreamId1: z.string().default(''), // deviceId
+  videoStreamId2: z.string().default(''), // deviceId
   sorters: z.array(sorterSettingsSchema).default([]),
 });
 

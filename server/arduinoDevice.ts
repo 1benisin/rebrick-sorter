@@ -122,7 +122,7 @@ export default class ArduinoDevice {
       console.error('No port to handle data from');
       return;
     }
-    const message = data ? `${command}${data}` : command;
+    const message = data !== undefined ? `${command}${data}` : command;
     const formattedMessage = this.constructMessage(message);
     this.port.write(formattedMessage, (err) => {
       if (err) {
@@ -153,20 +153,7 @@ export default class ArduinoDevice {
           sorterSettings.ACCELERATION,
           sorterSettings.HOMING_SPEED,
           sorterSettings.SPEED,
-        ];
-        settingsMessage = 's,' + settingsValues.join(',');
-      } else if (this.settings.deviceType === 'conveyor_jets') {
-        const conveyorSettings = this.settings as ConveyorJetsSettings;
-        const settingsValues = [conveyorSettings.JET_FIRE_TIME];
-        settingsMessage = 's,' + settingsValues.join(',');
-      } else if (this.settings.deviceType === 'hopper_feeder') {
-        const hopperSettings = this.settings as HopperFeederSettings;
-        const settingsValues = [
-          hopperSettings.hopperStepsPerAction,
-          hopperSettings.hopperActionInterval,
-          hopperSettings.motorSpeed,
-          hopperSettings.ACCELERATION,
-          hopperSettings.SPEED,
+          sorterSettings.ROW_MAJOR_ORDER ? 1 : 0,
         ];
         settingsMessage = 's,' + settingsValues.join(',');
       } else {

@@ -1,5 +1,3 @@
-// server/serialPortManager.ts
-
 import ArduinoDevice from './arduinoDevice';
 import { SerialPort } from 'serialport';
 import { ArduinoDeviceCommand } from '../types/arduinoCommands.type';
@@ -9,26 +7,15 @@ import { AllEvents, BackToFrontEvents } from '../types/socketMessage.type';
 import { DeviceSettings } from './arduinoSettings.type';
 
 const MockedPorts = [
-  '/dev/tty.usbmodem1101',
-  '/dev/tty.usbmodem1201',
-  '/dev/tty.usbmodem1401',
-  '/dev/tty.usbserial-130',
+  '/dev/tty.usbmodem1101', // sorter_A
+  '/dev/tty.usbmodem1201', // sorter_B
+  '/dev/tty.usbmodem1401', // conveyor_jets
+  '/dev/tty.usbserial-130', // hopper_feeder
 ];
 
 // Define settings for each device
 const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
   sorter_A: {
-    deviceType: 'sorter',
-    GRID_DIMENSION: 16,
-    X_OFFSET: 40,
-    Y_OFFSET: 10,
-    X_STEPS_TO_LAST: 7920,
-    Y_STEPS_TO_LAST: 7820,
-    ACCELERATION: 6500,
-    HOMING_SPEED: 1000,
-    SPEED: 175,
-  },
-  sorter_B: {
     deviceType: 'sorter',
     GRID_DIMENSION: 12,
     X_OFFSET: 10,
@@ -38,6 +25,19 @@ const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
     ACCELERATION: 5000,
     HOMING_SPEED: 1000,
     SPEED: 120,
+    ROW_MAJOR_ORDER: true,
+  },
+  sorter_B: {
+    deviceType: 'sorter',
+    GRID_DIMENSION: 16,
+    X_OFFSET: 40,
+    Y_OFFSET: 10,
+    X_STEPS_TO_LAST: 7920,
+    Y_STEPS_TO_LAST: 7820,
+    ACCELERATION: 6500,
+    HOMING_SPEED: 1000,
+    SPEED: 175,
+    ROW_MAJOR_ORDER: false,
   },
   conveyor_jets: {
     deviceType: 'conveyor_jets',

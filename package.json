@@ -47,6 +47,7 @@
     "clsx": "^1.2.1",
     "cmdk": "^0.2.0",
     "crisp-sdk-web": "^1.0.19",
+    "dotenv": "^16.4.5",
     "encoding": "^0.1.13",
     "firebase": "^10.7.2",
     "lucide-react": "^0.259.0",

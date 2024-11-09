@@ -2,7 +2,7 @@
 
 import { io, Socket } from 'socket.io-client';
 import { Service, ServiceState } from './Service.interface';
-import { AllEvents } from '@/types/socketMessage.type';
+import { AllEvents, EventPayloads } from '@/types/socketMessage.type';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 
 class SocketService implements Service {
@@ -77,9 +77,9 @@ class SocketService implements Service {
     return this.transport;
   }
 
-  public emit(event: string, data?: any): void {
+  public emit<K extends keyof EventPayloads>(event: K, data: EventPayloads[K]): void {
     if (this.socket && this.state === ServiceState.INITIALIZED) {
-      !!data ? this.socket.emit(event, data) : this.socket.emit(event);
+      this.socket.emit(event, data);
     } else {
       console.error('Cannot emit event: socket is not initialized');
     }

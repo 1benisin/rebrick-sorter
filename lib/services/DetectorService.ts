@@ -99,7 +99,7 @@ class DetectorService implements Service {
     }
   }
 
-  // Method to calibrate conveyor spped
+  // Method to calibrate conveyor speed
   async calibrateConveyorSpeed(): Promise<number> {
     try {
       if (!this.model) {

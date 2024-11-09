@@ -1,5 +1,3 @@
-// components/Navbar.tsx
-
 // components/navbar.tsx
 
 'use client';

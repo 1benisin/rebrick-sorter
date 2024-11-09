@@ -1,7 +1,5 @@
 // lib/services/SorterService.ts
 
-// lib/sortProcessCtrl.ts
-
 import { Service, ServiceName, ServiceState } from './Service.interface';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import { alertStore } from '@/stores/alertStore';
@@ -72,12 +70,14 @@ class SortProcessControllerService implements Service {
 
         // TODO: properly calculate distance between detections using conveyor speed logs
         // for each speed change in the speed log that would have effected the lastDetection calculate where it would be at the unmatchedDetection.timestamp
-        const conveyorSpeedLog = sortProcessStore.getState().conveyorSpeedLog;
+
+        const settingsService = serviceManager.getService(ServiceName.SETTINGS);
+        const { conveyorSpeed } = settingsService.getSettings();
         const predictedX = findPositionAtTime(
           lastDetection.centroid.x,
           lastDetection.timestamp,
           unmatchedDetection.timestamp,
-          conveyorSpeedLog,
+          conveyorSpeed,
         );
         // const distanceTravelled = (unmatchedDetection.timestamp - lastDetection.timestamp) * conveyorSpeed;
         // const predictedX = lastDetection.centroid.x + distanceTravelled;

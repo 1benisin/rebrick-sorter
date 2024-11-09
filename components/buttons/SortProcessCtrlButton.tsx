@@ -19,7 +19,7 @@ const SortProcessCtrlButton = () => {
     if (isRunning) {
       sorterService.stop();
       const socket = serviceManager.getService(ServiceName.SOCKET);
-      if (!!socket) socket.emit(AllEvents.CLEAR_HARDWARE_ACTIONS);
+      if (!!socket) socket.emit(AllEvents.CLEAR_HARDWARE_ACTIONS, undefined);
     } else {
       sorterService.start();
     }

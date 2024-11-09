@@ -18,7 +18,7 @@ const JetButton = () => {
   const handleClick = async () => {
     if (!socket) return;
     console.log(AllEvents.FIRE_JET, jet);
-    socket.emit(AllEvents.FIRE_JET, jet);
+    socket.emit(AllEvents.FIRE_JET, { sorter: parseInt(jet) });
   };
 
   return (

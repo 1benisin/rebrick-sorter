@@ -16,15 +16,6 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": [
-    "server.ts",
-    "server/**/*.ts",
-    "types/arduinoCommands.type.ts",
-    "types/serialPort.type.ts",
-    "types/sortPart.dto.ts",
-    "types/hardwareInit.dto.ts",
-    "types/socketMessage.type.ts",
-    "lib/utils.ts"
-  ],
+  "include": ["server.ts", "server/**/*.ts", "types/**/*.ts", "lib/utils.ts", "lib/firebase.ts", ".env.local"],
   "exclude": ["node_modules"]
 }

@@ -11,10 +11,10 @@ const HomeSorterButton = () => {
   const handleClick = async () => {
     const socket = serviceManager.getService(ServiceName.SOCKET);
     if (!socket) return;
-    socket.emit(AllEvents.HOME_SORTER, '0');
+    socket.emit(AllEvents.HOME_SORTER, { sorter: 0 });
     // delay 100 ms to allow the sorter to process the command
     await new Promise((resolve) => setTimeout(resolve, 100));
-    socket.emit(AllEvents.HOME_SORTER, '1');
+    socket.emit(AllEvents.HOME_SORTER, { sorter: 1 });
   };
 
   return <Button onClick={handleClick}>Home Sorter</Button>;
