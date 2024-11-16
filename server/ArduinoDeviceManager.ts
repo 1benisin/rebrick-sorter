@@ -42,13 +42,13 @@ const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
   sorter_C: {
     deviceType: 'sorter',
     GRID_DIMENSION: 20,
-    X_OFFSET: 10,
-    Y_OFFSET: 10,
+    X_OFFSET: 15,
+    Y_OFFSET: 900,
     X_STEPS_TO_LAST: 9900,
-    Y_STEPS_TO_LAST: 9900,
+    Y_STEPS_TO_LAST: 10480,
     ACCELERATION: 6500,
     HOMING_SPEED: 1000,
-    SPEED: 250,
+    SPEED: 200,
     ROW_MAJOR_ORDER: true,
   },
   sorter_D: {
@@ -60,7 +60,7 @@ const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
     Y_STEPS_TO_LAST: 9150,
     ACCELERATION: 6500,
     HOMING_SPEED: 1000,
-    SPEED: 175,
+    SPEED: 200,
     ROW_MAJOR_ORDER: true,
   },
   conveyor_jets: {
