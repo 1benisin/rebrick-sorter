@@ -7,12 +7,13 @@ import { brickognizeResponseSchema, BrickognizeResponse } from '@/types/types';
 import { ClassificationItem } from '@/types/detectionPairs.d';
 import { SortPartDto } from '@/types/sortPart.dto';
 import { BinLookupType, binLookupSchema } from '@/types/binLookup.type';
-import { ref, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { ref, getDownloadURL, uploadString } from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
 import { SkipSortReason } from '@/types/detectionPairs.d';
 import { Service, ServiceName, ServiceState } from './Service.interface';
 import serviceManager from './ServiceManager';
 import { AllEvents } from '@/types/socketMessage.type';
+import { collection, doc, setDoc } from 'firebase/firestore';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -207,6 +208,37 @@ class ClassifierService implements Service {
     }
   }
 
+  private async saveImageAndResponse(imageURI: string, brickognizeResponse: BrickognizeResponse): Promise<void> {
+    try {
+      // Get a new document reference with an auto-generated ID
+      const classificationRef = doc(collection(db, 'classifications'));
+      const id = classificationRef.id;
+
+      // Create a reference to Firebase Storage
+      const imageRef = ref(storage, `classified_images/${id}.jpg`);
+
+      // Upload the image
+      await uploadString(imageRef, imageURI, 'data_url');
+
+      // Get the download URL
+      const imageUrl = await getDownloadURL(imageRef);
+
+      // Prepare the data to save to Firestore
+      const dataToSave = {
+        imageUrl: imageUrl,
+        brickognizeResponse: brickognizeResponse,
+        timestamp: Date.now(),
+      };
+
+      // Save the data to Firestore
+      await setDoc(classificationRef, dataToSave);
+
+      console.log('Image and response saved successfully.');
+    } catch (error) {
+      console.error('Error saving image and response:', error);
+    }
+  }
+
   private async classifyImage(imageURI: string): Promise<BrickognizeResponse> {
     try {
       // Send the request to your Next.js server's API route with the image URI
@@ -215,6 +247,9 @@ class ClassifierService implements Service {
       });
       // validate the response
       const brickognizeResponse = brickognizeResponseSchema.parse(response.data);
+
+      // Save the image and response to Firebase
+      await this.saveImageAndResponse(imageURI, brickognizeResponse);
 
       // Handle the server response as needed
       return brickognizeResponse;

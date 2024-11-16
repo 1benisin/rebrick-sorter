@@ -15,6 +15,10 @@ const HomeSorterButton = () => {
     // delay 100 ms to allow the sorter to process the command
     await new Promise((resolve) => setTimeout(resolve, 100));
     socket.emit(AllEvents.HOME_SORTER, { sorter: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    socket.emit(AllEvents.HOME_SORTER, { sorter: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    socket.emit(AllEvents.HOME_SORTER, { sorter: 3 });
   };
 
   return <Button onClick={handleClick}>Home Sorter</Button>;

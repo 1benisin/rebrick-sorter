@@ -1,6 +1,8 @@
 
 #define JET_0_PIN 11
 #define JET_1_PIN 12
+#define JET_2_PIN 10
+#define JET_3_PIN 9
 
 #define C_DIR1_PIN 7
 #define C_DIR2_PIN 8
@@ -17,6 +19,8 @@ void setup()
 
   pinMode(JET_0_PIN, OUTPUT);
   pinMode(JET_1_PIN, OUTPUT);
+  pinMode(JET_2_PIN, OUTPUT);
+  pinMode(JET_3_PIN, OUTPUT);
   
   pinMode(C_DIR1_PIN, OUTPUT);
   pinMode(C_DIR2_PIN, OUTPUT);
@@ -69,6 +73,16 @@ void processMessage(char *message) {
         digitalWrite(JET_1_PIN, HIGH);
         delay(JET_FIRE_TIME);
         digitalWrite(JET_1_PIN, LOW);
+      }
+      else if(actionValue == 2) {
+        digitalWrite(JET_2_PIN, HIGH);
+        delay(JET_FIRE_TIME);
+        digitalWrite(JET_2_PIN, LOW);
+      }
+      else if(actionValue == 3) {
+        digitalWrite(JET_3_PIN, HIGH);
+        delay(JET_FIRE_TIME);
+        digitalWrite(JET_3_PIN, LOW);
       }
       else {
         print("no matching jet number");
