@@ -1,182 +1,192 @@
-// components/DualVideo.tsx
+import { useSettings } from '@/components/hooks/useSettings';
+import { SettingsType } from '@/types/settings.type';
+import React, { useState, useEffect, useRef } from 'react';
 
-// video.tsx:
-'use client';
+const DualVideo = () => {
+  const { settings, saveSettings, isLoading } = useSettings();
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSettings } from '@/hooks/useSettings';
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId1, setSelectedDeviceId1] = useState('');
+  const [selectedDeviceId2, setSelectedDeviceId2] = useState('');
 
-const TEST_VIDEOS = ['normal', 'too-close'];
-const TEST_VIDEO_PATH = '/test-videos/';
-const VIDEO_PLAYBACK_RATE = 1;
-
-const Video = () => {
   const videoRef1 = useRef<HTMLVideoElement>(null);
   const videoRef2 = useRef<HTMLVideoElement>(null);
-  const [cameras, setCameras] = useState<{ deviceId: string; label: string }[]>([]);
-  const [selectedCamera1, setSelectedCamera1] = useState('');
-  const [selectedCamera2, setSelectedCamera2] = useState('');
-  const { settings, saveSettings, isLoading, error } = useSettings();
 
-  const selectCamera1 = useCallback(
-    async (cameraId: string) => {
-      if (videoRef1.current) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: cameraId, width: { ideal: 3840, max: 3840 }, height: { ideal: 2160, max: 2160 } },
-          });
-          videoRef1.current.src = '';
-          videoRef1.current.srcObject = stream;
-        } catch (error) {
-          console.error('Error accessing the selected camera:', error);
-        }
-
-        videoRef1.current.onloadedmetadata = () => {
-          setSelectedCamera1(cameraId);
-          if (settings) {
-            saveSettings({ ...settings, videoStreamId1: cameraId });
-          }
-          console.log('videoRef1.current.videoWidth', videoRef1.current?.videoWidth);
-          console.log('videoRef1.current.videoHeight', videoRef1.current?.videoHeight);
-        };
-      }
-    },
-    [saveSettings, settings],
-  );
-
-  const selectCamera2 = useCallback(
-    async (cameraId: string) => {
-      if (videoRef2.current) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: cameraId, width: { ideal: 3840, max: 3840 }, height: { ideal: 2160, max: 2160 } },
-          });
-          videoRef2.current.src = '';
-          videoRef2.current.srcObject = stream;
-        } catch (error) {
-          console.error('Error accessing the selected camera:', error);
-        }
-
-        videoRef2.current.onloadedmetadata = () => {
-          setSelectedCamera2(cameraId);
-          if (settings) {
-            saveSettings({ ...settings, videoStreamId2: cameraId });
-          }
-          console.log('videoRef2.current.videoWidth', videoRef2.current?.videoWidth);
-          console.log('videoRef2.current.videoHeight', videoRef2.current?.videoHeight);
-        };
-      }
-    },
-    [settings, saveSettings],
-  );
-
+  // Fetch video devices when component mounts
   useEffect(() => {
-    const getCameras = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter((device) => device.kind === 'videoinput');
-        console.log('videoDevices', videoDevices);
-        setCameras(
-          videoDevices.map((device) => ({
-            deviceId: device.deviceId,
-            label: device.label || `Camera ${device.deviceId}`,
-          })),
-        );
+    // Request permission to access media devices
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
+        // Stop the stream immediately since we just need permissions
+        stream.getTracks().forEach((track) => track.stop());
 
-        // Automatically assign cameras based on settings
-        if (settings?.videoStreamId1) {
-          const deviceExists = cameras.some((camera) => camera.deviceId === settings.videoStreamId1);
-          if (deviceExists) {
-            await selectCamera1(settings?.videoStreamId1);
-          }
-        }
-        if (settings?.videoStreamId2) {
-          const deviceExists = cameras.some((camera) => camera.deviceId === settings.videoStreamId2);
-          if (deviceExists) {
-            await selectCamera2(settings.videoStreamId2);
-          }
-        }
-      } catch (error) {
+        // Now enumerate devices
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+          const videoInputs = devices.filter((device) => device.kind === 'videoinput');
+          setVideoDevices(videoInputs);
+        });
+      })
+      .catch((error) => {
         console.error('Error accessing media devices:', error);
+      });
+  }, []);
+
+  // Initialize selected devices from settings
+  useEffect(() => {
+    if (settings) {
+      // check if selectedDeviceId1 is in the list of video devices
+      const device1Exists = videoDevices.some((device) => device.deviceId === settings.videoStreamId1);
+      if (device1Exists) {
+        setSelectedDeviceId1(settings.videoStreamId1);
+      }
+      const device2Exists = videoDevices.some((device) => device.deviceId === settings.videoStreamId2);
+      if (device2Exists) {
+        setSelectedDeviceId2(settings.videoStreamId2);
+      }
+    }
+  }, [settings, videoDevices]);
+
+  // Handle changes to selectedDeviceId1
+  useEffect(() => {
+    let stream: MediaStream;
+
+    // check if selectedDeviceId1 is in the list of video devices
+    const deviceExists = videoDevices.some((device) => device.deviceId === selectedDeviceId1);
+
+    if (selectedDeviceId1 && deviceExists) {
+      console.log('--Selected device 1:', selectedDeviceId1);
+
+      navigator.mediaDevices
+        .getUserMedia({ video: { deviceId: { exact: selectedDeviceId1 } } })
+        .then((s) => {
+          stream = s;
+          if (videoRef1.current) {
+            videoRef1.current.srcObject = stream;
+          }
+        })
+        .catch((error) => {
+          console.error('Error accessing video device 1:', error);
+        });
+    }
+
+    // Cleanup on component unmount or device change
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
       }
     };
+  }, [selectedDeviceId1, videoDevices]);
 
-    if (!isLoading && !error) {
-      getCameras();
+  // Handle changes to selectedDeviceId2
+  useEffect(() => {
+    let stream: MediaStream;
+
+    // check if selectedDeviceId1 is in the list of video devices
+    const deviceExists = videoDevices.some((device) => device.deviceId === selectedDeviceId2);
+
+    if (selectedDeviceId2 && deviceExists) {
+      navigator.mediaDevices
+        .getUserMedia({ video: { deviceId: { exact: selectedDeviceId2 } } })
+        .then((s) => {
+          stream = s;
+          if (videoRef2.current) {
+            videoRef2.current.srcObject = stream;
+          }
+        })
+        .catch((error) => {
+          console.error('Error accessing video device 2:', error);
+        });
     }
-  }, [settings?.videoStreamId1, settings?.videoStreamId2, selectCamera1, selectCamera2, isLoading, error, cameras]);
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
-  if (!settings) return null;
+    // Cleanup on component unmount or device change
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [selectedDeviceId2, videoDevices]);
+
+  // Handle selection change for the first device
+  const handleDeviceChange1 = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const deviceId = event.target.value;
+    setSelectedDeviceId1(deviceId);
+
+    // Update settings
+    if (settings) {
+      saveSettings({ ...settings, videoStreamId1: deviceId });
+    }
+  };
+
+  // Handle selection change for the second device
+  const handleDeviceChange2 = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const deviceId = event.target.value;
+    setSelectedDeviceId2(deviceId);
+
+    // Update settings
+    if (settings) {
+      saveSettings({ ...settings, videoStreamId2: deviceId });
+    }
+  };
 
   return (
     <div className="min-w-96 mx-auto flex max-w-md flex-col">
-      {/* Video container to clip to bottom half */}
       <div className="relative h-96 w-full">
-        <div className="absolute left-0 top-0 h-3/5 w-full overflow-hidden">
-          <video
-            ref={videoRef1}
-            id="video1"
-            autoPlay
-            loop
-            playsInline
-            muted
-            className="left-0 top-0 w-full"
-            // translate video vertically
-            style={{ transform: `translateY(${settings.camera1VerticalPositionPercentage}%)` }}
-          ></video>
-        </div>
-        <div className="absolute bottom-0 left-0 h-2/5 w-full overflow-hidden">
-          <video
-            ref={videoRef2}
-            id="video2"
-            autoPlay
-            loop
-            playsInline
-            muted
-            className="left-0 top-0 w-full"
-            // translate video vertically and flip horizontally
-            style={{ transform: `scaleX(-1) translateY(${settings.camera2VerticalPositionPercentage}%)` }}
-          ></video>
-        </div>
+        {settings && (
+          <>
+            <div className="absolute left-0 top-0 h-3/5 w-full overflow-hidden">
+              <video
+                ref={videoRef1}
+                id="video1"
+                autoPlay
+                loop
+                playsInline
+                muted
+                className="left-0 top-0 w-full"
+                // translate video vertically
+                style={{ transform: `translateY(${settings.camera1VerticalPositionPercentage}%)` }}
+              ></video>
+            </div>
+            <div className="absolute bottom-0 left-0 h-2/5 w-full overflow-hidden">
+              <video
+                ref={videoRef2}
+                id="video2"
+                autoPlay
+                loop
+                playsInline
+                muted
+                className="left-0 top-0 w-full"
+                // translate video vertically and flip horizontally
+                style={{ transform: `scaleX(-1) translateY(${settings.camera2VerticalPositionPercentage}%)` }}
+              ></video>
+            </div>
+          </>
+        )}
       </div>
-      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera1} handleCameraChange={selectCamera1} />
-      <VideoSourceSelect cameras={cameras} selectedCamera={selectedCamera2} handleCameraChange={selectCamera2} />
-    </div>
-  );
-};
-
-const VideoSourceSelect = ({
-  cameras,
-  selectedCamera,
-  handleCameraChange,
-}: {
-  cameras: { deviceId: string; label: string }[];
-  selectedCamera: string;
-  handleCameraChange: (cameraId: string) => void;
-}) => {
-  return (
-    <div className="flex w-full items-center pt-1 text-xs">
-      <label htmlFor="cameraSelect">Select Camera:</label>
-      <Select value={selectedCamera} onValueChange={handleCameraChange}>
-        <SelectTrigger className="text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem key="placeholder" value="" className="text-xs">
-            Choose Video Source
-          </SelectItem>
-          {cameras.map((camera) => (
-            <SelectItem key={camera.deviceId} value={camera.deviceId} className="text-xs">
-              {`Camera ${camera.deviceId.slice(-10)}`}
-            </SelectItem>
+      <div>
+        <select value={selectedDeviceId1} onChange={handleDeviceChange1}>
+          <option key={'default'} value={''}>
+            {'Select a camera'}
+          </option>
+          {videoDevices.map((device) => (
+            <option key={device.deviceId} value={device.deviceId}>
+              {`Camera ${device.deviceId.slice(-5)}`}
+            </option>
           ))}
-        </SelectContent>
-      </Select>
+        </select>
+        <select value={selectedDeviceId2} onChange={handleDeviceChange2}>
+          <option key={'default'} value={''}>
+            {'Select a camera'}
+          </option>
+          {videoDevices.map((device) => (
+            <option key={device.deviceId} value={device.deviceId}>
+              {`Camera ${device.deviceId.slice(-5)}`}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 };
 
-export default Video;
+export default DualVideo;

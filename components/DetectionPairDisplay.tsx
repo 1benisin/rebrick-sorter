@@ -8,7 +8,7 @@ import { DetectionPairGroup, mockDetectionPairGroup } from '@/types/detectionPai
 import { v4 as uuid } from 'uuid';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { useSettings } from '@/hooks/useSettings';
+import { useSettings } from '@/components/hooks/useSettings';
 
 const DetectionPairDisplay = () => {
   const detectionPairGroups = sortProcessStore((state) => state.detectionPairGroups);

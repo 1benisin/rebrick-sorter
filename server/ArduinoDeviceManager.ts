@@ -5,6 +5,7 @@ import { SerialPortName, SerialPortType } from '../types/serialPort.type';
 import eventHub from './eventHub';
 import { AllEvents, BackToFrontEvents } from '../types/socketMessage.type';
 import { DeviceSettings } from './arduinoSettings.type';
+import { SettingsType, SorterSettingsType } from '../types/settings.type';
 
 const MockedPorts = [
   '/dev/tty.usbmodem1101', // sorter_A
@@ -14,68 +15,10 @@ const MockedPorts = [
 ];
 
 // Define settings for each device
-const deviceSettingsMap: Record<SerialPortName, DeviceSettings> = {
-  sorter_A: {
-    deviceType: 'sorter',
-    GRID_DIMENSION: 12,
-    X_OFFSET: 10,
-    Y_OFFSET: 10,
-    X_STEPS_TO_LAST: 6085,
-    Y_STEPS_TO_LAST: 6100,
-    ACCELERATION: 5000,
-    HOMING_SPEED: 1000,
-    SPEED: 120,
-    ROW_MAJOR_ORDER: true,
-  },
-  sorter_B: {
-    deviceType: 'sorter',
-    GRID_DIMENSION: 16,
-    X_OFFSET: 40,
-    Y_OFFSET: 10,
-    X_STEPS_TO_LAST: 7920,
-    Y_STEPS_TO_LAST: 7820,
-    ACCELERATION: 6500,
-    HOMING_SPEED: 1000,
-    SPEED: 175,
-    ROW_MAJOR_ORDER: false,
-  },
-  sorter_C: {
-    deviceType: 'sorter',
-    GRID_DIMENSION: 20,
-    X_OFFSET: 15,
-    Y_OFFSET: 900,
-    X_STEPS_TO_LAST: 9900,
-    Y_STEPS_TO_LAST: 10480,
-    ACCELERATION: 6500,
-    HOMING_SPEED: 1000,
-    SPEED: 200,
-    ROW_MAJOR_ORDER: true,
-  },
-  sorter_D: {
-    deviceType: 'sorter',
-    GRID_DIMENSION: 14,
-    X_OFFSET: 10,
-    Y_OFFSET: 10,
-    X_STEPS_TO_LAST: 9150,
-    Y_STEPS_TO_LAST: 9150,
-    ACCELERATION: 6500,
-    HOMING_SPEED: 1000,
-    SPEED: 200,
-    ROW_MAJOR_ORDER: true,
-  },
-  conveyor_jets: {
-    deviceType: 'conveyor_jets',
-    JET_FIRE_TIME: 200,
-  },
-  hopper_feeder: {
-    deviceType: 'hopper_feeder',
-    hopperStepsPerAction: 2020,
-    hopperActionInterval: 20000,
-    motorSpeed: 200,
-    ACCELERATION: 1000,
-    SPEED: 1000,
-  },
-};
+
+interface PortWithSettings extends SerialPortType {
+  deviceSettings?: SorterSettingsType | null;
+}
 
 class ArduinoDeviceManager {
   private static instance: ArduinoDeviceManager;
@@ -94,25 +37,62 @@ class ArduinoDeviceManager {
     return ArduinoDeviceManager.instance;
   }
 
-  async connectAllDevices(
-    serialPortsToConnect: SerialPortType[],
-  ): Promise<{ port: SerialPortType; success: boolean; error?: any }[]> {
-    console.log('serialPortsToConnect', serialPortsToConnect);
-    const devicePromises = serialPortsToConnect.map((port) =>
-      this.connectPort(port)
-        .then(() => ({
-          port,
-          success: true,
-        }))
-        .catch((error) => ({
-          port,
-          success: false,
-          error,
-        })),
-    );
+  private async connectWithErrorHandling(port: PortWithSettings) {
+    return this.connectPort(port)
+      .then(() => ({
+        port,
+        success: true,
+      }))
+      .catch((error) => ({
+        port,
+        success: false,
+        error,
+      }));
+  }
 
-    // Wait for all device creation attempts to settle
-    return await Promise.all(devicePromises);
+  async connectAllDevices(
+    initSettings: SettingsType,
+  ): Promise<{ port: PortWithSettings; success: boolean; error?: any }[]> {
+    const portsToConnect: PortWithSettings[] = [
+      ...initSettings.sorters.map((sorter) => ({
+        name: sorter.name,
+        path: sorter.serialPort,
+        deviceSettings: sorter,
+      })),
+      {
+        name: 'conveyor_jets',
+        path: initSettings.conveyorJetsSerialPort,
+        deviceSettings: null,
+      },
+      {
+        name: 'hopper_feeder',
+        path: initSettings.hopperFeederSerialPort,
+        deviceSettings: null,
+      },
+    ];
+
+    return Promise.all(portsToConnect.map((port) => this.connectWithErrorHandling(port)));
+  }
+
+  private async connectPort(port: PortWithSettings): Promise<void> {
+    const { name, path, deviceSettings } = port;
+    if (this.devices[path]) {
+      console.log(`Device for port ${path} already added.`);
+      return;
+    }
+    try {
+      let device = new ArduinoDevice(path, deviceSettings ?? null);
+      if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
+        await device.connectMock();
+      } else {
+        await device.connect();
+      }
+      this.devices[path] = device;
+      console.log(`Device for port ${path} connected with name ${name}`);
+    } catch (error) {
+      console.error(`Error adding device for port ${path}:`, error);
+      throw error;
+    }
   }
 
   public async disconnectAllDevices(): Promise<void> {
@@ -150,34 +130,6 @@ class ArduinoDeviceManager {
     const ports = await SerialPort.list();
     const portPaths = ports.map((port) => port.path);
     eventHub.emit(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, portPaths);
-  }
-
-  private async connectPort(port: SerialPortType): Promise<void> {
-    const { name, path } = port;
-    // Check if the device has already been added
-    if (this.devices[path]) {
-      console.log(`Device for port ${path} already added.`);
-      return;
-    }
-    try {
-      // Retrieve settings based on device name
-      const settings = deviceSettingsMap[name];
-      if (!settings) {
-        throw new Error(`No settings found for device name: ${name}`);
-      }
-      // Attempt to create the device
-      let device = new ArduinoDevice(path, settings);
-      if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
-        await device.connectMock();
-      } else {
-        await device.connect();
-      }
-      this.devices[path] = device;
-      console.log(`Device for port ${path} connected with name ${name}`);
-    } catch (error) {
-      console.error(`Error adding device for port ${path}:`, error);
-      throw error;
-    }
   }
 
   removeDevice(portPath: string) {

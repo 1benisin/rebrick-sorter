@@ -8,14 +8,18 @@ import { settingsSchema, SettingsType, sorterSettingsSchema } from '@/types/sett
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useSettings } from '@/hooks/useSettings';
+import { useSettings } from '@/components/hooks/useSettings';
 import SerialPortFormInput from '@/components/SerialPortFormInput';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { serialPortNamesArray } from '@/types/serialPort.type';
 import { Card } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
+import { useToast } from '@/components/hooks/use-toast';
 
 const SettingsForm = () => {
   const { settings, saveSettings } = useSettings();
+  const { toast } = useToast();
 
   const form = useForm<SettingsType>({
     resolver: zodResolver(settingsSchema),
@@ -32,6 +36,10 @@ const SettingsForm = () => {
   const onSubmit: SubmitHandler<SettingsType> = (data) => {
     console.log('Saving Settings data: ', data);
     saveSettings(data);
+    toast({
+      title: 'Settings saved',
+      description: 'Your settings have been successfully saved.',
+    });
   };
 
   if (!settings) return null;
@@ -115,112 +123,251 @@ const SettingsForm = () => {
           <SerialPortFormInput control={form.control} name="conveyorJetsSerialPort" label="Conveyor Jets Serial Port" />
           <SerialPortFormInput control={form.control} name="hopperFeederSerialPort" label="Hopper Feeder Serial Port" />
         </Card>
+
+        {/* sorter settings array */}
         {fields.map((field, index) => (
-          <Card key={field.id} className="flex flex-row items-end space-x-2 p-2">
-            <FormField
-              control={form.control}
-              name={`sorters.${index}.name`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Arduino Name</FormLabel>
-                  <Select defaultValue={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a name for port" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {serialPortNamesArray.map((portName) => (
-                        <SelectItem key={portName} value={portName}>
-                          {portName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+          <Collapsible key={field.id}>
+            <Card className="p-4">
+              <CollapsibleTrigger className="w-full">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ChevronDown className="h-4 w-4" />
+                    <h3 className="text-lg font-semibold">Sorter {index + 1}</h3>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent collapsible from triggering
+                      remove(index);
+                    }}
+                  >
+                    Delete Sorter
+                  </Button>
+                </div>
+              </CollapsibleTrigger>
 
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <CollapsibleContent>
+                <div className="grid grid-cols-4 gap-4">
+                  {/* Column 1 - Basic Settings */}
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.name`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Sorter Name</FormLabel>
+                          <Select defaultValue={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a sorter name" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {serialPortNamesArray.map((portName) => (
+                                <SelectItem key={portName} value={portName}>
+                                  {portName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-            <SerialPortFormInput control={form.control} name={`sorters.${index}.serialPort`} label="Serial Port" />
+                    <SerialPortFormInput
+                      control={form.control}
+                      name={`sorters.${index}.serialPort`}
+                      label="Sorter Serial Port"
+                    />
 
-            <FormField
-              control={form.control}
-              name={`sorters.${index}.jetPosition`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Jet Position</FormLabel>
-                  <FormControl>
-                    <Input className="w-20" {...field} />
-                  </FormControl>
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.jetPosition`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Jet Position</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.rowMajorOrder`}
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-2">
+                          <FormLabel>Row Major Order</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={field.value}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-            <FormField
-              control={form.control}
-              name={`sorters.${index}.gridWidth`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Grid Width</FormLabel>
-                  <FormControl>
-                    <Input className="w-16" {...field} />
-                  </FormControl>
+                  {/* Column 2 - Grid Settings */}
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.gridDimension`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Grid Dimension</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.maxPartDimensions.width`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Max Part Width</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-            <FormField
-              control={form.control}
-              name={`sorters.${index}.gridHeight`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Grid Height</FormLabel>
-                  <FormControl>
-                    <Input className="w-16" {...field} />
-                  </FormControl>
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.maxPartDimensions.height`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Max Part Height</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name={`sorters.${index}.maxPartDimensions.width`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Max Part Width</FormLabel>
-                  <FormControl>
-                    <Input className="w-16" {...field} />
-                  </FormControl>
+                  {/* Column 3 - Offset Settings */}
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.xOffset`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>X Offset</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name={`sorters.${index}.maxPartDimensions.height`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Max Part Height</FormLabel>
-                  <FormControl>
-                    <Input className="w-16" {...field} />
-                  </FormControl>
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.yOffset`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Y Offset</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button size="sm" variant="destructive" onClick={() => remove(index)}>
-              Delete
-            </Button>
-          </Card>
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.xStepsToLast`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>X Steps to Last</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.yStepsToLast`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Y Steps to Last</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Column 4 - Speed Settings */}
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.acceleration`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Acceleration</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.homingSpeed`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Homing Speed</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.speed`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Speed</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         ))}
         <Button type="button" onClick={() => append(sorterSettingsSchema.parse({}))}>
           Add Sorter
