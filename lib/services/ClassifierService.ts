@@ -14,6 +14,7 @@ import { Service, ServiceName, ServiceState } from './Service.interface';
 import serviceManager from './ServiceManager';
 import { AllEvents } from '@/types/socketMessage.type';
 import { collection, doc, setDoc } from 'firebase/firestore';
+import { gunzipSync } from 'zlib';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -36,11 +37,17 @@ class ClassifierService implements Service {
       }
 
       // load bin lookup
-      const storageRef = ref(storage, 'bin_lookup.json');
+      const storageRef = ref(storage, 'bin_lookup_v3.json.gz');
       const binLookupUrl = await getDownloadURL(storageRef);
-      const response = await axios.get(binLookupUrl);
+      const response = await axios.get(binLookupUrl, {
+        responseType: 'arraybuffer', // Important: get raw binary data
+      });
 
-      const formattedBinLookup = response.data.reduce(
+      // Decompress the gzipped data
+      const decompressed = gunzipSync(Buffer.from(response.data)).toString();
+      const jsonData = JSON.parse(decompressed);
+
+      const formattedBinLookup = jsonData.reduce(
         (acc: Record<string, { bin: number; sorter: number }>, item: [string, number, string]) => {
           const [partId, bin, sorter] = item;
           if (!partId || !bin || !sorter) {
