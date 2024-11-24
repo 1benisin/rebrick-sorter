@@ -80,15 +80,21 @@ export default class ArduinoDevice {
   };
 
   // Method to disconnect from the Arduino
-  disconnect = () => {
+  disconnect = async (): Promise<void> => {
     if (!this.port) {
       console.error('No port connected');
-      return;
+      return Promise.reject('No port connected');
     }
-    this.port.close((err) => {
-      if (err) {
-        console.error(`Error closing ${this.port?.path}:`, err.message);
-      }
+
+    return new Promise((resolve, reject) => {
+      this.port!.close((err) => {
+        if (err) {
+          console.error(`Error closing ${this.port?.path}:`, err.message);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
     });
   };
 

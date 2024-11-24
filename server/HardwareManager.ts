@@ -72,6 +72,7 @@ class HardwareManager {
           try {
             const settingsData = snapshot.data();
             const settings = settingsSchema.parse(settingsData);
+            console.log('Settings updated:', settings);
             await this.initializeHardware(settings);
           } catch (error) {
             console.error('Error processing settings update:', error);

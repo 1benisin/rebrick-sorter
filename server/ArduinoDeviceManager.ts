@@ -76,9 +76,10 @@ class ArduinoDeviceManager {
 
   private async connectPort(port: PortWithSettings): Promise<void> {
     const { name, path, deviceSettings } = port;
-    if (this.devices[path]) {
-      console.log(`Device for port ${path} already added.`);
-      return;
+    const currentDevice = this.devices[path];
+    // disconnect the device if it is already connected
+    if (currentDevice) {
+      await currentDevice.disconnect();
     }
     try {
       let device = new ArduinoDevice(path, deviceSettings ?? null);

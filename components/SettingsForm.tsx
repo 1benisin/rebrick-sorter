@@ -126,13 +126,13 @@ const SettingsForm = () => {
 
         {/* sorter settings array */}
         {fields.map((field, index) => (
-          <Collapsible key={field.id}>
-            <Card className="p-4">
+          <Collapsible key={field.id} defaultOpen>
+            <Card className="border-4 p-4">
               <CollapsibleTrigger className="w-full">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <ChevronDown className="h-4 w-4" />
-                    <h3 className="text-lg font-semibold">Sorter {index + 1}</h3>
+                    <h3 className="text-lg font-semibold">Sorter {index}</h3>
                   </div>
                   <Button
                     size="sm"
