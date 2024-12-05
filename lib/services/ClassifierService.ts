@@ -14,7 +14,7 @@ import { Service, ServiceName, ServiceState } from './Service.interface';
 import serviceManager from './ServiceManager';
 import { AllEvents } from '@/types/socketMessage.type';
 import { collection, doc, setDoc } from 'firebase/firestore';
-import { gunzipSync } from 'zlib';
+import pako from 'pako';
 
 export const CLASSIFICATION_DIMENSIONS = {
   width: 299,
@@ -40,11 +40,10 @@ class ClassifierService implements Service {
       const storageRef = ref(storage, 'bin_lookup_v3.json.gz');
       const binLookupUrl = await getDownloadURL(storageRef);
       const response = await axios.get(binLookupUrl, {
-        responseType: 'arraybuffer', // Important: get raw binary data
+        responseType: 'arraybuffer',
       });
 
-      // Decompress the gzipped data
-      const decompressed = gunzipSync(Buffer.from(response.data)).toString();
+      const decompressed = pako.inflate(new Uint8Array(response.data), { to: 'string' });
       const jsonData = JSON.parse(decompressed);
 
       const formattedBinLookup = jsonData.reduce(

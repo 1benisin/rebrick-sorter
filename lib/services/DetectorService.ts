@@ -424,39 +424,31 @@ class DetectorService implements Service {
   }
 
   private mergeBitmaps(imageBitmap1: ImageBitmap, imageBitmap2: ImageBitmap): HTMLCanvasElement {
-    // scale down image if it is too large
     const { width, height } = imageBitmap1;
 
     const targetCanvas = document.createElement('canvas');
-    targetCanvas.width = imageBitmap1.width;
-    targetCanvas.height = imageBitmap1.height;
+    targetCanvas.width = width;
+    targetCanvas.height = height;
     const ctx = targetCanvas.getContext('2d') as CanvasRenderingContext2D;
 
-    // Draw the middle half of imageBitmap1 on the top half of the canvas
-    ctx.drawImage(
-      imageBitmap1,
-      0,
-      (height / 5) * 1,
-      width,
-      (height / 5) * 4, // source rectangle
-      0,
-      0,
-      targetCanvas.width,
-      (targetCanvas.height / 5) * 3, // destination rectangle on canvas
-    );
+    // Draw the first image in the top 3/5 of the canvas
+    ctx.drawImage(imageBitmap1, 0, 0, width, height, 0, 0, width, (height / 5) * 3);
 
-    // Draw the middle half of imageBitmap2 on the bottom half of the canvas
+    // For the second image: save context, flip horizontally, draw, then restore
+    ctx.save();
+    ctx.scale(-1, 1); // Flip horizontally
     ctx.drawImage(
       imageBitmap2,
       0,
-      (height / 10) * 3,
-      width,
-      (height / 10) * 7, // source rectangle
       0,
-      (targetCanvas.height / 5) * 3,
-      targetCanvas.width,
-      targetCanvas.height, // destination rectangle on canvas
+      width,
+      height,
+      -width, // Need to use negative width when flipped
+      (height / 5) * 3,
+      width,
+      (height / 5) * 2,
     );
+    ctx.restore();
 
     return targetCanvas;
   }
