@@ -109,10 +109,10 @@ class DetectorService implements Service {
       }
 
       // loop until we have enough distance samples
-      let speeds = []; // pixels per millisecond
+      let speedSamples = []; // pixels per millisecond
       let lastPosition = null;
       let lastTimestamp = null;
-      while (speeds.length < CALIBRATION_SAMPLE_COUNT) {
+      while (speedSamples.length < CALIBRATION_SAMPLE_COUNT) {
         const detectionPairs = await this.detect();
         if (detectionPairs.length === 0) continue;
 
@@ -122,21 +122,28 @@ class DetectorService implements Service {
           return acc.centroid.x > detection.centroid.x ? acc : detection;
         }, detectionPairs[0][0]);
 
-        // if first detection or nextDetection is to the left of the last detection
-        if (lastPosition === null || lastTimestamp === null || nextDetection.centroid.x < lastPosition.x) {
-          lastPosition = nextDetection.centroid;
-          lastTimestamp = nextDetection.timestamp;
-        } else {
-          // add speed in pixels per sec to speeds
-          const speed = (nextDetection.centroid.x - lastPosition.x) / (nextDetection.timestamp - lastTimestamp);
-
-          speeds.push(speed);
+        if (lastPosition && lastTimestamp && nextDetection.centroid.x > lastPosition.x) {
+          const timeDiff = nextDetection.timestamp - lastTimestamp;
+          // Only calculate speed if at least 100ms has passed
+          if (timeDiff >= 100) {
+            const speed = (nextDetection.centroid.x - lastPosition.x) / timeDiff;
+            speedSamples.push(speed);
+          }
         }
+
+        lastPosition = nextDetection.centroid;
+        lastTimestamp = nextDetection.timestamp;
       }
       // return median distance
-      speeds.sort((a, b) => a - b);
-      const conveyorSpeed = speeds[Math.floor(speeds.length / 2)];
-      return conveyorSpeed;
+      speedSamples.sort((a, b) => a - b);
+      const medianConveyorSpeed = speedSamples[Math.floor(speedSamples.length / 2)];
+      const averageConveyorSpeed = speedSamples.reduce((acc, speed) => acc + speed, 0) / speedSamples.length;
+
+      // print median and average
+      console.log(`Median conveyor speed: ${medianConveyorSpeed} pixels/ms`);
+      console.log(`Average conveyor speed: ${averageConveyorSpeed} pixels/ms`);
+
+      return averageConveyorSpeed;
     } catch (error) {
       const message = 'Error during calibration: ' + error;
       console.error(message);
@@ -417,39 +424,31 @@ class DetectorService implements Service {
   }
 
   private mergeBitmaps(imageBitmap1: ImageBitmap, imageBitmap2: ImageBitmap): HTMLCanvasElement {
-    // scale down image if it is too large
     const { width, height } = imageBitmap1;
 
     const targetCanvas = document.createElement('canvas');
-    targetCanvas.width = imageBitmap1.width;
-    targetCanvas.height = imageBitmap1.height;
+    targetCanvas.width = width;
+    targetCanvas.height = height;
     const ctx = targetCanvas.getContext('2d') as CanvasRenderingContext2D;
 
-    // Draw the middle half of imageBitmap1 on the top half of the canvas
-    ctx.drawImage(
-      imageBitmap1,
-      0,
-      (height / 5) * 1,
-      width,
-      (height / 5) * 4, // source rectangle
-      0,
-      0,
-      targetCanvas.width,
-      (targetCanvas.height / 5) * 3, // destination rectangle on canvas
-    );
+    // Draw the first image in the top 3/5 of the canvas
+    ctx.drawImage(imageBitmap1, 0, 0, width, height, 0, 0, width, (height / 5) * 3);
 
-    // Draw the middle half of imageBitmap2 on the bottom half of the canvas
+    // For the second image: save context, flip horizontally, draw, then restore
+    ctx.save();
+    ctx.scale(-1, 1); // Flip horizontally
     ctx.drawImage(
       imageBitmap2,
       0,
-      (height / 10) * 3,
-      width,
-      (height / 10) * 7, // source rectangle
       0,
-      (targetCanvas.height / 5) * 3,
-      targetCanvas.width,
-      targetCanvas.height, // destination rectangle on canvas
+      width,
+      height,
+      -width, // Need to use negative width when flipped
+      (height / 5) * 3,
+      width,
+      (height / 5) * 2,
     );
+    ctx.restore();
 
     return targetCanvas;
   }

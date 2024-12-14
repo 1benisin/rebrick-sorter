@@ -2,13 +2,14 @@
 
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
 import { ConveyorJetsSettings, DeviceSettings, HopperFeederSettings, SorterSettings } from './arduinoSettings.type';
+import { SorterSettingsType } from '../types/settings.type';
 
 export default class ArduinoDevice {
   private port: SerialPort | SerialPortMock | null = null;
   portPath: string = '';
-  settings: DeviceSettings;
+  settings: SorterSettingsType | null;
 
-  constructor(portPath: string, settings: DeviceSettings) {
+  constructor(portPath: string, settings: SorterSettingsType | null) {
     this.portPath = portPath;
     this.settings = settings;
   }
@@ -79,15 +80,21 @@ export default class ArduinoDevice {
   };
 
   // Method to disconnect from the Arduino
-  disconnect = () => {
+  disconnect = async (): Promise<void> => {
     if (!this.port) {
       console.error('No port connected');
-      return;
+      return Promise.reject('No port connected');
     }
-    this.port.close((err) => {
-      if (err) {
-        console.error(`Error closing ${this.port?.path}:`, err.message);
-      }
+
+    return new Promise((resolve, reject) => {
+      this.port!.close((err) => {
+        if (err) {
+          console.error(`Error closing ${this.port?.path}:`, err.message);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
     });
   };
 
@@ -133,8 +140,8 @@ export default class ArduinoDevice {
 
   // Method to handle incoming data from the Arduino
   handleData = (data: string) => {
-    if (!this.port) {
-      console.error('No port to handle data from');
+    if (!this.port || !this.settings) {
+      console.error('No port or settings to handle data from');
       return;
     }
     console.log(`Data received from ${this.port.path}:`, data);
@@ -142,25 +149,18 @@ export default class ArduinoDevice {
     if (data.includes('Ready')) {
       let settingsMessage = '';
 
-      if (this.settings.deviceType === 'sorter') {
-        const sorterSettings = this.settings as SorterSettings;
-        const settingsValues = [
-          sorterSettings.GRID_DIMENSION,
-          sorterSettings.X_OFFSET,
-          sorterSettings.Y_OFFSET,
-          sorterSettings.X_STEPS_TO_LAST,
-          sorterSettings.Y_STEPS_TO_LAST,
-          sorterSettings.ACCELERATION,
-          sorterSettings.HOMING_SPEED,
-          sorterSettings.SPEED,
-          sorterSettings.ROW_MAJOR_ORDER ? 1 : 0,
-        ];
-        settingsMessage = 's,' + settingsValues.join(',');
-      } else {
-        console.error(`Unknown device type for ${this.port?.path}`);
-        return;
-      }
-
+      const settingsValues = [
+        this.settings.gridDimension,
+        this.settings.xOffset,
+        this.settings.yOffset,
+        this.settings.xStepsToLast,
+        this.settings.yStepsToLast,
+        this.settings.acceleration,
+        this.settings.homingSpeed,
+        this.settings.speed,
+        this.settings.rowMajorOrder ? 1 : 0,
+      ];
+      settingsMessage = 's,' + settingsValues.join(',');
       this.sendCommand(settingsMessage);
     }
   };

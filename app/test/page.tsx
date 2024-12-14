@@ -2,7 +2,7 @@
 
 'use client';
 
-import DualVideo from '@/components/DualVideo2';
+import DualVideo from '@/components/DualVideo';
 
 export default function Test() {
   return (

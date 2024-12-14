@@ -9,7 +9,7 @@ import eventHub from './eventHub';
 import { AllEvents } from '../types/socketMessage.type';
 import { settingsSchema, SettingsType } from '../types/settings.type';
 import { db } from '../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 // min amount conveyor speed can be slowed down from it's default speed (maximum speed): 255
 const MIN_SLOWDOWN_PERCENT = 0.4;
@@ -41,6 +41,7 @@ class HardwareManager {
   serialPorts: Record<string, string> = {};
   sorterTravelTimes: number[][] = [];
   sorterBinPositions: { x: number; y: number }[][] = [];
+  private unsubscribeSettings: (() => void) | null = null;
 
   private constructor() {
     this.conveyor = conveyor;
@@ -50,6 +51,9 @@ class HardwareManager {
     eventHub.onEvent(AllEvents.MOVE_SORTER, this.moveSorter);
     eventHub.onEvent(AllEvents.SCHEDULE_SORTER_MOVE, this.scheduleSorterMove);
     eventHub.onEvent(AllEvents.SCHEDULE_JET_FIRE, this.scheduleJetFire);
+
+    // Subscribe to settings changes
+    this.subscribeToSettings();
   }
 
   static getInstance(): HardwareManager {
@@ -59,53 +63,33 @@ class HardwareManager {
     return HardwareManager.instance;
   }
 
-  // public async init(): Promise<void> {
-  //   if (this.initialized) {
-  //     console.log(`${this.constructor.name} is already initialized`);
-  //     return;
-  //   }
-
-  //   if (this.initializationPromise) {
-  //     console.log(`${this.constructor.name} initialization is already in progress`);
-  //     return this.initializationPromise;
-  //   }
-
-  //   this.initializationPromise = this.initializeInternal();
-
-  //   try {
-  //     await this.initializationPromise;
-  //     this.initialized = true;
-  //   } finally {
-  //     this.initializationPromise = null;
-  //   }
-  // }
-
-  // public reinit = () => {
-  //   this.initialized = false;
-  //   this.initializationPromise = null;
-  //   this.init();
-  // };
-
-  private fetchSettings = async () => {
-    // get settings from firebase
-    let initSettings: SettingsType;
+  private subscribeToSettings = () => {
     const settingsRef = doc(db, 'settings', 'dev-user');
-    const settinsSnapshot = await getDoc(settingsRef);
-    if (settinsSnapshot.exists()) {
-      const settingsData = settinsSnapshot.data();
-      initSettings = settingsSchema.parse(settingsData);
-    } else {
-      throw new Error('Settings document does not exist');
-    }
-    console.log('---initSettings:', initSettings);
-    return initSettings;
+    this.unsubscribeSettings = onSnapshot(
+      settingsRef,
+      async (snapshot) => {
+        if (snapshot.exists()) {
+          try {
+            const settingsData = snapshot.data();
+            const settings = settingsSchema.parse(settingsData);
+            console.log('Settings updated:', settings);
+            await this.initializeHardware(settings);
+          } catch (error) {
+            console.error('Error processing settings update:', error);
+            this.initialized = false;
+            eventHub.emitEvent(AllEvents.INIT_HARDWARE_SUCCESS, { success: false });
+          }
+        }
+      },
+      (error) => {
+        console.error('Error subscribing to settings:', error);
+      },
+    );
   };
 
-  public init = async () => {
-    console.log('HardwareManager initializing');
+  private initializeHardware = async (initSettings: SettingsType) => {
+    console.log('HardwareManager initializing with settings:', initSettings);
     try {
-      const initSettings = await this.fetchSettings();
-
       this.conveyorSpeed = initSettings.conveyorSpeed;
       this.jetPositions = initSettings.sorters.map((sorter) => sorter.jetPosition);
       this.sorterTravelTimes = sorterTravelTimes;
@@ -119,14 +103,11 @@ class HardwareManager {
       serialPorts.push({ name: 'hopper_feeder', path: initSettings.hopperFeederSerialPort });
 
       console.log('---serialPorts:', serialPorts);
-      const connectionStatuses = await arduinoDeviceManager.connectAllDevices(serialPorts);
+      const connectionStatuses = await arduinoDeviceManager.connectAllDevices(initSettings);
+
       console.log('---connectionStatuses:', connectionStatuses);
       const isEveryPortConnected = connectionStatuses.every((status) => status.success);
       console.log('---isEveryPortConnected:', isEveryPortConnected);
-      // if (!isEveryPortConnected) {
-      //   console.error(`---Failed to connect to serial ports: ${connectionStatuses}`);
-      //   throw new Error(`Failed to connect to serial ports: ${connectionStatuses}`);
-      // }
 
       this.serialPorts = serialPorts.reduce((acc: Record<string, string>, port) => {
         acc[port.name] = port.path;
@@ -134,7 +115,7 @@ class HardwareManager {
       }, {});
 
       // generate sorter bin positions
-      this.generateBinPositions(initSettings.sorters);
+      this.generateBinPositions(initSettings);
 
       // initialize conveyor
       await this.conveyor.init({
@@ -145,12 +126,18 @@ class HardwareManager {
       });
 
       this.initialized = true;
-      // Emit success event
       eventHub.emitEvent(AllEvents.INIT_HARDWARE_SUCCESS, { success: true });
     } catch (error) {
+      console.error('Error initializing hardware:', error);
       this.initialized = false;
       eventHub.emitEvent(AllEvents.INIT_HARDWARE_SUCCESS, { success: false });
     }
+  };
+
+  public init = async () => {
+    console.log('HardwareManager initial setup');
+    // The actual initialization will happen through the subscription
+    // This method is kept for backwards compatibility
   };
 
   public calculateTimings = (
@@ -190,17 +177,12 @@ class HardwareManager {
     return { moveTime, jetTime, travelTimeFromLastBin };
   };
 
-  private generateBinPositions = (
-    sorterDimensions: {
-      gridWidth: number;
-      gridHeight: number;
-    }[],
-  ) => {
+  private generateBinPositions = (initSettings: SettingsType) => {
     this.sorterBinPositions = [];
-    for (const { gridHeight, gridWidth } of sorterDimensions) {
+    for (const { gridDimension } of initSettings.sorters) {
       const positions = [{ x: 0, y: 0 }]; // postion 0 is null because bin ids start at 1
-      for (let y = 0; y < gridHeight; y++) {
-        for (let x = 0; x < gridWidth; x++) {
+      for (let y = 0; y < gridDimension; y++) {
+        for (let x = 0; x < gridDimension; x++) {
           positions.push({ x, y });
         }
       }

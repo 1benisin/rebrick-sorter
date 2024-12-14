@@ -19,15 +19,15 @@
 
 // Device settings struct
 typedef struct {
-  int GRID_DIMENSION;
-  int X_OFFSET;
-  int Y_OFFSET;
-  int X_STEPS_TO_LAST;
-  int Y_STEPS_TO_LAST;
-  int ACCELERATION;
-  int HOMING_SPEED;
-  int SPEED;
-  bool ROW_MAJOR_ORDER; 
+  int   GRID_DIMENSION;
+  int   X_OFFSET;
+  int   Y_OFFSET;
+  int   X_STEPS_TO_LAST;
+  int   Y_STEPS_TO_LAST;
+  int   ACCELERATION;
+  int   HOMING_SPEED;
+  int   SPEED;
+  bool  ROW_MAJOR_ORDER; 
 } DeviceSettings;
 
 DeviceSettings settings;
