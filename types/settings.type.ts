@@ -6,7 +6,16 @@ import { serialPortNameEnumSchema } from './serialPort.type';
 export const sorterSettingsSchema = z.object({
   name: serialPortNameEnumSchema.default(serialPortNameEnumSchema.Values.conveyor_jets),
   serialPort: z.string().min(1).default('default'),
-  jetPosition: z.coerce.number().min(0, { message: 'Jet position must be greater than or equal to 0' }).default(0),
+  jetPositionStart: z.coerce
+    .number()
+    .min(0, { message: 'Start jet position must be greater than or equal to 0' })
+    .max(5, { message: 'Start jet position must be less than or equal to 5' })
+    .default(0),
+  jetPositionEnd: z.coerce
+    .number()
+    .min(0, { message: 'End jet position must be greater than or equal to 0' })
+    .max(5, { message: 'End jet position must be less than or equal to 5' })
+    .default(0),
   maxPartDimensions: z
     .object({
       width: z.coerce.number().min(1, { message: 'Max part width must be greater than 0' }).default(1),

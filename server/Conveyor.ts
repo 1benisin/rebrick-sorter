@@ -14,7 +14,8 @@ const MOVE_PAUSE_BUFFER = 1600; // pause between sorter moves to allow for part 
 type InitSettings = {
   defaultConveyorSpeed: number;
   sorterCount: number;
-  jetPositions: number[];
+  jetPositionsStart: number[];
+  jetPositionsEnd: number[];
   arduinoPath: string;
 };
 

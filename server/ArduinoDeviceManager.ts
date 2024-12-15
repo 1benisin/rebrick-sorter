@@ -1,11 +1,11 @@
 import ArduinoDevice from './arduinoDevice';
 import { SerialPort } from 'serialport';
 import { ArduinoDeviceCommand } from '../types/arduinoCommands.type';
-import { SerialPortName, SerialPortType } from '../types/serialPort.type';
 import eventHub from './eventHub';
 import { AllEvents, BackToFrontEvents } from '../types/socketMessage.type';
-import { DeviceSettings } from './arduinoSettings.type';
-import { SettingsType, SorterSettingsType } from '../types/settings.type';
+import { SettingsType } from '../types/settings.type';
+import { SerialPortType } from '../types/serialPort.type';
+import { ArduinoConfig, SorterInitConfig } from './arduinoConfig.type';
 
 const MockedPorts = [
   '/dev/tty.usbmodem1101', // sorter_A
@@ -14,10 +14,8 @@ const MockedPorts = [
   '/dev/tty.usbserial-130', // hopper_feeder
 ];
 
-// Define settings for each device
-
-interface PortWithSettings extends SerialPortType {
-  deviceSettings?: SorterSettingsType | null;
+interface DeviceConfig extends SerialPortType {
+  config: ArduinoConfig;
 }
 
 class ArduinoDeviceManager {
@@ -37,52 +35,72 @@ class ArduinoDeviceManager {
     return ArduinoDeviceManager.instance;
   }
 
-  private async connectWithErrorHandling(port: PortWithSettings) {
-    return this.connectPort(port)
+  private async connectWithErrorHandling(config: DeviceConfig) {
+    return this.connectPort(config)
       .then(() => ({
-        port,
         success: true,
       }))
       .catch((error) => ({
-        port,
         success: false,
         error,
       }));
   }
 
-  async connectAllDevices(
-    initSettings: SettingsType,
-  ): Promise<{ port: PortWithSettings; success: boolean; error?: any }[]> {
-    const portsToConnect: PortWithSettings[] = [
-      ...initSettings.sorters.map((sorter) => ({
-        name: sorter.name,
-        path: sorter.serialPort,
-        deviceSettings: sorter,
-      })),
+  async connectAllDevices(initSettings: SettingsType): Promise<{ success: boolean; error?: any }[]> {
+    const deviceConfigs: DeviceConfig[] = [
+      ...initSettings.sorters.map((sorter) => {
+        const config: SorterInitConfig = {
+          deviceType: 'sorter',
+          GRID_DIMENSION: sorter.gridDimension,
+          X_OFFSET: sorter.xOffset,
+          Y_OFFSET: sorter.yOffset,
+          X_STEPS_TO_LAST: sorter.xStepsToLast,
+          Y_STEPS_TO_LAST: sorter.yStepsToLast,
+          ACCELERATION: sorter.acceleration,
+          HOMING_SPEED: sorter.homingSpeed,
+          SPEED: sorter.speed,
+          ROW_MAJOR_ORDER: sorter.rowMajorOrder,
+        };
+        return {
+          name: sorter.name,
+          path: sorter.serialPort,
+          config,
+        };
+      }),
       {
         name: 'conveyor_jets',
         path: initSettings.conveyorJetsSerialPort,
-        deviceSettings: null,
+        config: {
+          deviceType: 'conveyor_jets',
+          JET_START_POSITIONS: initSettings.sorters.map((sorter) => sorter.jetPositionStart),
+          JET_END_POSITIONS: initSettings.sorters.map((sorter) => sorter.jetPositionEnd),
+        },
       },
       {
         name: 'hopper_feeder',
         path: initSettings.hopperFeederSerialPort,
-        deviceSettings: null,
+        config: {
+          deviceType: 'hopper_feeder',
+        },
       },
     ];
 
-    return Promise.all(portsToConnect.map((port) => this.connectWithErrorHandling(port)));
+    return Promise.all(deviceConfigs.map((config) => this.connectWithErrorHandling(config)));
   }
 
-  private async connectPort(port: PortWithSettings): Promise<void> {
-    const { name, path, deviceSettings } = port;
+  private async connectPort(deviceConfig: DeviceConfig): Promise<void> {
+    const { name, path, config } = deviceConfig;
     const currentDevice = this.devices[path];
     // disconnect the device if it is already connected
     if (currentDevice) {
       await currentDevice.disconnect();
     }
+    if (!config) {
+      throw new Error('No config found for port');
+    }
+
     try {
-      let device = new ArduinoDevice(path, deviceSettings ?? null);
+      let device = new ArduinoDevice(path, config);
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
         await device.connectMock();
       } else {
