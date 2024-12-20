@@ -156,7 +156,7 @@ export default class ArduinoDevice {
 
   private buildConveyorJetsInitMessage(config: ConveyorJetsInitConfig): string {
     const jetFireTimes = config.JET_END_POSITIONS.map((end, index) => end - config.JET_START_POSITIONS[index]);
-    return 'c,' + jetFireTimes.join(',');
+    return 's,' + jetFireTimes.join(',');
   }
 
   // Updated handleData method

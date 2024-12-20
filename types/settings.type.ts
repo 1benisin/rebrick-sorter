@@ -8,18 +8,18 @@ export const sorterSettingsSchema = z.object({
   serialPort: z.string().min(1).default('default'),
   jetPositionStart: z.coerce
     .number()
-    .min(0, { message: 'Start jet position must be greater than or equal to 0' })
-    .max(5, { message: 'Start jet position must be less than or equal to 5' })
+    .min(0, { message: 'Start jet position must be a non-negative number' })
+    .max(99999, { message: 'Start jet position exceeds maximum allowed value' })
     .default(0),
   jetPositionEnd: z.coerce
     .number()
-    .min(0, { message: 'End jet position must be greater than or equal to 0' })
-    .max(5, { message: 'End jet position must be less than or equal to 5' })
+    .min(0, { message: 'End jet position must be a non-negative number' })
+    .max(99999, { message: 'End jet position exceeds maximum allowed value' })
     .default(0),
   maxPartDimensions: z
     .object({
-      width: z.coerce.number().min(1, { message: 'Max part width must be greater than 0' }).default(1),
-      height: z.coerce.number().min(1, { message: 'Max part height must be greater than 0' }).default(1),
+      width: z.coerce.number().min(1, { message: 'Part width must be at least 1 unit' }).default(1),
+      height: z.coerce.number().min(1, { message: 'Part height must be at least 1 unit' }).default(1),
     })
     .default({ width: 1, height: 1 }),
   gridDimension: z.coerce.number().min(1).default(12),
@@ -36,14 +36,18 @@ export const sorterSettingsSchema = z.object({
 export type SorterSettingsType = z.infer<typeof sorterSettingsSchema>;
 
 export const settingsSchema = z.object({
-  conveyorSpeed: z.coerce.number().min(0, { message: 'Conveyor speed must be greater than 0' }).default(1),
+  conveyorSpeed: z.coerce.number().min(0, { message: 'Conveyor speed must be a non-negative number' }).default(1),
   detectDistanceThreshold: z.coerce
     .number()
-    .min(1, { message: 'Detect distance threshold must be greater than 0' })
+    .min(1, { message: 'Detection threshold must be at least 1 unit' })
     .default(1),
   conveyorJetsSerialPort: z.string().default(''),
   hopperFeederSerialPort: z.string().default(''),
-  classificationThresholdPercentage: z.coerce.number().min(0).max(2).default(1),
+  classificationThresholdPercentage: z.coerce
+    .number()
+    .min(0, { message: 'Classification threshold must be between 0 and 2' })
+    .max(2, { message: 'Classification threshold must be between 0 and 2' })
+    .default(1),
   camera1VerticalPositionPercentage: z.coerce.number().default(1),
   camera2VerticalPositionPercentage: z.coerce.number().default(-35),
   videoStreamId1: z.string().default(''), // deviceId
