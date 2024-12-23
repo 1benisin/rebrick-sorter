@@ -36,7 +36,8 @@ class HardwareManager {
   protected initialized: boolean = false;
   protected initializationPromise: Promise<void> | null = null;
   private conveyor: Conveyor;
-  private jetPositions: number[] = [];
+  private jetPositionsStart: number[] = [];
+  private jetPositionsEnd: number[] = [];
   private conveyorSpeed: number = 0;
   serialPorts: Record<string, string> = {};
   sorterTravelTimes: number[][] = [];
@@ -91,7 +92,8 @@ class HardwareManager {
     console.log('HardwareManager initializing with settings:', initSettings);
     try {
       this.conveyorSpeed = initSettings.conveyorSpeed;
-      this.jetPositions = initSettings.sorters.map((sorter) => sorter.jetPosition);
+      this.jetPositionsStart = initSettings.sorters.map((sorter) => sorter.jetPositionStart);
+      this.jetPositionsEnd = initSettings.sorters.map((sorter) => sorter.jetPositionEnd);
       this.sorterTravelTimes = sorterTravelTimes;
 
       // connect serial ports
@@ -121,7 +123,8 @@ class HardwareManager {
       await this.conveyor.init({
         defaultConveyorSpeed: initSettings.conveyorSpeed,
         sorterCount: initSettings.sorters.length,
-        jetPositions: initSettings.sorters.map((sorter) => sorter.jetPosition),
+        jetPositionsStart: initSettings.sorters.map((sorter) => sorter.jetPositionStart),
+        jetPositionsEnd: initSettings.sorters.map((sorter) => sorter.jetPositionEnd),
         arduinoPath: this.serialPorts[serialPortNames.conveyor_jets as keyof typeof serialPortNames],
       });
 
@@ -147,8 +150,11 @@ class HardwareManager {
     initialPosition: number,
     prevSorterbin: number,
   ) => {
+    // Calculate middle point of jet position
+    const jetPositionMiddle = (this.jetPositionsStart[sorter] + this.jetPositionsEnd[sorter]) / 2;
+
     // distance to jet should never be negative
-    const distanceToJet = this.jetPositions[sorter] - initialPosition;
+    const distanceToJet = jetPositionMiddle - initialPosition;
 
     const jetTime = this.conveyorSpeed * distanceToJet + initialTime;
 
@@ -173,6 +179,9 @@ class HardwareManager {
       initialTime,
       initialPosition,
       prevSorterbin,
+      jetPositionStart: this.jetPositionsStart[sorter],
+      jetPositionEnd: this.jetPositionsEnd[sorter],
+      jetPositionMiddle,
     });
     return { moveTime, jetTime, travelTimeFromLastBin };
   };

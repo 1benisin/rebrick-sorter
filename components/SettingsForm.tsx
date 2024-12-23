@@ -184,10 +184,24 @@ const SettingsForm = () => {
 
                     <FormField
                       control={form.control}
-                      name={`sorters.${index}.jetPosition`}
+                      name={`sorters.${index}.jetPositionStart`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Jet Position</FormLabel>
+                          <FormLabel>Start Jet Position</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name={`sorters.${index}.jetPositionEnd`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>End Jet Position</FormLabel>
                           <FormControl>
                             <Input {...field} />
                           </FormControl>

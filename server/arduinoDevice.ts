@@ -1,17 +1,17 @@
 // server/arduinoDevice.ts
 
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
-import { ConveyorJetsSettings, DeviceSettings, HopperFeederSettings, SorterSettings } from './arduinoSettings.type';
 import { SorterSettingsType } from '../types/settings.type';
+import { ArduinoConfig, ConveyorJetsInitConfig, SorterInitConfig } from './arduinoConfig.type';
 
 export default class ArduinoDevice {
   private port: SerialPort | SerialPortMock | null = null;
   portPath: string = '';
-  settings: SorterSettingsType | null;
+  config: ArduinoConfig | null;
 
-  constructor(portPath: string, settings: SorterSettingsType | null) {
+  constructor(portPath: string, config: ArduinoConfig) {
     this.portPath = portPath;
-    this.settings = settings;
+    this.config = config;
   }
 
   // Static factory method
@@ -138,30 +138,47 @@ export default class ArduinoDevice {
     });
   };
 
-  // Method to handle incoming data from the Arduino
+  // Create specific message builders for each device type
+  private buildSorterInitMessage(config: SorterInitConfig): string {
+    const configValues = [
+      config.GRID_DIMENSION,
+      config.X_OFFSET,
+      config.Y_OFFSET,
+      config.X_STEPS_TO_LAST,
+      config.Y_STEPS_TO_LAST,
+      config.ACCELERATION,
+      config.HOMING_SPEED,
+      config.SPEED,
+      config.ROW_MAJOR_ORDER ? 1 : 0,
+    ];
+    return 's,' + configValues.join(',');
+  }
+
+  private buildConveyorJetsInitMessage(config: ConveyorJetsInitConfig): string {
+    const jetFireTimes = config.JET_END_POSITIONS.map((end, index) => end - config.JET_START_POSITIONS[index]);
+    return 's,' + jetFireTimes.join(',');
+  }
+
+  // Updated handleData method
   handleData = (data: string) => {
-    if (!this.port || !this.settings) {
-      console.error('No port or settings to handle data from');
+    if (!this.port || !this.config) {
+      console.error('No port or config to handle data from');
       return;
     }
-    console.log(`Data received from ${this.port.path}:`, data);
+    console.log(`Data received from ${this.portPath}:`, data);
 
     if (data.includes('Ready')) {
-      let settingsMessage = '';
+      let configMessage = '';
 
-      const settingsValues = [
-        this.settings.gridDimension,
-        this.settings.xOffset,
-        this.settings.yOffset,
-        this.settings.xStepsToLast,
-        this.settings.yStepsToLast,
-        this.settings.acceleration,
-        this.settings.homingSpeed,
-        this.settings.speed,
-        this.settings.rowMajorOrder ? 1 : 0,
-      ];
-      settingsMessage = 's,' + settingsValues.join(',');
-      this.sendCommand(settingsMessage);
+      if (this.config.deviceType === 'sorter') {
+        configMessage = this.buildSorterInitMessage(this.config);
+      } else if (this.config.deviceType === 'conveyor_jets') {
+        configMessage = this.buildConveyorJetsInitMessage(this.config);
+      }
+
+      if (configMessage) {
+        this.sendCommand(configMessage);
+      }
     }
   };
 }

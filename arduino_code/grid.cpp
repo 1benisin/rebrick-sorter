@@ -4,8 +4,6 @@
 // Increase MAX_MESSAGE_LENGTH to accommodate settings message
 #define MAX_MESSAGE_LENGTH 60 // Adjusted for longer messages
 
-#define MAX_GRID_DIMENSION 16 // Maximum grid dimension expected
-
 // Other pin definitions remain the same
 #define AUTO_DISABLE true
 #define X_ENABLE_PIN 3
@@ -39,14 +37,6 @@ int curBin = 0; // current bin number
 bool moveCompleteSent = true; // flag to indicate that a move complete "MC" message has been sent
 bool homing = false; // flag to indicate that the sorter is currently homing
 bool settingsInitialized = false; // flag to indicate settings have been received
-
-// Remove binLoc struct and binLocations array
-// typedef struct {
-//   int x;
-//   int y;
-// } binLoc;
-
-// binLoc binLocations[MAX_GRID_DIMENSION * MAX_GRID_DIMENSION] = {};
 
 // ___________________________ STEPPER LIBRARY FUNCTIONS ___________________________
 
@@ -101,7 +91,7 @@ void setup() {
   pinMode(X_STOP_PIN, INPUT_PULLUP);
   pinMode(Y_STOP_PIN, INPUT_PULLUP);
 
-  print("Ready"); // Indicate that the Arduino is ready to receive settings
+  print("Ready"); // Indicate that the Arduino is ready to receive config init settings message
 }
 
 // ______________________________ FUNCTIONS ______________________________

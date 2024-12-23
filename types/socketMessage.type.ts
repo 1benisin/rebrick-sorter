@@ -1,7 +1,6 @@
 // types/socketMessage.type.ts
 
 import { HardwareInitDto } from './hardwareInit.dto';
-import { PartQueue } from './hardwareTypes.d';
 import { SortPartDto } from './sortPart.dto';
 
 export type SocketMessage = {
