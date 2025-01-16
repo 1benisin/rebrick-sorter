@@ -3,9 +3,10 @@
 #define JET_2_PIN 10
 #define JET_3_PIN 9
 
-#define C_DIR1_PIN 7
-#define C_DIR2_PIN 8
-#define C_SPEED_PIN 3
+#define RPWM_PIN   5
+#define R_EN_PIN   6
+#define ENCODER_A  2
+#define ENCODER_B  3
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
@@ -13,6 +14,24 @@ int JET_FIRE_TIMES[4];  // Array to store fire times for each jet
 bool settingsInitialized = false;
 
 volatile bool conveyorOn = false;
+volatile long encoderCount = 0;  // New encoder count variable
+
+// New ISR functions
+void readEncoderA() {
+  if (digitalRead(ENCODER_A) == digitalRead(ENCODER_B)) {
+    encoderCount++;
+  } else {
+    encoderCount--;
+  }
+}
+
+void readEncoderB() {
+  if (digitalRead(ENCODER_A) == digitalRead(ENCODER_B)) {
+    encoderCount--;
+  } else {
+    encoderCount++;
+  }
+}
 
 void setup()
 {
@@ -23,11 +42,14 @@ void setup()
   pinMode(JET_2_PIN, OUTPUT);
   pinMode(JET_3_PIN, OUTPUT);
   
-  pinMode(C_DIR1_PIN, OUTPUT);
-  pinMode(C_DIR2_PIN, OUTPUT);
-  pinMode(C_SPEED_PIN, OUTPUT);
-
-  //  digitalWrite(C_DIR1_PIN, LOW); // sets the conveyor going in in the right direction
+  pinMode(RPWM_PIN, OUTPUT);
+  pinMode(R_EN_PIN, OUTPUT);
+  pinMode(ENCODER_A, INPUT_PULLUP);
+  pinMode(ENCODER_B, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A), readEncoderA, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_B), readEncoderB, CHANGE);
+  digitalWrite(R_EN_PIN, LOW);
+  analogWrite(RPWM_PIN, 0);
 
   print("Ready");
 }
@@ -78,24 +100,23 @@ void processMessage(char *message) {
       conveyorOn = !conveyorOn;
       if (!conveyorOn) 
       {
-        // Set rotation direction pins both to low to turn off motor
-        // digitalWrite(C_DIR1_PIN, LOW);
-        // digitalWrite(C_DIR2_PIN, LOW);
-        analogWrite(C_SPEED_PIN, 0); 
+        digitalWrite(R_EN_PIN, LOW);
+        analogWrite(RPWM_PIN, 0);
       }
       else {
-        analogWrite(C_SPEED_PIN, 250); 
+        digitalWrite(R_EN_PIN, HIGH);
+        analogWrite(RPWM_PIN, 250);
       }
       print(conveyorOn ? "on" : "off");
       break;
     }
 
-    case 'c': { // action value is the speed{
+    case 'c': { // action value is the speed
       if (actionValue > 255)
         print("conveyor speed above 250");
       if (actionValue < 50)
         print("conveyor speed below 50");
-      analogWrite(C_SPEED_PIN, actionValue);
+      analogWrite(RPWM_PIN, actionValue);
       print(actionValue);
       break;
     }
