@@ -131,7 +131,7 @@ const DualVideo = () => {
 
   return (
     <div className="min-w-96 mx-auto flex max-w-md flex-col">
-      <div className="relative h-96 w-full">
+      <div className="relative h-80 w-full">
         {settings && (
           <>
             <div className="absolute left-0 top-0 h-3/5 w-full overflow-hidden">
@@ -143,8 +143,8 @@ const DualVideo = () => {
                 playsInline
                 muted
                 className="left-0 top-0 w-full"
-                // translate video vertically
-                style={{ transform: `translateY(${settings.camera1VerticalPositionPercentage}%)` }}
+                // Show middle 60% of video1, so translate up by 20%
+                style={{ transform: `translateY(-20%)` }}
               ></video>
             </div>
             <div className="absolute bottom-0 left-0 h-2/5 w-full overflow-hidden">
@@ -156,8 +156,8 @@ const DualVideo = () => {
                 playsInline
                 muted
                 className="left-0 top-0 w-full"
-                // translate video vertically and flip horizontally
-                style={{ transform: `scaleX(-1) translateY(${settings.camera2VerticalPositionPercentage}%)` }}
+                // Show middle 40% of video2, so translate up by 30%, and flip horizontally
+                style={{ transform: `scaleX(-1) translateY(-30%)` }}
               ></video>
             </div>
           </>

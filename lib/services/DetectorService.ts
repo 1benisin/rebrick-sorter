@@ -282,8 +282,8 @@ class DetectorService implements Service {
 
     // tag isTopView
     taggedPredictions = taggedPredictions.map((prediction) => {
-      // center Y is less than 2/3 of the canvas height
-      const isTopView = prediction.box.top + prediction.box.height / 2 < canvasDim.height * (2 / 3);
+      // Changed from (2/3) to (3/5) to match mergeBitmaps proportion
+      const isTopView = prediction.box.top + prediction.box.height / 2 < canvasDim.height * (3 / 5);
       return {
         ...prediction,
         isTopView,
@@ -431,8 +431,25 @@ class DetectorService implements Service {
     targetCanvas.height = height;
     const ctx = targetCanvas.getContext('2d') as CanvasRenderingContext2D;
 
+    // Calculate the middle portion of source images
+    const sourceYOffset = height * 0.2; // Skip 20% from top
+    const sourceHeight = height * 0.6; // Use middle 60% of source image
+
     // Draw the first image in the top 3/5 of the canvas
-    ctx.drawImage(imageBitmap1, 0, 0, width, height, 0, 0, width, (height / 5) * 3);
+    ctx.drawImage(
+      imageBitmap1,
+      0,
+      sourceYOffset,
+      width,
+      sourceHeight, // source dimensions (middle portion)
+      0,
+      0,
+      width,
+      height * 0.6, // destination dimensions (60% of canvas)
+    );
+
+    const sourceYOffset2 = height * 0.3; // Skip 30% from top
+    const sourceHeight2 = height * 0.4; // Use middle 40% of source image
 
     // For the second image: save context, flip horizontally, draw, then restore
     ctx.save();
@@ -440,13 +457,13 @@ class DetectorService implements Service {
     ctx.drawImage(
       imageBitmap2,
       0,
-      0,
+      sourceYOffset2,
       width,
-      height,
+      sourceHeight2, // source dimensions (middle portion)
       -width, // Need to use negative width when flipped
-      (height / 5) * 3,
+      height * 0.6, // Start at 60% of height
       width,
-      (height / 5) * 2,
+      height * 0.4, // Use remaining 40% of height
     );
     ctx.restore();
 
