@@ -3,6 +3,10 @@
 #define CONV_ENCODER_A  2  // Encoder input A
 #define CONV_ENCODER_B  3  // Encoder input B
 
+// New defines for left side pins
+#define CONV_LPWM_PIN   9
+#define CONV_L_EN_PIN   8
+
 volatile long encoderCount = 0;
 bool motorRunning = false;
 unsigned long lastDisplayTime = 0;
@@ -34,6 +38,14 @@ void setup() {
   pinMode(CONV_ENCODER_A, INPUT_PULLUP);
   pinMode(CONV_ENCODER_B, INPUT_PULLUP);
   
+  // Configure the new left pins
+  pinMode(CONV_LPWM_PIN, OUTPUT);
+  pinMode(CONV_L_EN_PIN, OUTPUT);
+
+  // Keep them low by default so reverse drive is disabled
+  digitalWrite(CONV_L_EN_PIN, LOW);
+  analogWrite(CONV_LPWM_PIN, 0);
+  
   // Attach interrupt handlers for encoder
   attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_A), readEncoderA, CHANGE);
   attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_B), readEncoderB, CHANGE);
@@ -51,11 +63,11 @@ void setup() {
 
 void loop() {
   // Display encoder count periodically
-  if (millis() - lastDisplayTime >= DISPLAY_INTERVAL) {
-    Serial.print("Encoder count: ");
-    Serial.println(encoderCount);
-    lastDisplayTime = millis();
-  }
+  // if (millis() - lastDisplayTime >= DISPLAY_INTERVAL) {
+  //   Serial.print("Encoder count: ");
+  //   Serial.println(encoderCount);
+  //   lastDisplayTime = millis();
+  // }
   
   // Check for serial commands
   if (Serial.available()) {
@@ -68,7 +80,12 @@ void loop() {
         analogWrite(CONV_RPWM_PIN, motorRunning ? 150 : 0); // Default speed 150
         Serial.println(motorRunning ? "Motor ON" : "Motor OFF");
         break;
-        
+
+      case 'p': // Print encoder count
+        Serial.print("Encoder count: ");
+        Serial.println(encoderCount);
+        break;
+
       case 's': // Set speed
         if (Serial.available()) {
           int speed = Serial.parseInt();
