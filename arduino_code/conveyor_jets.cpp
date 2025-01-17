@@ -3,10 +3,10 @@
 #define JET_2_PIN 10
 #define JET_3_PIN 9
 
-#define RPWM_PIN   5
-#define R_EN_PIN   6
-#define ENCODER_A  2
-#define ENCODER_B  3
+#define CONV_RPWM_PIN   5
+#define CONV_R_EN_PIN   6
+#define CONV_ENCODER_A  2
+#define CONV_ENCODER_B  3
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
@@ -18,7 +18,7 @@ volatile long encoderCount = 0;  // New encoder count variable
 
 // New ISR functions
 void readEncoderA() {
-  if (digitalRead(ENCODER_A) == digitalRead(ENCODER_B)) {
+  if (digitalRead(CONV_ENCODER_A) == digitalRead(CONV_ENCODER_B)) {
     encoderCount++;
   } else {
     encoderCount--;
@@ -26,7 +26,7 @@ void readEncoderA() {
 }
 
 void readEncoderB() {
-  if (digitalRead(ENCODER_A) == digitalRead(ENCODER_B)) {
+  if (digitalRead(CONV_ENCODER_A) == digitalRead(CONV_ENCODER_B)) {
     encoderCount--;
   } else {
     encoderCount++;
@@ -42,14 +42,14 @@ void setup()
   pinMode(JET_2_PIN, OUTPUT);
   pinMode(JET_3_PIN, OUTPUT);
   
-  pinMode(RPWM_PIN, OUTPUT);
-  pinMode(R_EN_PIN, OUTPUT);
-  pinMode(ENCODER_A, INPUT_PULLUP);
-  pinMode(ENCODER_B, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_A), readEncoderA, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_B), readEncoderB, CHANGE);
-  digitalWrite(R_EN_PIN, LOW);
-  analogWrite(RPWM_PIN, 0);
+  pinMode(CONV_RPWM_PIN, OUTPUT);
+  pinMode(CONV_R_EN_PIN, OUTPUT);
+  pinMode(CONV_ENCODER_A, INPUT_PULLUP);
+  pinMode(CONV_ENCODER_B, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_A), readEncoderA, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_B), readEncoderB, CHANGE);
+  digitalWrite(CONV_R_EN_PIN, LOW);
+  analogWrite(CONV_RPWM_PIN, 0);
 
   print("Ready");
 }
@@ -100,12 +100,12 @@ void processMessage(char *message) {
       conveyorOn = !conveyorOn;
       if (!conveyorOn) 
       {
-        digitalWrite(R_EN_PIN, LOW);
-        analogWrite(RPWM_PIN, 0);
+        digitalWrite(CONV_R_EN_PIN, LOW);
+        analogWrite(CONV_RPWM_PIN, 0);
       }
       else {
-        digitalWrite(R_EN_PIN, HIGH);
-        analogWrite(RPWM_PIN, 250);
+        digitalWrite(CONV_R_EN_PIN, HIGH);
+        analogWrite(CONV_RPWM_PIN, 250);
       }
       print(conveyorOn ? "on" : "off");
       break;
@@ -116,7 +116,7 @@ void processMessage(char *message) {
         print("conveyor speed above 250");
       if (actionValue < 50)
         print("conveyor speed below 50");
-      analogWrite(RPWM_PIN, actionValue);
+      analogWrite(CONV_RPWM_PIN, actionValue);
       print(actionValue);
       break;
     }
