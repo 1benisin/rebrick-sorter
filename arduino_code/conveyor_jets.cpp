@@ -10,11 +10,22 @@
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
+
 int JET_FIRE_TIMES[4];  // Array to store fire times for each jet
 bool settingsInitialized = false;
 
 volatile bool conveyorOn = false;
 volatile long encoderCount = 0;  // New encoder count variable
+
+// Update this value to match the motor's encoder resolution after gearing
+#define CONV_ENCODER_PPR 8400  // 64 CPR * 131.25 gear ratio
+
+int targetRPM = 40;          // Desired RPM (can be updated with an 'r' command)
+int currentRPM = 0;          // Measured RPM from the encoder
+int pwmValue = 0;            // Current PWM value (0-255)
+float kp = 1.0;              // Proportional gain (tune as needed)
+unsigned long lastControlMillis = 0;
+const unsigned long controlInterval = 100;  // Interval for RPM/control update (ms)
 
 // New ISR functions
 void readEncoderA() {
@@ -96,28 +107,34 @@ void processMessage(char *message) {
       break;
     }
 
-    case 'o': { // converyor on off
+    case 'o': { // conveyor on off
       conveyorOn = !conveyorOn;
-      if (!conveyorOn) 
-      {
+      if (!conveyorOn) {
         digitalWrite(CONV_R_EN_PIN, LOW);
         analogWrite(CONV_RPWM_PIN, 0);
-      }
-      else {
+        pwmValue = 0;
+      } else {
         digitalWrite(CONV_R_EN_PIN, HIGH);
-        analogWrite(CONV_RPWM_PIN, 250);
+        pwmValue = 100;  // Starting PWM value
+        analogWrite(CONV_RPWM_PIN, pwmValue);
+        lastControlMillis = millis();
+        encoderCount = 0;  // Reset encoder count when starting
       }
       print(conveyorOn ? "on" : "off");
       break;
     }
 
-    case 'c': { // action value is the speed
-      if (actionValue > 255)
-        print("conveyor speed above 250");
-      if (actionValue < 50)
-        print("conveyor speed below 50");
-      analogWrite(CONV_RPWM_PIN, actionValue);
-      print(actionValue);
+    case 'c': { // Set target RPM (formerly 'r')
+      int previousTargetRPM = targetRPM; //store the value before it is changed
+      targetRPM = constrain(actionValue, 10, 60); // Constrain to safe range
+
+      if (actionValue < 10 || actionValue > 60){
+        Serial.print("Target RPM outside of bounds [10 - 60],");
+      } else {
+        Serial.print("Target RPM updated: ");
+      }
+      
+      Serial.println(targetRPM);
       break;
     }
     
@@ -193,6 +210,38 @@ void loop() {
       // Add the incoming byte to our message
       message[message_pos] = inByte;
       message_pos++;
+    }
+  }
+
+  // Closed-Loop Motor Control
+  if (conveyorOn) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastControlMillis >= controlInterval) {
+      // Safely read and reset the encoder count
+      noInterrupts();
+      long count = encoderCount;
+      encoderCount = 0;
+      interrupts();
+      
+      // Calculate RPM
+      currentRPM = (abs(count) * 60000L) / (CONV_ENCODER_PPR * controlInterval);
+      
+      // Proportional control: adjust PWM based on RPM error
+      int error = targetRPM - currentRPM;
+      pwmValue += (int)(kp * error);
+      pwmValue = constrain(pwmValue, 0, 255);
+      
+      // Update motor speed
+      analogWrite(CONV_RPWM_PIN, pwmValue);
+      lastControlMillis = currentTime;
+      
+      // Debug info
+      Serial.print("RPM: ");
+      Serial.print(currentRPM);
+      Serial.print(" | Target RPM: ");
+      Serial.print(targetRPM);
+      Serial.print(" | PWM: ");
+      Serial.println(pwmValue);
     }
   }
 
