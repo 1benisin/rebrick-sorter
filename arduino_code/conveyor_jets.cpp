@@ -12,6 +12,8 @@
 
 
 int JET_FIRE_TIMES[4];  // Array to store fire times for each jet
+bool jetActive[4] = {false, false, false, false};  // Track if each jet is currently firing
+unsigned long jetEndTime[4];  // Store end times for each jet
 bool settingsInitialized = false;
 
 volatile bool conveyorOn = false;
@@ -149,9 +151,11 @@ void processMessage(char *message) {
           case 2: jetPin = JET_2_PIN; break;
           case 3: jetPin = JET_3_PIN; break;
         }
+        unsigned long jetStartTime = millis();
         digitalWrite(jetPin, HIGH);
-        delay(JET_FIRE_TIMES[actionValue]);
-        digitalWrite(jetPin, LOW);
+        // Store the jet state and end time in global variables
+        jetActive[actionValue] = true;
+        jetEndTime[actionValue] = jetStartTime + JET_FIRE_TIMES[actionValue];
       }
       else {
         print("no matching jet number");
@@ -245,8 +249,24 @@ void loop() {
     }
   }
 
+  // Check if any jets need to be turned off
+  for(int i = 0; i < 4; i++) {
+    if(jetActive[i] && millis() >= jetEndTime[i]) {
+      digitalWrite(getJetPin(i), LOW);
+      jetActive[i] = false;
+    }
+  }
 }
 
+int getJetPin(int jetNumber) {
+  switch(jetNumber) {
+    case 0: return JET_0_PIN;
+    case 1: return JET_1_PIN;
+    case 2: return JET_2_PIN;
+    case 3: return JET_3_PIN;
+    default: return -1;
+  }
+}
 
 void print(String a) { 
   Serial.print("Main: ");

@@ -19,7 +19,7 @@ export const LandingHero = () => {
       <div>
         {/* <Link href={isSignedIn ? "/dashboard" : "/sign-up"}> */}
         <Link href="/dashboard">
-          <Button variant="premium" className="rounded-full p-4 font-semibold md:p-6 md:text-lg">
+          <Button type="button" variant="premium" className="rounded-full p-4 font-semibold md:p-6 md:text-lg">
             Start Generating For Free
           </Button>
         </Link>

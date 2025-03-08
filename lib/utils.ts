@@ -37,10 +37,6 @@ export function getFormattedTime(fromAccuracy: TimeUnit, toAccuracy: TimeUnit, t
 }
 
 export const findPositionAtTime = (startPos: number, startTime: number, endTime: number, conveyorSpeed: number) => {
-  let remainingTime = endTime - startTime;
-  if (remainingTime < 0) {
-    console.warn('findPositionAtTime: startTime is after endTime'); // sanity check
-    return startPos;
-  }
-  return startPos + conveyorSpeed * remainingTime;
+  let timeDiff = endTime - startTime;
+  return startPos - conveyorSpeed * timeDiff;
 };

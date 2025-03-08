@@ -21,6 +21,7 @@ const CalibrationButton = () => {
 
   return (
     <Button
+      type="button"
       className="bg-green-500 font-bold text-white hover:bg-green-700"
       variant={isRunning ? 'outline' : 'default'}
       onClick={handleClick}

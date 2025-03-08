@@ -24,7 +24,11 @@ const FakeSortPartButton = () => {
     socket.emit(AllEvents.SORT_PART, fakePayload);
   };
 
-  return <Button onClick={handleClick}>Sort Part</Button>;
+  return (
+    <Button type="button" onClick={handleClick}>
+      Sort Part
+    </Button>
+  );
 };
 
 export default FakeSortPartButton;

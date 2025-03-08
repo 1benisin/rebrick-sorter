@@ -33,7 +33,13 @@ const AlertDisplay = () => {
                   <AlertDescription>{alert.message}</AlertDescription>
                 </div>
               </div>
-              <Button onClick={() => clearAlertAtTimestamp(alert.timestamp)} variant="ghost" size="sm" title="Clear">
+              <Button
+                type="button"
+                onClick={() => clearAlertAtTimestamp(alert.timestamp)}
+                variant="ghost"
+                size="sm"
+                title="Clear"
+              >
                 <XCircle className="h-6 w-6" />
               </Button>
             </div>

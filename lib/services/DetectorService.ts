@@ -19,7 +19,7 @@ const DETECTION_MODEL_URL = '/detection-model/model.json';
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
 const MAX_DETECTION_DIMENSION = 300; // max width or height of image to be used for detection
 const MIN_DETECT_DIST_PERCENT = 0.1; // min percentage of detection image width two detections can be from each other
-const CALIBRATION_SAMPLE_COUNT = 30;
+const CALIBRATION_SAMPLE_COUNT = 20;
 
 // create tagged predictions type that extends automl.PredictedObject
 type TaggedPredictionType = automl.PredictedObject & {
@@ -117,48 +117,38 @@ class DetectorService implements Service {
 
       while (speedSamples.length < CALIBRATION_SAMPLE_COUNT) {
         iterationCount++;
-        console.log(`Calibration iteration ${iterationCount}, samples collected: ${speedSamples.length}`);
+        // console.log(`iteration ${iterationCount}, samples: ${speedSamples.length}`);
 
         const detectionPairs = await this.detect();
-        console.log(`Detected ${detectionPairs.length} pairs`);
 
         if (detectionPairs.length === 0) {
-          console.log('No detections found in this iteration');
           continue;
         }
 
         // get the detection with the centroid furthest to the right
         const nextDetection = detectionPairs.reduce((acc, pair) => {
           const detection: Detection = pair[0];
-          return acc.centroid.x > detection.centroid.x ? acc : detection;
+          return acc.centroid.x < detection.centroid.x ? acc : detection;
         }, detectionPairs[0][0]);
 
         console.log(`Found detection at x: ${nextDetection.centroid.x}`);
 
-        if (lastPosition && lastTimestamp && nextDetection.centroid.x > lastPosition.x) {
+        if (lastPosition && lastTimestamp && nextDetection.centroid.x < lastPosition.x) {
           const timeDiff = nextDetection.timestamp - lastTimestamp;
           // Only calculate speed if at least 100ms has passed
           if (timeDiff >= 100) {
-            const speed = (nextDetection.centroid.x - lastPosition.x) / timeDiff;
+            const speed = (lastPosition.x - nextDetection.centroid.x) / timeDiff;
             speedSamples.push(speed);
             console.log(`Added speed sample: ${speed} (${speedSamples.length}/${CALIBRATION_SAMPLE_COUNT})`);
-          } else {
-            console.log(`Time difference too small: ${timeDiff}ms`);
           }
-        } else {
-          console.log('Skipping speed calculation:', {
-            hasLastPosition: !!lastPosition,
-            hasLastTimestamp: !!lastTimestamp,
-            isMovingRight: lastPosition ? nextDetection.centroid.x > lastPosition.x : 'N/A',
-          });
         }
 
         lastPosition = nextDetection.centroid;
         lastTimestamp = nextDetection.timestamp;
 
         // Add safety timeout after 100 iterations
-        if (iterationCount > 100) {
-          console.log('Calibration timeout after 100 iterations');
+        if (iterationCount > 150) {
+          console.log('Calibration timeout after 150 iterations');
           throw new Error('Calibration timeout - unable to collect enough samples');
         }
 
