@@ -108,19 +108,32 @@ class DetectorService implements Service {
         throw new Error(error);
       }
 
+      console.log('Starting calibration...');
       // loop until we have enough distance samples
       let speedSamples = []; // pixels per millisecond
       let lastPosition = null;
       let lastTimestamp = null;
-      while (speedSamples.length < CALIBRATION_SAMPLE_COUNT) {
-        const detectionPairs = await this.detect();
-        if (detectionPairs.length === 0) continue;
+      let iterationCount = 0;
 
-        // get the dection with the centroid furthest to the right
+      while (speedSamples.length < CALIBRATION_SAMPLE_COUNT) {
+        iterationCount++;
+        console.log(`Calibration iteration ${iterationCount}, samples collected: ${speedSamples.length}`);
+
+        const detectionPairs = await this.detect();
+        console.log(`Detected ${detectionPairs.length} pairs`);
+
+        if (detectionPairs.length === 0) {
+          console.log('No detections found in this iteration');
+          continue;
+        }
+
+        // get the detection with the centroid furthest to the right
         const nextDetection = detectionPairs.reduce((acc, pair) => {
           const detection: Detection = pair[0];
           return acc.centroid.x > detection.centroid.x ? acc : detection;
         }, detectionPairs[0][0]);
+
+        console.log(`Found detection at x: ${nextDetection.centroid.x}`);
 
         if (lastPosition && lastTimestamp && nextDetection.centroid.x > lastPosition.x) {
           const timeDiff = nextDetection.timestamp - lastTimestamp;
@@ -128,11 +141,29 @@ class DetectorService implements Service {
           if (timeDiff >= 100) {
             const speed = (nextDetection.centroid.x - lastPosition.x) / timeDiff;
             speedSamples.push(speed);
+            console.log(`Added speed sample: ${speed} (${speedSamples.length}/${CALIBRATION_SAMPLE_COUNT})`);
+          } else {
+            console.log(`Time difference too small: ${timeDiff}ms`);
           }
+        } else {
+          console.log('Skipping speed calculation:', {
+            hasLastPosition: !!lastPosition,
+            hasLastTimestamp: !!lastTimestamp,
+            isMovingRight: lastPosition ? nextDetection.centroid.x > lastPosition.x : 'N/A',
+          });
         }
 
         lastPosition = nextDetection.centroid;
         lastTimestamp = nextDetection.timestamp;
+
+        // Add safety timeout after 100 iterations
+        if (iterationCount > 100) {
+          console.log('Calibration timeout after 100 iterations');
+          throw new Error('Calibration timeout - unable to collect enough samples');
+        }
+
+        // Add small delay between iterations
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
       // return median distance
       speedSamples.sort((a, b) => a - b);
