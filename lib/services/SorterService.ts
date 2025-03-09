@@ -11,7 +11,7 @@ import { v4 as uuid } from 'uuid';
 import serviceManager from './ServiceManager';
 import { findPositionAtTime } from '../utils';
 
-const MIN_PROCESS_LOOP_TIME = 800;
+const MIN_PROCESS_LOOP_TIME = 500;
 
 class SortProcessControllerService implements Service {
   private status: ServiceState = ServiceState.UNINITIALIZED;
@@ -67,9 +67,6 @@ class SortProcessControllerService implements Service {
         if (!lastDetection) {
           continue;
         }
-
-        // TODO: properly calculate distance between detections using conveyor speed logs
-        // for each speed change in the speed log that would have effected the lastDetection calculate where it would be at the unmatchedDetection.timestamp
 
         const settingsService = serviceManager.getService(ServiceName.SETTINGS);
         const { conveyorSpeed } = settingsService.getSettings();
@@ -201,7 +198,7 @@ class SortProcessControllerService implements Service {
 
   private async runProcess() {
     const startTime = Date.now();
-    console.log('----------- Process Start ');
+    // console.log('----------- Process Start ');
     try {
       // Get detections
 
@@ -227,7 +224,7 @@ class SortProcessControllerService implements Service {
       // schedult to run process again after MIN_PROCESS_LOOP_TIME
       const timeToNextRun = Math.max(0, MIN_PROCESS_LOOP_TIME - (Date.now() - startTime));
 
-      console.log('----------- Process End ', (Date.now() + timeToNextRun - startTime) / 1000);
+      // console.log('----------- Process End ', (Date.now() + timeToNextRun - startTime) / 1000);
       setTimeout(() => this.runProcess(), timeToNextRun);
     }
   }

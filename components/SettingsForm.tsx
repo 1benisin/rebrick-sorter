@@ -135,6 +135,7 @@ const SettingsForm = () => {
                     <h3 className="text-lg font-semibold">Sorter {index}</h3>
                   </div>
                   <Button
+                    type="button"
                     size="sm"
                     variant="destructive"
                     onClick={(e) => {

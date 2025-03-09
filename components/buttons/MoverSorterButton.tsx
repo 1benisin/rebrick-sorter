@@ -24,7 +24,9 @@ const MoveSorterButton = () => {
 
   return (
     <Card className="flex items-end gap-3 p-2">
-      <Button onClick={handleClick}>Move Sorter</Button>
+      <Button type="button" onClick={handleClick}>
+        Move Sorter
+      </Button>
       <div className="grid gap-1">
         <Label htmlFor="sorter">Sorter:</Label>
         <Input id="sorter" className="w-12" placeholder={sorter} onChange={(e) => setSorter(e.target.value)} />

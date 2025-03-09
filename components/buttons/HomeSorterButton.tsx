@@ -21,7 +21,11 @@ const HomeSorterButton = () => {
     socket.emit(AllEvents.HOME_SORTER, { sorter: 3 });
   };
 
-  return <Button onClick={handleClick}>Home Sorter</Button>;
+  return (
+    <Button type="button" onClick={handleClick}>
+      Home Sorter
+    </Button>
+  );
 };
 
 export default HomeSorterButton;

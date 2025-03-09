@@ -23,7 +23,9 @@ const JetButton = () => {
 
   return (
     <Card className="flex items-end gap-3 p-2">
-      <Button onClick={handleClick}>Fire Jet</Button>
+      <Button type="button" onClick={handleClick}>
+        Fire Jet
+      </Button>
       <div className="grid gap-1">
         <Label htmlFor="jet">Jet:</Label>
         <Input id="jest" className="w-12" placeholder={jet} onChange={(e) => setJet(e.target.value)} />

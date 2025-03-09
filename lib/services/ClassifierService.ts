@@ -254,7 +254,7 @@ class ClassifierService implements Service {
       // validate the response
       const brickognizeResponse = brickognizeResponseSchema.parse(response.data);
 
-      // Save the image and response to Firebase
+      // Save the image and response to Firebase for future brickognize model distillation
       await this.saveImageAndResponse(imageURI, brickognizeResponse);
 
       // Handle the server response as needed

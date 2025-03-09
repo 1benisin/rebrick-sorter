@@ -3,16 +3,48 @@
 #define JET_2_PIN 10
 #define JET_3_PIN 9
 
-#define C_DIR1_PIN 7
-#define C_DIR2_PIN 8
-#define C_SPEED_PIN 3
+#define CONV_RPWM_PIN   5
+#define CONV_R_EN_PIN   6
+#define CONV_ENCODER_A  2
+#define CONV_ENCODER_B  3
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
+
 int JET_FIRE_TIMES[4];  // Array to store fire times for each jet
+bool jetActive[4] = {false, false, false, false};  // Track if each jet is currently firing
+unsigned long jetEndTime[4];  // Store end times for each jet
 bool settingsInitialized = false;
 
 volatile bool conveyorOn = false;
+volatile long encoderCount = 0;  // New encoder count variable
+
+// Update this value to match the motor's encoder resolution after gearing
+#define CONV_ENCODER_PPR 8400  // 64 CPR * 131.25 gear ratio
+
+int targetRPM = 40;          // Desired RPM (can be updated with an 'r' command)
+int currentRPM = 0;          // Measured RPM from the encoder
+int pwmValue = 0;            // Current PWM value (0-255)
+float kp = 1.0;              // Proportional gain (tune as needed)
+unsigned long lastControlMillis = 0;
+const unsigned long controlInterval = 100;  // Interval for RPM/control update (ms)
+
+// New ISR functions
+void readEncoderA() {
+  if (digitalRead(CONV_ENCODER_A) == digitalRead(CONV_ENCODER_B)) {
+    encoderCount++;
+  } else {
+    encoderCount--;
+  }
+}
+
+void readEncoderB() {
+  if (digitalRead(CONV_ENCODER_A) == digitalRead(CONV_ENCODER_B)) {
+    encoderCount--;
+  } else {
+    encoderCount++;
+  }
+}
 
 void setup()
 {
@@ -23,11 +55,14 @@ void setup()
   pinMode(JET_2_PIN, OUTPUT);
   pinMode(JET_3_PIN, OUTPUT);
   
-  pinMode(C_DIR1_PIN, OUTPUT);
-  pinMode(C_DIR2_PIN, OUTPUT);
-  pinMode(C_SPEED_PIN, OUTPUT);
-
-  //  digitalWrite(C_DIR1_PIN, LOW); // sets the conveyor going in in the right direction
+  pinMode(CONV_RPWM_PIN, OUTPUT);
+  pinMode(CONV_R_EN_PIN, OUTPUT);
+  pinMode(CONV_ENCODER_A, INPUT_PULLUP);
+  pinMode(CONV_ENCODER_B, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_A), readEncoderA, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_B), readEncoderB, CHANGE);
+  digitalWrite(CONV_R_EN_PIN, LOW);
+  analogWrite(CONV_RPWM_PIN, 0);
 
   print("Ready");
 }
@@ -74,29 +109,34 @@ void processMessage(char *message) {
       break;
     }
 
-    case 'o': { // converyor on off
+    case 'o': { // conveyor on off
       conveyorOn = !conveyorOn;
-      if (!conveyorOn) 
-      {
-        // Set rotation direction pins both to low to turn off motor
-        // digitalWrite(C_DIR1_PIN, LOW);
-        // digitalWrite(C_DIR2_PIN, LOW);
-        analogWrite(C_SPEED_PIN, 0); 
-      }
-      else {
-        analogWrite(C_SPEED_PIN, 250); 
+      if (!conveyorOn) {
+        digitalWrite(CONV_R_EN_PIN, LOW);
+        analogWrite(CONV_RPWM_PIN, 0);
+        pwmValue = 0;
+      } else {
+        digitalWrite(CONV_R_EN_PIN, HIGH);
+        pwmValue = 100;  // Starting PWM value
+        analogWrite(CONV_RPWM_PIN, pwmValue);
+        lastControlMillis = millis();
+        encoderCount = 0;  // Reset encoder count when starting
       }
       print(conveyorOn ? "on" : "off");
       break;
     }
 
-    case 'c': { // action value is the speed{
-      if (actionValue > 255)
-        print("conveyor speed above 250");
-      if (actionValue < 50)
-        print("conveyor speed below 50");
-      analogWrite(C_SPEED_PIN, actionValue);
-      print(actionValue);
+    case 'c': { // Set target RPM (formerly 'r')
+      int previousTargetRPM = targetRPM; //store the value before it is changed
+      targetRPM = constrain(actionValue, 10, 60); // Constrain to safe range
+
+      if (actionValue < 10 || actionValue > 60){
+        Serial.print("Target RPM outside of bounds [10 - 60],");
+      } else {
+        Serial.print("Target RPM updated: ");
+      }
+      
+      Serial.println(targetRPM);
       break;
     }
     
@@ -111,9 +151,11 @@ void processMessage(char *message) {
           case 2: jetPin = JET_2_PIN; break;
           case 3: jetPin = JET_3_PIN; break;
         }
+        unsigned long jetStartTime = millis();
         digitalWrite(jetPin, HIGH);
-        delay(JET_FIRE_TIMES[actionValue]);
-        digitalWrite(jetPin, LOW);
+        // Store the jet state and end time in global variables
+        jetActive[actionValue] = true;
+        jetEndTime[actionValue] = jetStartTime + JET_FIRE_TIMES[actionValue];
       }
       else {
         print("no matching jet number");
@@ -175,8 +217,56 @@ void loop() {
     }
   }
 
+  // Closed-Loop Motor Control
+  if (conveyorOn) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastControlMillis >= controlInterval) {
+      // Safely read and reset the encoder count
+      noInterrupts();
+      long count = encoderCount;
+      encoderCount = 0;
+      interrupts();
+      
+      // Calculate RPM
+      currentRPM = (abs(count) * 60000L) / (CONV_ENCODER_PPR * controlInterval);
+      
+      // Proportional control: adjust PWM based on RPM error
+      int error = targetRPM - currentRPM;
+      pwmValue += (int)(kp * error);
+      pwmValue = constrain(pwmValue, 0, 255);
+      
+      // Update motor speed
+      analogWrite(CONV_RPWM_PIN, pwmValue);
+      lastControlMillis = currentTime;
+      
+      // Debug info
+      Serial.print("RPM: ");
+      Serial.print(currentRPM);
+      Serial.print(" | Target RPM: ");
+      Serial.print(targetRPM);
+      Serial.print(" | PWM: ");
+      Serial.println(pwmValue);
+    }
+  }
+
+  // Check if any jets need to be turned off
+  for(int i = 0; i < 4; i++) {
+    if(jetActive[i] && millis() >= jetEndTime[i]) {
+      digitalWrite(getJetPin(i), LOW);
+      jetActive[i] = false;
+    }
+  }
 }
 
+int getJetPin(int jetNumber) {
+  switch(jetNumber) {
+    case 0: return JET_0_PIN;
+    case 1: return JET_1_PIN;
+    case 2: return JET_2_PIN;
+    case 3: return JET_3_PIN;
+    default: return -1;
+  }
+}
 
 void print(String a) { 
   Serial.print("Main: ");

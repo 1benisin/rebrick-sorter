@@ -12,6 +12,7 @@ const CalibrationButton = () => {
   const [calibrationResult, setCalibrationResult] = useState<number | null>(null);
 
   const handleCalibrate = async () => {
+    console.log('Calibrating button clicked');
     const detector = serviceManager.getService(ServiceName.DETECTOR);
     setIsCalibrating(true);
     await detector.calibrateConveyorSpeed().then((result) => {
@@ -23,6 +24,7 @@ const CalibrationButton = () => {
   return (
     <div className="flex items-center">
       <Button
+        type="button"
         className="bg-green-500 hover:bg-green-700"
         variant={isCalibrating ? 'outline' : 'default'}
         onClick={handleCalibrate}
