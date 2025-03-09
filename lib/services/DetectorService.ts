@@ -472,21 +472,18 @@ class DetectorService implements Service {
     const sourceYOffset2 = height * 0.3; // Skip 30% from top
     const sourceHeight2 = height * 0.4; // Use middle 40% of source image
 
-    // For the second image: save context, flip horizontally, draw, then restore
-    ctx.save();
-    ctx.scale(-1, 1); // Flip horizontally
+    // Draw the second image flipped horizontally by using negative width in destination parameters
     ctx.drawImage(
       imageBitmap2,
       0,
       sourceYOffset2,
       width,
       sourceHeight2, // source dimensions (middle portion)
-      -width, // Need to use negative width when flipped
+      width, // Start from right edge
       height * 0.6, // Start at 60% of height
-      width,
+      -width, // Negative width will flip horizontally
       height * 0.4, // Use remaining 40% of height
     );
-    ctx.restore();
 
     return targetCanvas;
   }
