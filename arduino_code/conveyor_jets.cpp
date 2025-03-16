@@ -177,43 +177,26 @@ void loop() {
   static char message[MAX_MESSAGE_LENGTH];
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
-  static unsigned int checksum = 0;
-  static unsigned int receivedChecksum = 0;
 
   while (Serial.available() > 0) {
-    // Read the next available byte in the serial receive buffer
     char inByte = Serial.read();
 
-    // Start capturing if we receive the start marker
     if(inByte == START_MARKER) {
       capturingMessage = true;
       message_pos = 0;
-      checksum = 0;
     }
-    // Stop capturing if we receive the end marker
     else if (inByte == END_MARKER) {
       capturingMessage = false;
-      // The last two characters of the message will be the checksum
-      receivedChecksum = (message[message_pos - 2] - '0') * 10 + (message[message_pos - 1] - '0');
-      message[message_pos - 2] = '\0';  // Set the end of the message before the checksum
-      
-      // Calculate the checksum now, after the message part is complete
-      for (int i = 0; i < message_pos - 2; i++) {
-        checksum += message[i];
-      }
-
-      // Check if the calculated checksum matches the received one
-      if (checksum % 100 == receivedChecksum) { // Checksum can be 2 digits
-        processMessage(message); // Process the message if it's correct
-      } else {
-        print("Error: Checksum does not match"); // Report an error if not
-      }
+      message[message_pos] = '\0';  // Null terminate the string
+      processMessage(message);
     }
-    // If we're capturing and the character isn't the end marker
     else if (capturingMessage) {
-      // Add the incoming byte to our message
       message[message_pos] = inByte;
       message_pos++;
+      if (message_pos >= MAX_MESSAGE_LENGTH) {
+        capturingMessage = false;
+        print("Error: Message too long");
+      }
     }
   }
 
