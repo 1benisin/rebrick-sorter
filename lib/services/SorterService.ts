@@ -114,7 +114,7 @@ class SortProcessControllerService implements Service {
         const lastDetectionPair = group.detectionPairs[lastDetectionIndex];
 
         // if past 1/3 of the screen and not already classifying: classify
-        if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.25 && !group?.classifying) {
+        if (lastDetectionPair[0].centroid.x < videoCaptureDimensions.width * 0.5 && !group?.classifying) {
           this.updateDetectionPairGroupValue(group.id, 'classifying', true);
 
           const settingsService = serviceManager.getService(ServiceName.SETTINGS);
@@ -126,7 +126,7 @@ class SortProcessControllerService implements Service {
               imageURI1: lastDetectionPair[0].imageURI,
               imageURI2: lastDetectionPair[1].imageURI,
               initialTime: lastDetectionPair[0].timestamp,
-              initialPosition: lastDetectionPair[0].centroid.x,
+              initialPosition: videoCaptureDimensions.width - lastDetectionPair[0].centroid.x,
               detectionDimensions: { width: lastDetectionPair[0].box.width, height: lastDetectionPair[0].box.height },
               classificationThresholdPercentage: settings.classificationThresholdPercentage,
               maxPartDimensions: settings.sorters.map((s) => s.maxPartDimensions),
@@ -186,8 +186,8 @@ class SortProcessControllerService implements Service {
       const { conveyorSpeed } = settingsService.getSettings();
 
       const distanceTravelled = (Date.now() - lastPair[0].timestamp) * conveyorSpeed;
-      const predictedX = lastPair[0].centroid.x + distanceTravelled;
-      if (predictedX > sortProcessStore.getState().videoCaptureDimensions.width) {
+      const predictedX = lastPair[0].centroid.x - distanceTravelled;
+      if (predictedX < 0) {
         group.offScreen = true;
       }
 
