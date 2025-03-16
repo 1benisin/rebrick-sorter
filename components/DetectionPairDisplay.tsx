@@ -53,6 +53,17 @@ const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
             >{`${(100 * classification.score).toFixed(0)}%`}</Badge>
           </div>
         )}
+        {classification && (
+          <div className="text-xs">
+            <div>
+              Sorter: <span className="font-bold text-blue-500">{classification?.sorter}</span>
+            </div>
+            <div>
+              Bin: <span className="font-bold text-purple-500">{classification?.bin}</span>
+            </div>
+            <div>{classification.name}</div>
+          </div>
+        )}
         {skipSortReason && <div className="text-xs text-red-700">{`${skipSortReason}: ${skipSort}`}</div>}
         {/* Display detections */}
         <div className="flex flex-col" onClick={() => console.log('Detection Pairs: ', group.detectionPairs)}>
@@ -103,13 +114,6 @@ const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
             </div>
           ))}
         </div>
-        {classification && (
-          <div className="text-xs">
-            <div>{`Sorter: ${classification?.sorter}`}</div>
-            <div>{`Bin: ${classification?.bin}`}</div>
-            <div>{classification.name}</div>
-          </div>
-        )}
       </Card>
 
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
