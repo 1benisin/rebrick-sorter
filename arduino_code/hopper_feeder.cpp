@@ -105,18 +105,12 @@ void checkFeeder() {
 
   // Add sensor reading debug
   int distance = ReadDistance(depthSensorAddress);
-  if (FEEDER_DEBUG) {
-    Serial.print("Distance: ");
-    Serial.println(distance);
+  if (FEEDER_DEBUG && distance < 50) {
+    Serial.println("SENSOR: Part detected in front of sensor");
   }
 
   switch (currFeederState) {
     case FeederState::start_moving: {
-      if (FEEDER_DEBUG) {
-        Serial.println("State: start_moving");
-        Serial.print("Motor Speed: ");
-        Serial.println(motorSpeed);
-      }
       startMotor(); 
       analogWrite(FEEDER_ENABLE_PIN, motorSpeed);
       feederStartTime = currentMillis;
@@ -125,22 +119,14 @@ void checkFeeder() {
     }
 
     case FeederState::moving: 
-      if (FEEDER_DEBUG) {
-        Serial.println("State: moving");
-        Serial.print("Distance: ");
-        Serial.println(distance);
-      }
       if (distance < 50) {
-        if (FEEDER_DEBUG) Serial.println("part_detected");
         currFeederState = FeederState::part_detected;
         previousMillis = currentMillis;
       }
       break;
     
-
     case FeederState::part_detected:
       if (currentMillis - previousMillis >= delayStoppingInterval) {
-        if (FEEDER_DEBUG) Serial.println("paused");
         stopMotor();
         totalFeederRunTime += currentMillis - feederStartTime;
         currFeederState = FeederState::paused;
@@ -151,16 +137,12 @@ void checkFeeder() {
     case FeederState::paused:
       if (currentMillis - previousMillis >= pauseInterval) {
         if (ReadDistance(depthSensorAddress) < 50) { 
-          if (FEEDER_DEBUG) Serial.println("short_move");
-        // if part is still there do a short move
           startMotor(); 
           analogWrite(FEEDER_ENABLE_PIN, motorSpeed);
           feederStartTime = currentMillis;
           currFeederState = FeederState::short_move;
           previousMillis = currentMillis;
         } else {
-          if (FEEDER_DEBUG) Serial.println("start_moving");
-          // else start full moving again 
           currFeederState = FeederState::start_moving;
         }
       }
@@ -168,7 +150,6 @@ void checkFeeder() {
 
     case FeederState::short_move:
       if (currentMillis - previousMillis >= shortMoveInterval) {
-        if (FEEDER_DEBUG) Serial.println("paused");
         stopMotor();
         totalFeederRunTime += currentMillis - feederStartTime;
         currFeederState = FeederState::paused;
@@ -191,25 +172,13 @@ void checkHopper()
 {
   unsigned long currentMillis = millis();
 
-  // Add endstop and stepper status debug
-  if (HOPPER_DEBUG) {
-    Serial.print("Endstop State: ");
-    Serial.println(digitalRead(STOP_PIN));
-    Serial.print("Stepper Running: ");
-    Serial.println(stepper->isRunning());
-    Serial.print("Current Position: ");
-    Serial.println(stepper->getCurrentPosition());
-  }
-
   switch (currHopperState)
   {
   case HopperState::moving_down: 
-    if (HOPPER_DEBUG) Serial.println("State: moving_down");
-    if ( digitalRead(STOP_PIN) == LOW || !stepper->isRunning()) {
+    if (digitalRead(STOP_PIN) == LOW || !stepper->isRunning()) {
       stepper->forceStopAndNewPosition(0);
       prevHopperTime = currentMillis;      
       currHopperState = HopperState::waiting_bottom;
-      if (HOPPER_DEBUG) Serial.println("waiting_bottom"); 
     }
     break;
 
@@ -217,32 +186,26 @@ void checkHopper()
     if (currentMillis - prevHopperTime >= hopperWaitTime) {
       stepper->move(hopperStepsPerAction);
       currHopperState = HopperState::moving_up;
-      if (HOPPER_DEBUG) Serial.println("moving_up");
     } 
     break;
 
   case HopperState::moving_up:
     if (!stepper->isRunning()) {
       currHopperState = HopperState::waiting_top;
-      if (HOPPER_DEBUG) Serial.println("waiting_top"); 
     } 
     break;
 
   case HopperState::waiting_top: 
-    // will start the hopper step cycle over if
-    // total feeder run time or the current feeder vibration is logger than the happer action interval
     unsigned long currVibrationExceedsInterval = currentMillis - feederStartTime >= hopperActionInterval;
     if (totalFeederRunTime >= hopperActionInterval || currVibrationExceedsInterval) {
+      if (HOPPER_DEBUG) {
+        Serial.println("HOPPER: Starting new cycle - moving down");
+      }
       if (currVibrationExceedsInterval) feederStartTime = currentMillis;
       totalFeederRunTime = 0;
       stepper->move(-hopperStepsPerAction-20);
       currHopperState = HopperState::moving_down;
-      if (HOPPER_DEBUG) Serial.println("moving_down");
     } 
-    break;
-
-  default:
-    if (HOPPER_DEBUG) Serial.print("No Hopper State");
     break;
   }
 }
@@ -272,20 +235,10 @@ void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, uns
 }
  
 int ReadDistance(unsigned char device){
-    if (FEEDER_DEBUG) {
-        Serial.print("Reading from device: ");
-        Serial.println(device);
-    }
     SensorRead(0x00, i2c_rx_buf, 2, device);
     lenth_val=i2c_rx_buf[0];
     lenth_val=lenth_val<<8;
     lenth_val|=i2c_rx_buf[1];
-    if (FEEDER_DEBUG) {
-        Serial.print("Raw sensor values: ");
-        Serial.print(i2c_rx_buf[0]);
-        Serial.print(" ");
-        Serial.println(i2c_rx_buf[1]);
-    }
     return lenth_val;
 }
 

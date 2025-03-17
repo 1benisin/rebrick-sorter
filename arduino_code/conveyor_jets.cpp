@@ -223,12 +223,12 @@ void loop() {
       lastControlMillis = currentTime;
       
       // Debug info
-      Serial.print("RPM: ");
-      Serial.print(currentRPM);
-      Serial.print(" | Target RPM: ");
-      Serial.print(targetRPM);
-      Serial.print(" | PWM: ");
-      Serial.println(pwmValue);
+      // Serial.print("RPM: ");
+      // Serial.print(currentRPM);
+      // Serial.print(" | Target RPM: ");
+      // Serial.print(targetRPM);
+      // Serial.print(" | PWM: ");
+      // Serial.println(pwmValue);
     }
   }
 
