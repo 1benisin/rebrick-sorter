@@ -3,8 +3,8 @@
 
 #define AUTO_DISABLE true
 
-#define FEEDER_DEBUG false
-#define HOPPER_DEBUG false
+#define FEEDER_DEBUG true
+#define HOPPER_DEBUG true
 
 #define ENABLE_PIN 6
 #define DIR_PIN 5
@@ -103,9 +103,20 @@ FeederState currFeederState = FeederState::start_moving;
 void checkFeeder() {
   unsigned long currentMillis = millis();
 
+  // Add sensor reading debug
+  int distance = ReadDistance(depthSensorAddress);
+  if (FEEDER_DEBUG) {
+    Serial.print("Distance: ");
+    Serial.println(distance);
+  }
+
   switch (currFeederState) {
     case FeederState::start_moving: {
-      if (FEEDER_DEBUG) Serial.println("moving");
+      if (FEEDER_DEBUG) {
+        Serial.println("State: start_moving");
+        Serial.print("Motor Speed: ");
+        Serial.println(motorSpeed);
+      }
       startMotor(); 
       analogWrite(FEEDER_ENABLE_PIN, motorSpeed);
       feederStartTime = currentMillis;
@@ -114,8 +125,12 @@ void checkFeeder() {
     }
 
     case FeederState::moving: 
-      if (FEEDER_DEBUG) Serial.println("still moving");
-      if (ReadDistance(depthSensorAddress) < 50) {
+      if (FEEDER_DEBUG) {
+        Serial.println("State: moving");
+        Serial.print("Distance: ");
+        Serial.println(distance);
+      }
+      if (distance < 50) {
         if (FEEDER_DEBUG) Serial.println("part_detected");
         currFeederState = FeederState::part_detected;
         previousMillis = currentMillis;
@@ -176,10 +191,21 @@ void checkHopper()
 {
   unsigned long currentMillis = millis();
 
+  // Add endstop and stepper status debug
+  if (HOPPER_DEBUG) {
+    Serial.print("Endstop State: ");
+    Serial.println(digitalRead(STOP_PIN));
+    Serial.print("Stepper Running: ");
+    Serial.println(stepper->isRunning());
+    Serial.print("Current Position: ");
+    Serial.println(stepper->getCurrentPosition());
+  }
+
   switch (currHopperState)
   {
   case HopperState::moving_down: 
-    if ( digitalRead(STOP_PIN) == LOW || !stepper->isRunning()) { // if stepper is down moving or endstop is hit
+    if (HOPPER_DEBUG) Serial.println("State: moving_down");
+    if ( digitalRead(STOP_PIN) == LOW || !stepper->isRunning()) {
       stepper->forceStopAndNewPosition(0);
       prevHopperTime = currentMillis;      
       currHopperState = HopperState::waiting_bottom;
@@ -246,12 +272,20 @@ void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, uns
 }
  
 int ReadDistance(unsigned char device){
-    // Serial.println("Reading Distance..."); // Debug line
+    if (FEEDER_DEBUG) {
+        Serial.print("Reading from device: ");
+        Serial.println(device);
+    }
     SensorRead(0x00, i2c_rx_buf, 2, device);
     lenth_val=i2c_rx_buf[0];
     lenth_val=lenth_val<<8;
     lenth_val|=i2c_rx_buf[1];
-    // Serial.println("Distance read: " + String(lenth_val)); // Debug line
+    if (FEEDER_DEBUG) {
+        Serial.print("Raw sensor values: ");
+        Serial.print(i2c_rx_buf[0]);
+        Serial.print(" ");
+        Serial.println(i2c_rx_buf[1]);
+    }
     return lenth_val;
 }
 
