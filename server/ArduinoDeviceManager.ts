@@ -81,6 +81,11 @@ class ArduinoDeviceManager {
         path: initSettings.hopperFeederSerialPort,
         config: {
           deviceType: 'hopper_feeder',
+          HOPPER_ACTION_INTERVAL: 20000, // 20 seconds
+          MOTOR_SPEED: 200,
+          DELAY_STOPPING_INTERVAL: 5,
+          PAUSE_INTERVAL: 1000,
+          SHORT_MOVE_INTERVAL: 250,
         },
       },
     ];

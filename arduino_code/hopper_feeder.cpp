@@ -15,13 +15,14 @@
 #define ACCELERATION 1000
 #define SPEED 1000 
 
+#define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
+
 // Hopper Variables
 int hopperStepsPerAction = 2020; // motor steps it takes to move from top to bottom
-bool positionReset = false;
-bool movingUp = false;
 unsigned long prevHopperTime = 0;  // will store the last time the task was run
 const long hopperWaitTime = 10;  // interval at which to run the task (milliseconds)
 unsigned long hopperActionInterval = 20000; // 21000 // time between hopper moving down then up
+bool settingsInitialized = false;
 
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *stepper = NULL;
@@ -42,11 +43,15 @@ unsigned long previousMillis = 0;
 const long delayStoppingInterval = 5;
 const long pauseInterval = 1000; // time between short move vibrations 1500
 const long shortMoveInterval = 250;
-// int readDistance;
 unsigned long totalFeederRunTime = 0;
 unsigned long feederStartTime = 0;
 
-
+// Settings from server
+int HOPPER_ACTION_INTERVAL = 20000;
+int MOTOR_SPEED = 200;
+int DELAY_STOPPING_INTERVAL = 5;
+int PAUSE_INTERVAL = 1000;
+int SHORT_MOVE_INTERVAL = 250;
 
 void setup() {
 
@@ -77,8 +82,9 @@ void setup() {
 
     stepper->move(100);
   }
-
+  print("Ready"); 
 }
+
 void startMotor() {
   digitalWrite(FEEDER_MOTOR_PIN1, LOW);
   digitalWrite(FEEDER_MOTOR_PIN2, HIGH);
@@ -112,7 +118,7 @@ void checkFeeder() {
   switch (currFeederState) {
     case FeederState::start_moving: {
       startMotor(); 
-      analogWrite(FEEDER_ENABLE_PIN, motorSpeed);
+      analogWrite(FEEDER_ENABLE_PIN, MOTOR_SPEED);
       feederStartTime = currentMillis;
       currFeederState = FeederState::moving;
       break;
@@ -126,7 +132,7 @@ void checkFeeder() {
       break;
     
     case FeederState::part_detected:
-      if (currentMillis - previousMillis >= delayStoppingInterval) {
+      if (currentMillis - previousMillis >= DELAY_STOPPING_INTERVAL) {
         stopMotor();
         totalFeederRunTime += currentMillis - feederStartTime;
         currFeederState = FeederState::paused;
@@ -135,10 +141,10 @@ void checkFeeder() {
       break;
 
     case FeederState::paused:
-      if (currentMillis - previousMillis >= pauseInterval) {
+      if (currentMillis - previousMillis >= PAUSE_INTERVAL) {
         if (ReadDistance(depthSensorAddress) < 50) { 
           startMotor(); 
-          analogWrite(FEEDER_ENABLE_PIN, motorSpeed);
+          analogWrite(FEEDER_ENABLE_PIN, MOTOR_SPEED);
           feederStartTime = currentMillis;
           currFeederState = FeederState::short_move;
           previousMillis = currentMillis;
@@ -149,7 +155,7 @@ void checkFeeder() {
       break;
 
     case FeederState::short_move:
-      if (currentMillis - previousMillis >= shortMoveInterval) {
+      if (currentMillis - previousMillis >= SHORT_MOVE_INTERVAL) {
         stopMotor();
         totalFeederRunTime += currentMillis - feederStartTime;
         currFeederState = FeederState::paused;
@@ -196,8 +202,8 @@ void checkHopper()
     break;
 
   case HopperState::waiting_top: 
-    unsigned long currVibrationExceedsInterval = currentMillis - feederStartTime >= hopperActionInterval;
-    if (totalFeederRunTime >= hopperActionInterval || currVibrationExceedsInterval) {
+    unsigned long currVibrationExceedsInterval = currentMillis - feederStartTime >= HOPPER_ACTION_INTERVAL;
+    if (totalFeederRunTime >= HOPPER_ACTION_INTERVAL || currVibrationExceedsInterval) {
       if (HOPPER_DEBUG) {
         Serial.println("HOPPER: Starting new cycle - moving down");
       }
@@ -210,11 +216,127 @@ void checkHopper()
   }
 }
 
+void processMessage(char *message) {
+  // Add settings check at the start
+  if (!settingsInitialized && message[0] != 's') {
+    print("Settings not initialized");
+    return;
+  }
+
+  switch (message[0]) {
+    case 's': {
+      processSettings(message);
+      break;
+    }
+
+    case 'o': { // hopper on/off
+      if (message[1] == '1') {
+        // Start hopper cycle
+        if (HOPPER_DEBUG) {
+          Serial.println("HOPPER: Starting new cycle - moving down");
+        }
+        stepper->move(-hopperStepsPerAction-20);
+        currHopperState = HopperState::moving_down;
+      } else {
+        // Stop hopper
+        stepper->forceStop();
+        currHopperState = HopperState::waiting_top;
+      }
+      print(message[1] == '1' ? "on" : "off");
+      break;
+    }
+
+    default: {
+      print("no matching serial communication");
+      break;
+    }
+  }
+}
+
+void processSettings(char *message) {
+  // Parse settings from message
+  // Expected format: 's,<HOPPER_ACTION_INTERVAL>,<MOTOR_SPEED>,<DELAY_STOPPING_INTERVAL>,<PAUSE_INTERVAL>,<SHORT_MOVE_INTERVAL>'
+  char *token;
+  int values[5]; // Array to hold 5 setting values
+  int valueIndex = 0;
+
+  // Skip 's,' and start tokenizing
+  token = strtok(&message[2], ",");
+  while (token != NULL && valueIndex < 5) {
+    values[valueIndex++] = atoi(token);
+    token = strtok(NULL, ",");
+  }
+
+  if (valueIndex >= 5) { // Ensure we have all required settings
+    HOPPER_ACTION_INTERVAL = values[0];
+    MOTOR_SPEED = values[1];
+    DELAY_STOPPING_INTERVAL = values[2];
+    PAUSE_INTERVAL = values[3];
+    SHORT_MOVE_INTERVAL = values[4];
+
+    settingsInitialized = true;
+    print("Settings updated");
+  } else {
+    print("Error: Not enough settings provided");
+  }
+}
+
+#define START_MARKER '<'
+#define END_MARKER '>'
+
 void loop() {
+  static char message[MAX_MESSAGE_LENGTH];
+  static unsigned int message_pos = 0;
+  static bool capturingMessage = false;
+
+  // Check for serial messages
+  while (Serial.available() > 0) {
+    char inByte = Serial.read();
+
+    if(inByte == START_MARKER) {
+      capturingMessage = true;
+      message_pos = 0;
+    }
+    else if (inByte == END_MARKER) {
+      capturingMessage = false;
+      message[message_pos] = '\0';  // Null terminate the string
+      processMessage(message);
+    }
+    else if (capturingMessage) {
+      message[message_pos] = inByte;
+      message_pos++;
+      if (message_pos >= MAX_MESSAGE_LENGTH) {
+        capturingMessage = false;
+        print("Error: Message too long");
+      }
+    }
+  }
+
   checkFeeder();
   checkHopper();
 }
- 
+
+void print(String a) { 
+  Serial.print("Hopper: ");
+  Serial.println(a);
+}
+void print(int a) { 
+  Serial.print("Hopper: ");
+  Serial.println(a);
+}
+void print(char *a) { 
+  Serial.print("Hopper: ");
+  Serial.println(a);
+}
+void print(float a) { 
+  Serial.print("Hopper: ");
+  Serial.println(a);
+}
+void print(bool a) { 
+  Serial.print("Hopper: ");
+  Serial.println(a);
+}
+
 void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr) 
 {
   unsigned short result=0;
