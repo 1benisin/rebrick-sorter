@@ -102,17 +102,7 @@ export default class ArduinoDevice {
   constructMessage = (msg: string) => {
     const START_MARKER = '<';
     const END_MARKER = '>';
-    // Explanation of checksum:
-    // checksum is the sum of all the ASCII values of the characters in the message, modulo 100
-    let checksum = 0;
-    for (let i = 0; i < msg.length; i++) {
-      checksum += msg.charCodeAt(i);
-    }
-    checksum %= 100;
-
-    // checksum is converted to a 2 digit decimal number and appended to the end of the message
-    const formattedMessage = START_MARKER + msg + checksum.toString().padStart(2, '0') + END_MARKER;
-    return formattedMessage;
+    return START_MARKER + msg + END_MARKER;
   };
 
   isOpen = () => {
