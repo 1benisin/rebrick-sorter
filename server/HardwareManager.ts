@@ -9,12 +9,12 @@ import eventHub from './eventHub';
 import { AllEvents } from '../types/socketMessage.type';
 import { settingsSchema, SettingsType } from '../types/settings.type';
 import { db } from '../lib/firebase';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 // min amount conveyor speed can be slowed down from it's default speed (maximum speed): 255
 const MIN_SLOWDOWN_PERCENT = 0.4;
 
-// TODO: integreate methods to calibrate sorter travel times
+// TODO: integreate methods to calibrate sorter travel times in milliseconds
 const sorterTravelTimes = [
   [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
   [
@@ -29,7 +29,7 @@ const sorterTravelTimes = [
 ];
 
 const FALL_TIME = 800; // time it takes to fall down the tube
-const MOVE_PAUSE_BUFFER = 1600; // time buffer for part to fall out the tube
+const MOVE_PAUSE_BUFFER = 1500; // time buffer for part to fall out the tube
 
 class HardwareManager {
   private static instance: HardwareManager;

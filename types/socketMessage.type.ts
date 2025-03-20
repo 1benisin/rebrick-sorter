@@ -33,6 +33,8 @@ export const BackToFrontEvents = {
   LOG_SPEED_QUEUE_SUCCESS: 'log-speed-queue-success',
   LIST_SERIAL_PORTS_SUCCESS: 'list-serial-ports-success',
   ABC_TEST: 'abc',
+  PART_SORTED: 'part-sorted',
+  JET_FIRED: 'jet-fired',
 } as const;
 
 export const AllEvents = {
@@ -73,6 +75,8 @@ export type EventPayloads = {
   }[];
   [AllEvents.LOG_SPEED_QUEUE_SUCCESS]: { speed: number; time: string }[];
   [AllEvents.LIST_SERIAL_PORTS_SUCCESS]: string[];
+  [AllEvents.PART_SORTED]: { sorter: number; bin: number };
+  [AllEvents.JET_FIRED]: { sorter: number };
 };
 
 export type AllEventsType = (typeof AllEvents)[keyof typeof AllEvents];

@@ -21,28 +21,21 @@
 int hopperStepsPerAction = 2020; // motor steps it takes to move from top to bottom
 unsigned long prevHopperTime = 0;  // will store the last time the task was run
 const long hopperWaitTime = 10;  // interval at which to run the task (milliseconds)
-unsigned long hopperActionInterval = 20000; // 21000 // time between hopper moving down then up
 bool settingsInitialized = false;
 
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *stepper = NULL;
  
- // --- Depth Sensor Variables
+// --- Depth Sensor Variables
 unsigned short lenth_val = 0;
 unsigned char i2c_rx_buf[16];
-// unsigned char device1 = 82; // 82 is factory default
 unsigned char depthSensorAddress = 80;
  
-
 // -- Feeder Variables
 #define FEEDER_ENABLE_PIN 11
 #define FEEDER_MOTOR_PIN1 8
 #define FEEDER_MOTOR_PIN2 7
-int motorSpeed = 200; // up to 255
 unsigned long previousMillis = 0;
-const long delayStoppingInterval = 5;
-const long pauseInterval = 1000; // time between short move vibrations 1500
-const long shortMoveInterval = 250;
 unsigned long totalFeederRunTime = 0;
 unsigned long feederStartTime = 0;
 

@@ -8,8 +8,9 @@ import eventHub from './eventHub';
 import { AllEvents } from '../types/socketMessage.type';
 import { SortPartDto } from '../types/sortPart.dto';
 import hardwareManager from './HardwareManager';
+import conveyorSpeedManager from './ConveyorSpeedManager';
 
-const MOVE_PAUSE_BUFFER = 1600; // pause between sorter moves to allow for part to clear the tube
+const MOVE_PAUSE_BUFFER = 1500; // pause between sorter moves to allow for part to clear the tube
 
 type InitSettings = {
   defaultConveyorSpeed: number;
@@ -41,22 +42,23 @@ export class Conveyor {
   public init(initSettings: InitSettings) {
     this.partQueue = [];
     this.arduinoPath = initSettings.arduinoPath;
+
+    // Initialize conveyor speed manager
+    conveyorSpeedManager.init(initSettings.defaultConveyorSpeed, initSettings.arduinoPath);
   }
 
   public deinit() {
     console.log('Conveyor deinitializing');
     try {
       this.partQueue = [];
-
       this.arduinoPath = '';
-
       console.log('Conveyor deinitialized successfully');
     } catch (error) {
       console.error(`Failed to deinitialize Conveyor: ${error}`);
     }
   }
 
-  private sortPart = ({ initialTime, initialPosition, bin, sorter }: SortPartDto) => {
+  private sortPart = ({ initialTime, initialPosition, bin, sorter, partId }: SortPartDto) => {
     console.log('--- sortPart:', {
       initialTime: getFormattedTime('min', 'ms', initialTime),
       initialPosition,
@@ -85,7 +87,25 @@ export class Conveyor {
         return;
       }
 
-      this.createAndSchedulePart(sorter, bin, initialPosition, initialTime, moveTime, jetTime, travelTimeFromLastBin);
+      // Create and schedule the part
+      const part = this.createAndSchedulePart(
+        sorter,
+        bin,
+        initialPosition,
+        initialTime,
+        moveTime,
+        jetTime,
+        travelTimeFromLastBin,
+      );
+
+      // Handle speed control for the new part
+      conveyorSpeedManager.handleNewPart({
+        partId,
+        initialTime,
+        initialPosition,
+        bin,
+        sorter,
+      });
     } catch (error) {
       console.error('sortPart error:', error);
       throw error;
@@ -141,7 +161,6 @@ export class Conveyor {
       command: ArduinoCommands.CONVEYOR_ON_OFF,
     };
     arduinoDeviceManager.sendCommandToDevice(arduinoDeviceCommand);
-    // this.scheduleConveyorSpeedChange(this.defaultConveyorSpeed);
   };
 }
 
