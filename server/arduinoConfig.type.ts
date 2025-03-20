@@ -19,6 +19,11 @@ export type ConveyorJetsInitConfig = {
   JET_END_POSITIONS: number[];
 };
 
-export type HopperFeederInitConfig = {
+export interface HopperFeederInitConfig {
   deviceType: 'hopper_feeder';
-};
+  HOPPER_ACTION_INTERVAL: number;
+  MOTOR_SPEED: number;
+  DELAY_STOPPING_INTERVAL: number;
+  PAUSE_INTERVAL: number;
+  SHORT_MOVE_INTERVAL: number;
+}

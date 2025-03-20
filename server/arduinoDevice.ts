@@ -2,7 +2,7 @@
 
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
 import { SorterSettingsType } from '../types/settings.type';
-import { ArduinoConfig, ConveyorJetsInitConfig, SorterInitConfig } from './arduinoConfig.type';
+import { ArduinoConfig, ConveyorJetsInitConfig, SorterInitConfig, HopperFeederInitConfig } from './arduinoConfig.type';
 
 export default class ArduinoDevice {
   private port: SerialPort | SerialPortMock | null = null;
@@ -149,6 +149,17 @@ export default class ArduinoDevice {
     return 's,' + jetFireTimes.join(',');
   }
 
+  private buildHopperFeederInitMessage(config: HopperFeederInitConfig): string {
+    const configValues = [
+      config.HOPPER_ACTION_INTERVAL,
+      config.MOTOR_SPEED,
+      config.DELAY_STOPPING_INTERVAL,
+      config.PAUSE_INTERVAL,
+      config.SHORT_MOVE_INTERVAL,
+    ];
+    return 's,' + configValues.join(',');
+  }
+
   // Updated handleData method
   handleData = (data: string) => {
     if (!this.port || !this.config) {
@@ -164,6 +175,8 @@ export default class ArduinoDevice {
         configMessage = this.buildSorterInitMessage(this.config);
       } else if (this.config.deviceType === 'conveyor_jets') {
         configMessage = this.buildConveyorJetsInitMessage(this.config);
+      } else if (this.config.deviceType === 'hopper_feeder') {
+        configMessage = this.buildHopperFeederInitMessage(this.config);
       }
 
       if (configMessage) {
