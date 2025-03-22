@@ -264,7 +264,7 @@ export class DeviceManager extends BaseComponent {
   }
 
   private handleDeviceData(portName: string, data: string): void {
-    console.log(`${portName}:`, data);
+    console.log(`\x1b[1m${portName}\x1b[0m:`, data);
     if (data.includes('Ready')) {
       const config = this.deviceConfigs.get(portName);
       if (!config) {
