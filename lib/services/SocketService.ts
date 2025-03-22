@@ -51,10 +51,6 @@ class SocketService implements Service {
       console.log('Part Queue: ', data);
     });
 
-    this.socket.on(AllEvents.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
-      console.log('Speed Queue: ', data);
-    });
-
     this.socket.on(AllEvents.INIT_HARDWARE_SUCCESS, (success: boolean) => {
       console.log('INIT_HARDWARE_SUCCESS result: ', success);
     });
