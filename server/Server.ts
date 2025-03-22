@@ -142,6 +142,7 @@ export class Server {
   }
 
   private handleConveyorOnOff(): void {
+    console.log('handleConveyorOnOff');
     this.conveyorManager.toggleConveyor();
   }
 

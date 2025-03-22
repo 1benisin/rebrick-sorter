@@ -106,7 +106,7 @@
 
 //     try {
 //       let device = new ArduinoDevice(path, config);
-//       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
+//       if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development') {
 //         await device.connectMock();
 //       } else {
 //         await device.connect();
@@ -147,7 +147,7 @@
 
 //   // Method to list available serial ports
 //   async listSerialPorts() {
-//     if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'DEV') {
+//     if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development') {
 //       eventHub.emit(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, MockedPorts);
 //       return;
 //     }

@@ -12,7 +12,7 @@ const NavBar = () => {
   const linkClassName = (pathname: string) =>
     `hover:text-gray-300 cursor-pointer ${curPath === pathname ? 'text-blue-500' : ''}`;
 
-  const backgroundColor = process.env.NEXT_PUBLIC_ENVIRONMENT == 'DEV' ? 'bg-yellow-900' : 'bg-slate-400';
+  const backgroundColor = process.env.NEXT_PUBLIC_ENVIRONMENT == 'Development' ? 'bg-yellow-900' : 'bg-slate-400';
 
   return (
     <nav className={cn(backgroundColor, 'p-4')}>

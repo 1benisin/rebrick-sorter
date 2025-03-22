@@ -75,6 +75,7 @@ class SocketService implements Service {
 
   public emit<K extends keyof EventPayloads>(event: K, data: EventPayloads[K]): void {
     if (this.socket && this.state === ServiceState.INITIALIZED) {
+      console.log('Emitting event: ', event, data);
       this.socket.emit(event, data);
     } else {
       console.error('Cannot emit event: socket is not initialized');
