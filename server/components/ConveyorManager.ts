@@ -3,8 +3,8 @@ import { DeviceManager } from './DeviceManager';
 import { SocketManager } from './SocketManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
 import { Part } from '../../types/hardwareTypes.d';
-import { SettingsType } from '../../types/settings.type';
 import { SettingsManager } from './SettingsManager';
+import { DeviceName } from '../../types/deviceName.type';
 
 export interface ConveyorManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
@@ -71,14 +71,14 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public toggleConveyor(): void {
-    this.deviceManager.sendCommand('conveyor_jets', ArduinoCommands.CONVEYOR_ON_OFF);
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_ON_OFF);
   }
 
   public setSpeed(speed: number): void {
     if (speed === this.currentSpeed) return;
 
     this.currentSpeed = speed;
-    this.deviceManager.sendCommand('conveyor_jets', ArduinoCommands.CONVEYOR_SPEED, Math.round(speed));
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_SPEED, Math.round(speed));
     this.socketManager.emitConveyorSpeedUpdate(speed);
   }
 
@@ -109,6 +109,20 @@ export class ConveyorManager extends BaseComponent {
       part.status = 'completed';
       this.socketManager.emitPartSorted(partId);
     }
+  }
+
+  public scheduleJetFire(sorter: number, jetTime: number): void {
+    const now = Date.now();
+    const delay = jetTime - now;
+
+    if (delay <= 0) {
+      console.log('JET FIRE: jetTime is in the past');
+      return;
+    }
+
+    setTimeout(() => {
+      this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, 'j', sorter);
+    }, delay);
   }
 
   protected notifyStatusChange(): void {

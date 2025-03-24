@@ -5,8 +5,10 @@ import { DeviceManager } from './components/DeviceManager';
 import { SorterManager } from './components/SorterManager';
 import { ConveyorManager } from './components/ConveyorManager';
 import { SortPartDto } from '../types/sortPart.dto';
+import { DeviceName } from '../types/deviceName.type';
+import { BackToFrontEvents } from '../types/socketMessage.type';
 
-export class Server {
+export class SystemCoordinator {
   private socketManager: SocketManager;
   private settingsManager: SettingsManager;
   private deviceManager: DeviceManager;
@@ -21,6 +23,7 @@ export class Server {
       onHomeSorter: this.handleHomeSorter.bind(this),
       onMoveSorter: this.handleMoveSorter.bind(this),
       onFireJet: this.handleFireJet.bind(this),
+      onListSerialPorts: this.handleListSerialPorts.bind(this),
     });
 
     this.settingsManager = new SettingsManager(this.socketManager);
@@ -121,6 +124,9 @@ export class Server {
       // Schedule sorter move
       await this.sorterManager.scheduleSorterMove(sorter, bin, moveTime);
 
+      // Schedule jet fire
+      this.conveyorManager.scheduleJetFire(sorter, jetTime);
+
       // Add part to queue with proper timing
       this.conveyorManager.addPart({
         sorter,
@@ -155,6 +161,15 @@ export class Server {
   }
 
   private handleFireJet(data: { sorter: number }): void {
-    this.deviceManager.sendCommand('conveyor_jets', 'f', data.sorter);
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, 'f', data.sorter);
+  }
+
+  private async handleListSerialPorts(): Promise<void> {
+    try {
+      const ports = await this.deviceManager.listSerialPorts();
+      this.socketManager.emitListSerialPortsSuccess(ports);
+    } catch (error) {
+      console.error('Error listing serial ports:', error);
+    }
   }
 }

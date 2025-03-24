@@ -3,6 +3,7 @@ import { ArduinoConfig } from './arduinoConfig.type';
 import { SerialPort, ReadlineParser, SerialPortMock } from 'serialport';
 import { SocketManager } from './SocketManager';
 import { SettingsManager } from './SettingsManager';
+import { DeviceName, DeviceInfo } from '../../types/deviceName.type';
 
 export interface DeviceManagerConfig extends ComponentConfig {
   socketManager: SocketManager;
@@ -10,8 +11,7 @@ export interface DeviceManagerConfig extends ComponentConfig {
 }
 
 export class DeviceManager extends BaseComponent {
-  private devices: Map<string, SerialPort | SerialPortMock> = new Map();
-  private deviceConfigs: Map<string, ArduinoConfig> = new Map();
+  private devices: Map<DeviceName, DeviceInfo> = new Map();
   private socketManager: SocketManager;
   private settingsManager: SettingsManager;
 
@@ -23,19 +23,21 @@ export class DeviceManager extends BaseComponent {
 
   public async initialize(): Promise<void> {
     try {
+      console.log('DeviceManager: Starting initialization...');
       this.setStatus(ComponentStatus.INITIALIZING);
 
       // Get settings from SettingsManager
+      console.log('DeviceManager: Getting settings...');
       const settings = this.settingsManager.getSettings();
       if (!settings) {
         throw new Error('Settings not available');
       }
-      console.log('Settings in device manager:', settings);
+      console.log('DeviceManager: Settings received successfully');
 
       // Connect to devices based on settings
       if (settings.conveyorJetsSerialPort) {
-        console.log('Attempting to connect to conveyor jets device...');
-        await this.connectDevice(settings.conveyorJetsSerialPort, {
+        console.log('DeviceManager: Connecting to conveyor jets...');
+        await this.connectDevice(DeviceName.CONVEYOR_JETS, settings.conveyorJetsSerialPort, {
           deviceType: 'conveyor_jets',
           JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
           JET_END_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionEnd),
@@ -44,9 +46,9 @@ export class DeviceManager extends BaseComponent {
       }
 
       if (settings.hopperFeederSerialPort) {
-        console.log('Attempting to connect to hopper feeder device...');
+        console.log('DeviceManager: Connecting to hopper feeder...');
         try {
-          await this.connectDevice(settings.hopperFeederSerialPort, {
+          await this.connectDevice(DeviceName.HOPPER_FEEDER, settings.hopperFeederSerialPort, {
             deviceType: 'hopper_feeder',
             HOPPER_ACTION_INTERVAL: 20000,
             MOTOR_SPEED: 200,
@@ -61,10 +63,15 @@ export class DeviceManager extends BaseComponent {
       }
 
       // Connect to sorters
-      for (const sorter of settings.sorters) {
-        console.log(`Attempting to connect to sorter ${sorter.name} at ${sorter.serialPort}...`);
+      console.log('DeviceManager: Starting to connect to sorters...');
+      console.log('DeviceManager: Number of sorters to connect:', settings.sorters.length);
+      for (let i = 0; i < settings.sorters.length; i++) {
+        const sorter = settings.sorters[i];
+        console.log(`Processing sorter ${i}:`, sorter.name);
+        const deviceName = DeviceName[`SORTER_${i}` as keyof typeof DeviceName];
+        console.log(`Attempting to connect to sorter ${deviceName} at ${sorter.serialPort}`);
         try {
-          await this.connectDevice(sorter.serialPort, {
+          await this.connectDevice(deviceName, sorter.serialPort, {
             deviceType: 'sorter',
             GRID_DIMENSION: sorter.gridDimension,
             X_OFFSET: sorter.xOffset,
@@ -76,15 +83,14 @@ export class DeviceManager extends BaseComponent {
             SPEED: sorter.speed,
             ROW_MAJOR_ORDER: sorter.rowMajorOrder,
           });
-          console.log(`Successfully connected to sorter ${sorter.name}`);
-          // Add delay between sorter connections
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          console.log(`Successfully connected to sorter ${deviceName}`);
         } catch (error) {
-          console.error(`Failed to connect to sorter ${sorter.name} at ${sorter.serialPort}:`, error);
+          console.error(`Failed to connect to sorter ${deviceName} at ${sorter.serialPort}:`, error);
           // Continue with other sorters even if one fails
           continue;
         }
       }
+      console.log('Finished processing all sorters');
 
       this.setStatus(ComponentStatus.READY);
     } catch (error) {
@@ -102,60 +108,41 @@ export class DeviceManager extends BaseComponent {
     // Unregister settings callback
     this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
 
-    for (const [path, device] of this.devices) {
+    for (const [deviceName, deviceInfo] of this.devices) {
       try {
         await new Promise<void>((resolve, reject) => {
-          device.close((err) => {
+          deviceInfo.device.close((err: Error | null) => {
             if (err) reject(err);
             else resolve();
           });
         });
       } catch (error) {
-        console.error(`Error closing device ${path}:`, error);
+        console.error(`Error closing device ${deviceName}:`, error);
       }
     }
     this.devices.clear();
-    this.deviceConfigs.clear();
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
 
-  public async connectDevice(portName: string, config: ArduinoConfig): Promise<void> {
-    console.log(`Connecting to device at ${portName}`);
+  public async connectDevice(deviceName: DeviceName, portName: string, config: ArduinoConfig): Promise<void> {
+    console.log(`Connecting to device ${deviceName} at ${portName}`);
     try {
       // Disconnect if already connected
-      if (this.devices.has(portName)) {
-        await this.disconnectDevice(portName);
+      if (this.devices.has(deviceName)) {
+        await this.disconnectDevice(deviceName);
       }
 
-      // Try to connect with retries
-      let retries = 3;
-      let lastError: Error | null = null;
-
-      while (retries > 0) {
-        try {
-          const device = await this.createDevice(portName, config);
-          this.devices.set(portName, device);
-          this.deviceConfigs.set(portName, config);
-          this.socketManager.emitComponentStatusUpdate(portName, ComponentStatus.READY, null);
-          return;
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error));
-          if (lastError.message.includes('Cannot lock port')) {
-            retries--;
-            if (retries > 0) {
-              console.log(`Port ${portName} is locked, retrying in 1 second... (${retries} attempts left)`);
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-              continue;
-            }
-          }
-          throw error; // Re-throw if it's not a port locking issue or we're out of retries
-        }
-      }
-
-      throw lastError || new Error(`Failed to connect to device at ${portName} after 3 attempts`);
+      const device = await this.createDevice(portName, config);
+      this.devices.set(deviceName, {
+        deviceName,
+        portName,
+        device,
+        config,
+      });
+      this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.READY, null);
     } catch (error) {
       this.socketManager.emitComponentStatusUpdate(
-        portName,
+        deviceName,
         ComponentStatus.ERROR,
         error instanceof Error ? error.message : 'Unknown error',
       );
@@ -163,45 +150,36 @@ export class DeviceManager extends BaseComponent {
     }
   }
 
-  public async disconnectDevice(portName: string): Promise<void> {
-    const device = this.devices.get(portName);
-    if (device) {
+  public async disconnectDevice(deviceName: DeviceName): Promise<void> {
+    const deviceInfo = this.devices.get(deviceName);
+    if (deviceInfo) {
       await new Promise<void>((resolve, reject) => {
-        device.close((err) => {
+        deviceInfo.device.close((err: Error | null) => {
           if (err) reject(err);
           else resolve();
         });
       });
-      this.devices.delete(portName);
-      this.deviceConfigs.delete(portName);
-      this.socketManager.emitComponentStatusUpdate(portName, ComponentStatus.UNINITIALIZED, null);
+      this.devices.delete(deviceName);
+      this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.UNINITIALIZED, null);
     }
   }
 
   private async createDevice(portName: string, config: ArduinoConfig): Promise<SerialPort | SerialPortMock> {
     const isDevMode = process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development';
-    console.log(`Using ${isDevMode ? 'mock' : 'real'} serial port for device at ${portName}`);
+    console.log(`DeviceManager: Creating device at ${portName} (Dev mode: ${isDevMode})`);
     try {
-      // Create the device with error callback in constructor
+      // Create the device without error callback in constructor
       const device = isDevMode
         ? new SerialPortMock({ path: portName, baudRate: 9600 })
-        : new SerialPort(
-            {
-              path: portName,
-              baudRate: 9600,
-            },
-            (err) => {
-              if (err) {
-                console.error(`Error creating device at ${portName}:`, err);
-                throw err;
-              }
-            },
-          );
+        : new SerialPort({
+            path: portName,
+            baudRate: 9600,
+          });
 
       // Wait for the port to be fully opened
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error(`Timeout opening port ${portName}`));
+          reject(new Error(`Timeout waiting for device to open at ${portName}`));
         }, 5000); // 5 second timeout
 
         device.on('open', () => {
@@ -220,7 +198,6 @@ export class DeviceManager extends BaseComponent {
       // Set up the parser to process incoming data
       const parser = device.pipe(new ReadlineParser({ delimiter: '\r\n' }));
       parser.on('data', (data) => this.handleDeviceData(portName, data));
-      console.log(`Parser set up for device at ${portName}`);
 
       return device;
     } catch (error) {
@@ -266,51 +243,65 @@ export class DeviceManager extends BaseComponent {
   private handleDeviceData(portName: string, data: string): void {
     console.log(`\x1b[1m${portName}\x1b[0m:`, data);
     if (data.includes('Ready')) {
-      const config = this.deviceConfigs.get(portName);
-      if (!config) {
-        console.error(`No config found for device ${portName}`);
+      // Find the device info by port name
+      const deviceInfo = Array.from(this.devices.values()).find((info) => info.portName === portName);
+      if (!deviceInfo) {
+        console.error(`No device info found for port ${portName}`);
         return;
       }
 
       let configMessage = '';
-      switch (config.deviceType) {
+      switch (deviceInfo.config.deviceType) {
         case 'sorter':
-          configMessage = this.buildSorterInitMessage(config);
+          configMessage = this.buildSorterInitMessage(deviceInfo.config);
           break;
         case 'conveyor_jets':
-          configMessage = this.buildConveyorJetsInitMessage(config);
+          configMessage = this.buildConveyorJetsInitMessage(deviceInfo.config);
           break;
         case 'hopper_feeder':
-          configMessage = this.buildHopperFeederInitMessage(config);
+          configMessage = this.buildHopperFeederInitMessage(deviceInfo.config);
           break;
       }
 
       if (configMessage) {
-        this.sendCommand(portName, configMessage);
+        this.sendCommand(deviceInfo.deviceName, configMessage);
       }
 
       this.socketManager.emitComponentStatusUpdate(portName, ComponentStatus.READY, null);
     }
   }
 
-  public sendCommand(portName: string, command: string, data?: number): void {
-    const device = this.devices.get(portName);
-    if (!device) {
-      throw new Error(`Device ${portName} not found`);
+  public sendCommand(deviceName: DeviceName, command: string, data?: number): void {
+    const deviceInfo = this.devices.get(deviceName);
+    if (!deviceInfo) {
+      throw new Error(`Device ${deviceName} not found`);
     }
 
     const message = data !== undefined ? `${command}${data}` : command;
     const formattedMessage = `<${message}>`;
 
-    device.write(formattedMessage, (err) => {
+    deviceInfo.device.write(formattedMessage, (err: Error | null) => {
       if (err) {
-        console.error(`Error sending message to ${portName}:`, err);
-        this.socketManager.emitComponentStatusUpdate(portName, ComponentStatus.ERROR, err.message);
+        console.error(`Error sending message to ${deviceName}:`, err);
+        this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, err.message);
       }
     });
   }
 
   protected notifyStatusChange(): void {
     this.socketManager.emitComponentStatusUpdate(this.getName(), this.getStatus(), this.getError());
+  }
+
+  public async listSerialPorts(): Promise<string[]> {
+    if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development') {
+      return [
+        '/dev/tty.usbmodem1101', // sorter_A
+        '/dev/tty.usbmodem1201', // sorter_B
+        '/dev/tty.usbmodem1401', // conveyor_jets
+        '/dev/tty.usbserial-130', // hopper_feeder
+      ];
+    }
+    const ports = await SerialPort.list();
+    return ports.map((port) => port.path);
   }
 }
