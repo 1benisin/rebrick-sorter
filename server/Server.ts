@@ -2,9 +2,11 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { SettingsManager } from './components/SettingsManager';
 import { SocketManager } from './components/SocketManager';
 import { DeviceManager } from './components/DeviceManager';
-import { SorterManager } from './components/SorterManager';
+import { FALL_TIME, SorterManager } from './components/SorterManager';
 import { ConveyorManager } from './components/ConveyorManager';
+import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
+import { Part } from '../types/hardwareTypes.d';
 
 export class Server {
   private socketManager: SocketManager;
@@ -12,6 +14,7 @@ export class Server {
   private deviceManager: DeviceManager;
   private sorterManager: SorterManager;
   private conveyorManager: ConveyorManager;
+  private speedManager: SpeedManager;
 
   constructor(private io: SocketIOServer) {
     // Initialize components
@@ -30,6 +33,12 @@ export class Server {
       settingsManager: this.settingsManager,
     });
 
+    this.speedManager = new SpeedManager({
+      deviceManager: this.deviceManager,
+      socketManager: this.socketManager,
+      settingsManager: this.settingsManager,
+    });
+
     this.sorterManager = new SorterManager({
       deviceManager: this.deviceManager,
       socketManager: this.socketManager,
@@ -40,6 +49,8 @@ export class Server {
       deviceManager: this.deviceManager,
       socketManager: this.socketManager,
       settingsManager: this.settingsManager,
+      speedManager: this.speedManager,
+      sorterManager: this.sorterManager,
     });
 
     // Setup socket connection handling
@@ -72,6 +83,9 @@ export class Server {
       // Initialize device manager with settings
       await this.deviceManager.initialize();
 
+      // Initialize speed manager
+      await this.speedManager.initialize();
+
       // Initialize sorter manager
       await this.sorterManager.initialize();
 
@@ -88,51 +102,57 @@ export class Server {
     try {
       const { initialTime, initialPosition, bin, sorter, partId } = data;
 
-      // Find previous part and validate timing
-      const prevPart = this.conveyorManager.findPreviousPart(sorter);
-      const prevSorterBin = prevPart ? prevPart.bin : 1;
-      const jetPositionMiddle = this.conveyorManager.getJetPosition(sorter);
-
-      // Calculate timings
-      const { moveTime, jetTime, travelTimeFromLastBin } = this.sorterManager.calculateTimings(
-        sorter,
-        bin,
-        initialTime,
-        initialPosition,
-        prevSorterBin,
-        this.conveyorManager.getCurrentSpeed(),
-        jetPositionMiddle,
-      );
-
-      // Check if moveTime is in the past
-      if (moveTime < Date.now()) {
-        console.log('SORT PART: moveTime is in the past');
-        this.socketManager.emitSortPartSuccess(false);
-        return;
-      }
-
-      // Check if moveTime is before previous part move is finished
-      if (prevPart && moveTime < prevPart.moveFinishedTime) {
-        console.log('SORT PART: moveTime is before previous part moveFinishedTime');
-        this.socketManager.emitSortPartSuccess(false);
-        return;
-      }
-
-      // Schedule sorter move
-      await this.sorterManager.scheduleSorterMove(sorter, bin, moveTime);
-
-      // Add part to queue with proper timing
-      this.conveyorManager.addPart({
-        sorter,
-        bin,
-        initialPosition,
-        initialTime,
-        moveTime,
-        moveFinishedTime: moveTime + travelTimeFromLastBin + 1000, // MOVE_PAUSE_BUFFER
-        jetTime,
+      // Create new part
+      const part: Part = {
         partId,
+        sorter,
+        bin,
+        initialPosition,
+        initialTime,
+        moveTime: 0, // Will be calculated below
+        moveFinishedTime: 0, // Will be calculated below
+        jetTime: 0, // Will be calculated below
+        defaultArrivalTime: 0, // Will be calculated below
+        arrivalTimeDelay: 0, // Will be calculated below
         status: 'pending',
+        conveyorSpeed: this.speedManager.getDefaultSpeed(),
+      };
+
+      // calculate values
+      const jetPosition = this.conveyorManager.getJetPosition(sorter);
+      const distanceToJet = jetPosition - initialPosition;
+      const jetTime = this.conveyorManager.findTimeAfterDistance(initialTime, distanceToJet);
+      const sorterPreviousPart = this.conveyorManager.findPreviousSorterPart(sorter);
+      const travelTimeFromLastBin = this.sorterManager.getTravelTimeBetweenBins({
+        sorter,
+        fromBin: sorterPreviousPart?.bin,
+        toBin: bin,
       });
+      const moveTime = Math.max(jetTime + FALL_TIME - travelTimeFromLastBin, 1);
+      const defaultSpeed = this.speedManager.getDefaultSpeed();
+      const conveyorTravelTime = distanceToJet / defaultSpeed;
+      const defaultArrivalTime = part.initialTime + conveyorTravelTime;
+
+      // Update part with calculated values
+      part.jetTime = jetTime;
+      part.moveTime = moveTime;
+      part.moveFinishedTime = moveTime + travelTimeFromLastBin;
+      part.defaultArrivalTime = defaultArrivalTime;
+
+      // if there is an arrival time delay, we need to slow down the part
+      const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
+      if (arrivalTimeDelay > 0 && sorterPreviousPart) {
+        // Update part with arrival time delay
+        part.moveTime += arrivalTimeDelay;
+        part.jetTime += arrivalTimeDelay;
+        part.arrivalTimeDelay = arrivalTimeDelay;
+      }
+
+      // Insert speed change
+      this.conveyorManager.insertPart(part);
+
+      // filter partQueue
+      this.conveyorManager.filterQueue();
 
       this.socketManager.emitSortPartSuccess(true);
     } catch (error) {

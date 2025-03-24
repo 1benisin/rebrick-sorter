@@ -2,6 +2,7 @@ import { Socket } from 'socket.io';
 import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent';
 import { SettingsType } from '../../types/settings.type';
 import { BackToFrontEvents, FrontToBackEvents } from '../../types/socketMessage.type';
+import { Part } from '../../types/hardwareTypes';
 
 export interface SocketManagerConfig extends ComponentConfig {
   onSortPart: (data: any) => void;
@@ -74,8 +75,14 @@ export class SocketManager extends BaseComponent {
     this.socket?.emit(BackToFrontEvents.SORTER_POSITION_UPDATE, { sorter, bin });
   }
 
-  public emitPartSorted(partId: string): void {
-    this.socket?.emit(BackToFrontEvents.PART_SORTED, { partId });
+  public emitPartSorted(part: Part): void {
+    if (!this.socket) return;
+    this.socket.emit('partSorted', { part });
+  }
+
+  public emitPartSkipped(partId: string): void {
+    if (!this.socket) return;
+    this.socket.emit('partSkipped', { partId });
   }
 
   public emitConveyorSpeedUpdate(speed: number): void {

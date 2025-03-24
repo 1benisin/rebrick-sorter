@@ -1,22 +1,25 @@
 // /types/hardwareTypes.d.ts
 
 export interface Part {
+  partId: string;
   sorter: number;
   bin: number;
   initialPosition: number;
   initialTime: number;
-  moveTime: number;
-  moveFinishedTime: number;
   jetTime: number;
-  partId: string;
+  jetRef?: NodeJS.Timeout;
+  moveTime: number;
+  moveRef?: NodeJS.Timeout;
+  moveFinishedTime: number;
+  defaultArrivalTime: number; // the time it takes for the part to reach the jet at default speed
+  arrivalTimeDelay: number;
+  conveyorSpeed: number;
+  conveyorSpeedRef?: NodeJS.Timeout;
   status: 'pending' | 'completed' | 'skipped';
 }
 
-export type PartQueue = Part[];
-
-export type SpeedChange = {
-  time: number;
-  speed: number;
-  ref: NodeJS.Timeout;
-};
-export type SpeedQueue = SpeedChange[];
+// export type SpeedChange = {
+//   time: number;
+//   speed: number;
+//   ref?: NodeJS.Timeout;
+// };

@@ -4,8 +4,8 @@ import { SocketManager } from './SocketManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
 import { SettingsManager } from './SettingsManager';
 
-const FALL_TIME = 800; // time it takes to fall down the tube
-const MOVE_PAUSE_BUFFER = 1500; // time buffer for part to fall out the tube
+export const FALL_TIME = 800; // time it takes to fall down the tube
+export const MOVE_PAUSE_BUFFER = 800; // time buffer for part to fall out the tube
 
 export interface SorterManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
@@ -30,8 +30,8 @@ export class SorterManager extends BaseComponent {
     this.settingsManager = config.settingsManager;
   }
 
-  private generateBinPositions(gridDimensions: number[]): void {
-    this.binPositions = [];
+  private generateBinPositions(gridDimensions: number[]): { x: number; y: number }[][] {
+    const binPositions: { x: number; y: number }[][] = [];
     for (const gridDimension of gridDimensions) {
       const positions = [{ x: 0, y: 0 }]; // position 0 is null because bin ids start at 1
       for (let y = 0; y < gridDimension; y++) {
@@ -39,8 +39,9 @@ export class SorterManager extends BaseComponent {
           positions.push({ x, y });
         }
       }
-      this.binPositions.push(positions);
+      binPositions.push(positions);
     }
+    return binPositions;
   }
 
   public async initialize(): Promise<void> {
@@ -68,10 +69,10 @@ export class SorterManager extends BaseComponent {
         ],
         [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
       ];
-      this.currentPositions = new Array(this.sorterCount).fill(0);
+      this.currentPositions = new Array(this.sorterCount).fill(1); // 1 is the first bin
 
       // Generate bin positions and initialize sorters
-      this.generateBinPositions(this.gridDimensions);
+      this.binPositions = this.generateBinPositions(this.gridDimensions);
 
       // Register for settings updates
       this.settingsManager.registerSettingsUpdateCallback(this.reinitialize.bind(this));
@@ -89,15 +90,15 @@ export class SorterManager extends BaseComponent {
   public async deinitialize(): Promise<void> {
     // Unregister settings callback
     this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
-    this.currentPositions = new Array(this.sorterCount).fill(0);
+    this.currentPositions = new Array(this.sorterCount).fill(1);
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
 
   public async homeSorter(sorter: number): Promise<void> {
     const path = `sorter_${sorter}`;
     this.deviceManager.sendCommand(path, ArduinoCommands.MOVE_TO_ORIGIN);
-    this.currentPositions[sorter] = 0;
-    this.socketManager.emitSorterPositionUpdate(sorter, 0);
+    this.currentPositions[sorter] = 1;
+    this.socketManager.emitSorterPositionUpdate(sorter, 1);
   }
 
   public async moveSorter(sorter: number, bin: number): Promise<void> {
@@ -109,51 +110,30 @@ export class SorterManager extends BaseComponent {
     this.socketManager.emitSorterPositionUpdate(sorter, constrainedBin);
   }
 
-  private getTravelTimeBetweenBins(
-    sorter: number,
-    fromBin: number,
-    toBin: number,
-    binPositions: { x: number; y: number }[][],
-    travelTimes: number[][],
-  ): number {
-    // console.log(`sorter: ${sorter} from: ${fromBin} to: ${toBin}`);
-    const { x: x1, y: y1 } = binPositions[sorter][toBin];
-    const { x: x2, y: y2 } = binPositions[sorter][fromBin];
+  public getTravelTimeBetweenBins({
+    sorter,
+    fromBin,
+    toBin,
+  }: {
+    sorter: number;
+    fromBin: number | undefined;
+    toBin: number;
+  }): number {
+    // if fromBin is not provided, use the current position of the sorter
+    const confirmedFromBin = fromBin || this.currentPositions[sorter] || 1;
+
+    const { x: x1, y: y1 } = this.binPositions[sorter][toBin];
+    const { x: x2, y: y2 } = this.binPositions[sorter][confirmedFromBin];
     const y = x2 - x1;
     const x = y2 - y1;
     const moveDist = Math.sqrt(x * x + y * y);
     const closestTravelTimeIndex = Math.round(moveDist);
-    return travelTimes[sorter][closestTravelTimeIndex];
+    return this.travelTimes[sorter][closestTravelTimeIndex];
   }
 
-  public calculateTimings(
-    sorter: number,
-    bin: number,
-    initialTime: number,
-    initialPosition: number,
-    prevSorterBin: number,
-    conveyorSpeed: number,
-    jetPositionMiddle: number,
-  ): { moveTime: number; jetTime: number; travelTimeFromLastBin: number } {
-    const distanceToJet = jetPositionMiddle - initialPosition;
-    const jetTime = conveyorSpeed * distanceToJet + initialTime;
-
-    const travelTimeFromLastBin = this.getTravelTimeBetweenBins(
-      sorter,
-      prevSorterBin,
-      bin,
-      this.binPositions,
-      this.travelTimes,
-    );
-
-    const moveTime = Math.max(jetTime + FALL_TIME - travelTimeFromLastBin, 1);
-
-    return { moveTime, jetTime, travelTimeFromLastBin };
-  }
-
-  public async scheduleSorterMove(sorter: number, bin: number, moveTime: number): Promise<void> {
+  public scheduleSorterMove(sorter: number, bin: number, moveTime: number): NodeJS.Timeout {
     const delay = moveTime - Date.now();
-    setTimeout(() => {
+    return setTimeout(() => {
       this.moveSorter(sorter, bin);
     }, delay);
   }
