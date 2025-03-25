@@ -22,7 +22,7 @@ volatile long encoderCount = 0;  // New encoder count variable
 // Update this value to match the motor's encoder resolution after gearing
 #define CONV_ENCODER_PPR 8400  // 64 CPR * 131.25 gear ratio
 
-int targetRPM = 50;          // Desired RPM (can be updated with an 'r' command)
+int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
 int currentRPM = 0;          // Measured RPM from the encoder
 int pwmValue = 0;            // Current PWM value (0-255)
 float kp = 1.0;              // Proportional gain (tune as needed)
