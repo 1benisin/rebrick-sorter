@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import next from 'next';
 import { Server as SocketIOServer } from 'socket.io';
-import { Server } from './server/Server';
+import { SystemCoordinator } from './server/SystemCoordinator';
 
 const envPath = path.resolve(__dirname, '../.env.local');
 dotenv.config({ path: envPath });
@@ -21,7 +21,7 @@ app.prepare().then(async () => {
   const io = new SocketIOServer(httpServer);
 
   // Create and initialize server
-  const server = new Server(io);
+  const systemCoordinator = new SystemCoordinator(io);
 
   httpServer
     .once('error', (err) => {

@@ -119,7 +119,9 @@ const SettingsForm = () => {
               </FormItem>
             )}
           />
+        </Card>
 
+        <Card className="grid w-full grid-cols-2 gap-4 p-4">
           <SerialPortFormInput control={form.control} name="conveyorJetsSerialPort" label="Conveyor Jets Serial Port" />
           <SerialPortFormInput control={form.control} name="hopperFeederSerialPort" label="Hopper Feeder Serial Port" />
         </Card>

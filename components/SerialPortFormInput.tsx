@@ -21,13 +21,25 @@ interface SerialPortFormInputProps {
 
 const SerialPortFormInput: React.FC<SerialPortFormInputProps> = ({ control, name, label }) => {
   const { serialPorts } = sortProcessStore();
-  // const [ports, setPorts] = useState<string[]>(serialPorts);
+  const [isLoading, setIsLoading] = useState(true);
   const socket = serviceManager.getService(ServiceName.SOCKET);
 
   useEffect(() => {
+    setIsLoading(true);
     // trigger the event to backend to list serial ports.
     // which triggers frontend LIST_SERIAL_PORTs_SUCCESS event and saves port paths to sortProcessStore serialPorts variable
     socket.emit(FrontToBackEvents.LIST_SERIAL_PORTS, undefined);
+
+    // Set up a one-time listener for the success event
+    const handleSuccess = (ports: string[]) => {
+      setIsLoading(false);
+    };
+
+    socket.on(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, handleSuccess);
+
+    return () => {
+      socket.off(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, handleSuccess);
+    };
   }, [socket]);
 
   return (
@@ -35,22 +47,35 @@ const SerialPortFormInput: React.FC<SerialPortFormInputProps> = ({ control, name
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem onClick={() => console.log('serialPorts', serialPorts)}>
-          <FormLabel onClick={() => console.log('serialPorts', serialPorts)}>{label}</FormLabel>
-          <Select defaultValue={field.value} onValueChange={field.onChange}>
-            <FormControl>
-              <SelectTrigger>
-                <SelectValue placeholder="Select Port" />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {serialPorts.map((port) => (
-                <SelectItem key={port} value={port}>
-                  {port}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          {isLoading ? (
+            <Select disabled>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Loading ports..." />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="loading">Loading ports...</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Port" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {serialPorts.map((port) => (
+                  <SelectItem key={port} value={port}>
+                    {port}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <FormMessage />
         </FormItem>
       )}

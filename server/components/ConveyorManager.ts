@@ -8,6 +8,7 @@ import { SpeedManager } from './SpeedManager';
 import { SorterManager } from './SorterManager';
 
 const MIN_SLOWDOWN_PERCENT = 0.5; // Minimum speed percentage before skipping a part
+import { DeviceName } from '../../types/deviceName.type';
 
 export interface ConveyorManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
@@ -77,7 +78,7 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public toggleConveyor(): void {
-    this.deviceManager.sendCommand('conveyor_jets', ArduinoCommands.CONVEYOR_ON_OFF);
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_ON_OFF);
   }
 
   public getCurrentSpeed(): number {
@@ -148,8 +149,7 @@ export class ConveyorManager extends BaseComponent {
   public scheduleJetFire(jet: number, jetTime: number, part: Part): NodeJS.Timeout {
     const delay = jetTime - Date.now();
     return setTimeout(() => {
-      const path = 'conveyor_jets';
-      this.deviceManager.sendCommand(path, ArduinoCommands.FIRE_JET, jet);
+      this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.FIRE_JET, jet);
       this.markPartSorted(part.initialTime);
     }, delay);
   }
@@ -256,16 +256,6 @@ export class ConveyorManager extends BaseComponent {
       this.partQueue[partIndex] = part;
     }
   }
-
-  // public prioritySortPartQueue(): void {
-  //   // Sort partQueue by defaultArrivalTime
-  //   this.partQueue.sort((a, b) => {
-  //     if (a.defaultArrivalTime && b.defaultArrivalTime) {
-  //       return a.defaultArrivalTime - b.defaultArrivalTime;
-  //     }
-  //     return 0;
-  //   });
-  // }
 
   public filterQueue(): void {
     // -- filter partQueue

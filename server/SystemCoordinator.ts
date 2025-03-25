@@ -7,8 +7,9 @@ import { ConveyorManager } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
 import { Part } from '../types/hardwareTypes.d';
+import { DeviceName } from '../types/deviceName.type';
 
-export class Server {
+export class SystemCoordinator {
   private socketManager: SocketManager;
   private settingsManager: SettingsManager;
   private deviceManager: DeviceManager;
@@ -24,6 +25,7 @@ export class Server {
       onHomeSorter: this.handleHomeSorter.bind(this),
       onMoveSorter: this.handleMoveSorter.bind(this),
       onFireJet: this.handleFireJet.bind(this),
+      onListSerialPorts: this.handleListSerialPorts.bind(this),
     });
 
     this.settingsManager = new SettingsManager(this.socketManager);
@@ -175,6 +177,15 @@ export class Server {
   }
 
   private handleFireJet(data: { sorter: number }): void {
-    this.deviceManager.sendCommand('conveyor_jets', 'f', data.sorter);
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, 'f', data.sorter);
+  }
+
+  private async handleListSerialPorts(): Promise<void> {
+    try {
+      const ports = await this.deviceManager.listSerialPorts();
+      this.socketManager.emitListSerialPortsSuccess(ports);
+    } catch (error) {
+      console.error('Error listing serial ports:', error);
+    }
   }
 }

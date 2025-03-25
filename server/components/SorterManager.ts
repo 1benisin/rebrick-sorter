@@ -3,6 +3,7 @@ import { DeviceManager } from './DeviceManager';
 import { SocketManager } from './SocketManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
 import { SettingsManager } from './SettingsManager';
+import { DeviceName } from '../../types/deviceName.type';
 
 export const FALL_TIME = 800; // time it takes to fall down the tube
 export const MOVE_PAUSE_BUFFER = 800; // time buffer for part to fall out the tube
@@ -95,8 +96,8 @@ export class SorterManager extends BaseComponent {
   }
 
   public async homeSorter(sorter: number): Promise<void> {
-    const path = `sorter_${sorter}`;
-    this.deviceManager.sendCommand(path, ArduinoCommands.MOVE_TO_ORIGIN);
+    const deviceName = DeviceName[`SORTER_${sorter}` as keyof typeof DeviceName];
+    this.deviceManager.sendCommand(deviceName, ArduinoCommands.MOVE_TO_ORIGIN);
     this.currentPositions[sorter] = 1;
     this.socketManager.emitSorterPositionUpdate(sorter, 1);
   }
@@ -104,8 +105,8 @@ export class SorterManager extends BaseComponent {
   public async moveSorter(sorter: number, bin: number): Promise<void> {
     const maxBin = this.gridDimensions[sorter] * this.gridDimensions[sorter];
     const constrainedBin = Math.max(1, Math.min(bin, maxBin));
-    const path = `sorter_${sorter}`;
-    this.deviceManager.sendCommand(path, ArduinoCommands.MOVE_TO_BIN, constrainedBin);
+    const deviceName = DeviceName[`SORTER_${sorter}` as keyof typeof DeviceName];
+    this.deviceManager.sendCommand(deviceName, ArduinoCommands.MOVE_TO_BIN, constrainedBin);
     this.currentPositions[sorter] = constrainedBin;
     this.socketManager.emitSorterPositionUpdate(sorter, constrainedBin);
   }
