@@ -3,9 +3,10 @@ import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent
 import { SettingsType } from '../../types/settings.type';
 import { BackToFrontEvents, FrontToBackEvents } from '../../types/socketMessage.type';
 import { Part } from '../../types/hardwareTypes';
+import { SortPartDto } from '../../types/sortPart.dto';
 
 export interface SocketManagerConfig extends ComponentConfig {
-  onSortPart: (data: any) => void;
+  onSortPart: (data: SortPartDto) => void;
   onConveyorOnOff: () => void;
   onHomeSorter: (data: { sorter: number }) => void;
   onMoveSorter: (data: { sorter: number; bin: number }) => void;

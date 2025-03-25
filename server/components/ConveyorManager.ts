@@ -6,10 +6,9 @@ import { Part } from '../../types/hardwareTypes.d';
 import { SettingsManager } from './SettingsManager';
 import { SpeedManager } from './SpeedManager';
 import { SorterManager } from './SorterManager';
-
-const MIN_SLOWDOWN_PERCENT = 0.5; // Minimum speed percentage before skipping a part
 import { DeviceName } from '../../types/deviceName.type';
 
+export const MIN_SLOWDOWN_PERCENT = 0.5; // Minimum speed percentage before skipping a part
 export interface ConveyorManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
   socketManager: SocketManager;
@@ -273,6 +272,10 @@ export class ConveyorManager extends BaseComponent {
     // and to keep at least one part for each sorter
     const sliceIndex = Math.min(...lastSorterPartIndexes, lastPartJettedIndex);
     this.partQueue = this.partQueue.slice(sliceIndex);
+  }
+
+  public getPartQueue(): Part[] {
+    return this.partQueue;
   }
 
   protected notifyStatusChange(): void {

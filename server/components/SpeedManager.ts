@@ -3,9 +3,10 @@ import { DeviceManager } from './DeviceManager';
 import { SocketManager } from './SocketManager';
 import { SettingsManager } from './SettingsManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
+import { DeviceName } from '../../types/deviceName.type';
+import { MIN_SLOWDOWN_PERCENT } from './ConveyorManager';
 
-const MIN_SPEED_PERCENTAGE = 0.5; // Minimum speed percentage before skipping a part
-
+const DEFAULT_CONVEYOR_RPM = 60; // 60 rpm is the maximum speed for the conveyor motor
 export interface SpeedManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
   socketManager: SocketManager;
@@ -90,20 +91,19 @@ export class SpeedManager extends BaseComponent {
     return speedPercent;
   }
 
-  public scheduleConveyorSpeedChange(speed: number, atTime?: number): NodeJS.Timeout {
-    if (speed < 0 || speed > this.defaultSpeed) {
-      throw new Error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
+  public scheduleConveyorSpeedChange(speed: number, atTime: number): NodeJS.Timeout {
+    if (speed < MIN_SLOWDOWN_PERCENT * this.defaultSpeed || speed > this.defaultSpeed) {
+      console.error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
     }
-    const timeout = !atTime ? 0 : atTime - Date.now();
 
-    // normalize speed to conveyor motor speed 0-255
-    const normalizedConveyorSpeed = Math.round((speed / this.defaultSpeed) * 255);
+    // normalize speed from pixels per millisecond to conveyor motor rpm 0-60 for arduino
+    const rpm_speed = Math.round((speed / this.defaultSpeed) * DEFAULT_CONVEYOR_RPM);
 
     return setTimeout(() => {
-      this.deviceManager.sendCommand('conveyor_jets', ArduinoCommands.CONVEYOR_SPEED, normalizedConveyorSpeed);
+      this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_SPEED, rpm_speed);
       this.currentSpeed = speed;
-      this.socketManager.emitConveyorSpeedUpdate(speed);
-    }, timeout);
+      this.socketManager.emitConveyorSpeedUpdate(rpm_speed);
+    }, atTime - Date.now());
   }
 
   protected notifyStatusChange(): void {

@@ -126,12 +126,11 @@ void processMessage(char *message) {
       break;
     }
 
-    case 'c': { // Set target RPM (formerly 'r')
-      int previousTargetRPM = targetRPM; //store the value before it is changed
+    case 'c': { // Set target RPM 
       targetRPM = constrain(actionValue, 10, 60); // Constrain to safe range
 
       if (actionValue < 10 || actionValue > 60){
-        Serial.print("Target RPM outside of bounds [10 - 60],");
+        Serial.print("Target RPM constrained to bounds [10 - 60]: ");
       } else {
         Serial.print("Target RPM updated: ");
       }

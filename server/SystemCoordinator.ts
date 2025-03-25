@@ -3,7 +3,7 @@ import { SettingsManager } from './components/SettingsManager';
 import { SocketManager } from './components/SocketManager';
 import { DeviceManager } from './components/DeviceManager';
 import { FALL_TIME, SorterManager } from './components/SorterManager';
-import { ConveyorManager } from './components/ConveyorManager';
+import { ConveyorManager, MIN_SLOWDOWN_PERCENT } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
 import { Part } from '../types/hardwareTypes.d';
@@ -75,13 +75,6 @@ export class SystemCoordinator {
       // Initialize settings manager to get initial settings
       await this.settingsManager.initialize();
 
-      // Get initial settings
-      const settings = this.settingsManager.getSettings();
-      console.log('settings', settings);
-      if (!settings) {
-        throw new Error('No settings available');
-      }
-
       // Initialize device manager with settings
       await this.deviceManager.initialize();
 
@@ -95,7 +88,6 @@ export class SystemCoordinator {
       await this.conveyorManager.initialize();
     } catch (error) {
       console.error('Error initializing components:', error);
-      // Handle initialization error
     }
   }
 
@@ -144,6 +136,35 @@ export class SystemCoordinator {
       // if there is an arrival time delay, we need to slow down the part
       const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
       if (arrivalTimeDelay > 0 && sorterPreviousPart) {
+        // Calculate required slowdown percentage before applying it
+        const slowdownPercent = this.speedManager.computeSlowDownPercent({
+          startOfSlowdown: sorterPreviousPart.jetTime,
+          targetArrivalTime: jetTime + arrivalTimeDelay,
+          arrivalTimeDelay,
+        });
+
+        // Check if slowdown would cause any part's speed to drop below minimum
+        const minAllowedSpeed = defaultSpeed * MIN_SLOWDOWN_PERCENT;
+
+        // Check all parts that would be affected by the slowdown
+        const startSlowdownIndex = this.conveyorManager
+          .getPartQueue()
+          .findIndex((p) => p.initialTime === sorterPreviousPart.initialTime);
+        const curPartInsertIndex = this.conveyorManager
+          .getPartQueue()
+          .findIndex((p) => p.defaultArrivalTime > part.defaultArrivalTime);
+
+        for (let i = startSlowdownIndex; i < curPartInsertIndex; i++) {
+          const p = this.conveyorManager.getPartQueue()[i];
+          if (p.conveyorSpeed * slowdownPercent < minAllowedSpeed) {
+            // Mark part as skipped and notify client
+            part.status = 'skipped';
+            this.socketManager.emitPartSorted(part);
+            this.socketManager.emitSortPartSuccess(true);
+            return;
+          }
+        }
+
         // Update part with arrival time delay
         part.moveTime += arrivalTimeDelay;
         part.jetTime += arrivalTimeDelay;

@@ -1,4 +1,4 @@
-// /types/hardwareTypes.d.ts
+// types/hardwareTypes.d.ts
 
 export interface Part {
   partId: string;
@@ -17,9 +17,3 @@ export interface Part {
   conveyorSpeedRef?: NodeJS.Timeout;
   status: 'pending' | 'completed' | 'skipped';
 }
-
-// export type SpeedChange = {
-//   time: number;
-//   speed: number;
-//   ref?: NodeJS.Timeout;
-// };
