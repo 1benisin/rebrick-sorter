@@ -18,10 +18,10 @@ const SorterPositionDisplay = () => {
       });
     };
 
-    socket.on(BackToFrontEvents.SORTER_MOVED, handleSorterMoved);
+    socket.on(BackToFrontEvents.SORTER_POSITION_UPDATE, handleSorterMoved);
 
     return () => {
-      socket.off(BackToFrontEvents.SORTER_MOVED, handleSorterMoved);
+      socket.off(BackToFrontEvents.SORTER_POSITION_UPDATE, handleSorterMoved);
     };
   }, [socket]);
 
