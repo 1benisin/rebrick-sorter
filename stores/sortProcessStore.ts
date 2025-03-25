@@ -32,13 +32,15 @@ export type SortProcessState = {
   conveyorSpeedLog: { time: number; speed: number }[];
   setConveyorSpeed: (speed: number) => void;
 
-  updatePPMCount: () => void;
   ppmCount: number;
   ppmTimestamps: number[];
 
   // ---
   serialPorts: string[];
   setSerialPorts: (ports: string[]) => void;
+
+  // ---
+  handleJetFired: () => void;
 };
 
 export const sortProcessStore = create<SortProcessState>((set) => ({
@@ -102,11 +104,17 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   // ---
   ppmCount: 0,
   ppmTimestamps: [],
-  updatePPMCount: () => {
+
+  // ---
+  serialPorts: [],
+  setSerialPorts: (ports: string[]) => set({ serialPorts: ports }),
+
+  // --- handleJetFired - calculate ppm count
+  handleJetFired: () => {
     set((state) => {
       const timestamps = state.ppmTimestamps;
       const now = Date.now();
-      // keep the last 30 min of timestamps
+      // keep the last 10 min of timestamps
       const updatedTimestamps = [now, ...timestamps].filter((ts) => now - ts < 10 * 60 * 1000);
       const ppmCount =
         updatedTimestamps.length > 1
@@ -116,8 +124,4 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
       return { ppmCount: Math.round(ppmCount), ppmTimestamps: updatedTimestamps };
     });
   },
-
-  // ---
-  serialPorts: [],
-  setSerialPorts: (ports: string[]) => set({ serialPorts: ports }),
 }));
