@@ -71,6 +71,12 @@ export class ConveyorManager extends BaseComponent {
   public async deinitialize(): Promise<void> {
     // Unregister settings callback
     this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
+    // clear all part actions
+    this.partQueue.forEach((part) => {
+      if (part.moveRef) clearTimeout(part.moveRef);
+      if (part.jetRef) clearTimeout(part.jetRef);
+      if (part.conveyorSpeedRef) clearTimeout(part.conveyorSpeedRef);
+    });
     this.partQueue = [];
 
     this.setStatus(ComponentStatus.UNINITIALIZED);
@@ -206,6 +212,7 @@ export class ConveyorManager extends BaseComponent {
         const delayBy = fractionOfSlowdown * part.arrivalTimeDelay;
         // adjust part values
         p.moveTime += delayBy;
+        p.moveFinishedTime += delayBy;
         p.jetTime += delayBy;
         p.conveyorSpeed = p.conveyorSpeed * slowdownPercent;
         // cancel any existing part actions
@@ -227,6 +234,7 @@ export class ConveyorManager extends BaseComponent {
 
         // adjust part values with full delay
         p.moveTime += part.arrivalTimeDelay;
+        p.moveFinishedTime += part.arrivalTimeDelay;
         p.jetTime += part.arrivalTimeDelay;
         // cancel any existing part actions
         if (p.moveRef) clearTimeout(p.moveRef);

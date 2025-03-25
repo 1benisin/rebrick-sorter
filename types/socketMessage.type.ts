@@ -10,6 +10,7 @@ export type SocketMessage = {
   [FrontToBackEvents.MOVE_SORTER]: { sorter: number; bin: number };
   [FrontToBackEvents.FIRE_JET]: { sorter: number };
   [FrontToBackEvents.LIST_SERIAL_PORTS]: void;
+  [FrontToBackEvents.RESET_SORT_PROCESS]: void;
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.SORT_PART_SUCCESS]: { success: boolean };
   [BackToFrontEvents.CONVEYOR_SPEED_UPDATE]: number;
@@ -39,6 +40,7 @@ export enum FrontToBackEvents {
   MOVE_SORTER = 'move-sorter',
   FIRE_JET = 'fire-jet',
   LIST_SERIAL_PORTS = 'list-serial-ports',
+  RESET_SORT_PROCESS = 'reset-sort-process',
 }
 
 export enum BackToFrontEvents {
@@ -79,6 +81,7 @@ export interface EventPayloads {
   [FrontToBackEvents.MOVE_SORTER]: { sorter: number; bin: number };
   [FrontToBackEvents.FIRE_JET]: { sorter: number };
   [FrontToBackEvents.LIST_SERIAL_PORTS]: void;
+  [FrontToBackEvents.RESET_SORT_PROCESS]: void;
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.SORT_PART_SUCCESS]: { success: boolean };
   [BackToFrontEvents.CONVEYOR_SPEED_UPDATE]: number;

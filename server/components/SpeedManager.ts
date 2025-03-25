@@ -107,8 +107,7 @@ export class SpeedManager extends BaseComponent {
 
   public scheduleConveyorSpeedChange(speed: number, atTime: number): NodeJS.Timeout {
     if (speed < MIN_SLOWDOWN_PERCENT * this.defaultSpeed || speed > this.defaultSpeed) {
-      console.error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
-      console.error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
+      console.error(`\x1b[33mscheduleConveyorSpeedChange: speed ${speed} is out of range\x1b[0m`);
     }
 
     // normalize speed from pixels per millisecond to conveyor motor rpm 0-60 for arduino

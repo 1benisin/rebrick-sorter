@@ -59,16 +59,17 @@ export class SorterManager extends BaseComponent {
       this.sorterCount = settings.sorters.length;
       this.gridDimensions = settings.sorters.map((sorter) => sorter.gridDimension);
       this.travelTimes = [
-        [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
+        [0, 828, 1166, 1429, 1655, 1846, 2022, 2184, 2333, 2400, 2466, 2533, 2600, 2666, 2733, 2800, 2866],
         [
           0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870,
           3006, 3009, 3144,
         ],
+
         [
           0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870,
-          3006, 3009, 3144,
+          3006, 3009, 3144, 3280, 3415, 3550, 3685, 3820, 3955, 4090,
         ],
-        [0, 609, 858, 1051, 1217, 1358, 1487, 1606, 1716, 1714, 1762, 1818, 1825, 1874, 1923, 2016, 2017],
+        [0, 828, 1166, 1429, 1655, 1846, 2022, 2184, 2333, 2400, 2466, 2533, 2600, 2666, 2733, 2800, 2866, 2933, 3000],
       ];
       this.currentPositions = new Array(this.sorterCount).fill(1); // 1 is the first bin
 
@@ -91,7 +92,7 @@ export class SorterManager extends BaseComponent {
   public async deinitialize(): Promise<void> {
     // Unregister settings callback
     this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
-    this.currentPositions = new Array(this.sorterCount).fill(1);
+    this.currentPositions = [];
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
 

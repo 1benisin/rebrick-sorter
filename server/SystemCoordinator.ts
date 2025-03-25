@@ -26,6 +26,7 @@ export class SystemCoordinator {
       onMoveSorter: this.handleMoveSorter.bind(this),
       onFireJet: this.handleFireJet.bind(this),
       onListSerialPorts: this.handleListSerialPorts.bind(this),
+      onResetSortProcess: this.handleResetSortProcess.bind(this),
     });
 
     this.settingsManager = new SettingsManager(this.socketManager);
@@ -86,8 +87,10 @@ export class SystemCoordinator {
 
       // Initialize conveyor manager
       await this.conveyorManager.initialize();
+
+      console.log('Initialized all components =============================');
     } catch (error) {
-      console.error('Error initializing components:', error);
+      console.error('\x1b[33mError initializing components:\x1b[0m', error);
     }
   }
 
@@ -117,12 +120,12 @@ export class SystemCoordinator {
       const distanceToJet = jetPosition - initialPosition;
       const jetTime = this.conveyorManager.findTimeAfterDistance(initialTime, distanceToJet);
       const sorterPreviousPart = this.conveyorManager.findPreviousSorterPart(sorter);
-      const travelTimeFromLastBin = this.sorterManager.getTravelTimeBetweenBins({
+      const travelTimeFromPreviousBin = this.sorterManager.getTravelTimeBetweenBins({
         sorter,
         fromBin: sorterPreviousPart?.bin,
         toBin: bin,
       });
-      const moveTime = Math.max(jetTime + FALL_TIME - travelTimeFromLastBin, 1);
+      const moveTime = Math.max(jetTime + FALL_TIME - travelTimeFromPreviousBin, 1);
       const defaultSpeed = this.speedManager.getDefaultSpeed();
       const conveyorTravelTime = distanceToJet / defaultSpeed;
       const defaultArrivalTime = part.initialTime + conveyorTravelTime;
@@ -131,7 +134,7 @@ export class SystemCoordinator {
       // Update part with calculated values
       part.jetTime = jetTime;
       part.moveTime = moveTime;
-      part.moveFinishedTime = moveTime + travelTimeFromLastBin;
+      part.moveFinishedTime = moveTime + travelTimeFromPreviousBin;
       part.defaultArrivalTime = defaultArrivalTime;
       part.arrivalTimeDelay = arrivalTimeDelay;
 
@@ -179,7 +182,7 @@ export class SystemCoordinator {
 
       this.socketManager.emitSortPartSuccess(true);
     } catch (error) {
-      console.error('Error handling sort part:', error);
+      console.error('\x1b[33mError handling sort part:\x1b[0m', error);
       this.socketManager.emitSortPartSuccess(false);
     }
   }
@@ -206,7 +209,11 @@ export class SystemCoordinator {
       const ports = await this.deviceManager.listSerialPorts();
       this.socketManager.emitListSerialPortsSuccess(ports);
     } catch (error) {
-      console.error('Error listing serial ports:', error);
+      console.error('\x1b[33mError listing serial ports:\x1b[0m', error);
     }
+  }
+
+  private handleResetSortProcess(): void {
+    this.conveyorManager.reinitialize();
   }
 }

@@ -12,6 +12,7 @@ export interface SocketManagerConfig extends ComponentConfig {
   onMoveSorter: (data: { sorter: number; bin: number }) => void;
   onFireJet: (data: { sorter: number }) => void;
   onListSerialPorts: () => Promise<void>;
+  onResetSortProcess: () => void;
 }
 
 export class SocketManager extends BaseComponent {
@@ -55,6 +56,7 @@ export class SocketManager extends BaseComponent {
     this.socket.on(FrontToBackEvents.MOVE_SORTER, this.handlers.onMoveSorter);
     this.socket.on(FrontToBackEvents.FIRE_JET, this.handlers.onFireJet);
     this.socket.on(FrontToBackEvents.LIST_SERIAL_PORTS, this.handlers.onListSerialPorts);
+    this.socket.on(FrontToBackEvents.RESET_SORT_PROCESS, this.handlers.onResetSortProcess);
 
     this.socket.on('disconnect', () => {
       this.setStatus(ComponentStatus.UNINITIALIZED);

@@ -27,26 +27,21 @@ export class DeviceManager extends BaseComponent {
       this.setStatus(ComponentStatus.INITIALIZING);
 
       // Get settings from SettingsManager
-      console.log('DeviceManager: Getting settings...');
       const settings = this.settingsManager.getSettings();
       if (!settings) {
         throw new Error('Settings not available');
       }
-      console.log('DeviceManager: Settings received successfully');
 
       // Connect to devices based on settings
       if (settings.conveyorJetsSerialPort) {
-        console.log('DeviceManager: Connecting to conveyor jets...');
         await this.connectDevice(DeviceName.CONVEYOR_JETS, settings.conveyorJetsSerialPort, {
           deviceType: 'conveyor_jets',
           JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
           JET_END_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionEnd),
         });
-        console.log('Successfully connected to conveyor jets device');
       }
 
       if (settings.hopperFeederSerialPort) {
-        console.log('DeviceManager: Connecting to hopper feeder...');
         try {
           await this.connectDevice(DeviceName.HOPPER_FEEDER, settings.hopperFeederSerialPort, {
             deviceType: 'hopper_feeder',
@@ -56,20 +51,15 @@ export class DeviceManager extends BaseComponent {
             PAUSE_INTERVAL: 1000,
             SHORT_MOVE_INTERVAL: 250,
           });
-          console.log('Successfully connected to hopper feeder device');
         } catch (error) {
-          console.error('Failed to connect to hopper feeder device:', error);
+          console.error('\x1b[33mFailed to connect to hopper feeder device:\x1b[0m', error);
         }
       }
 
       // Connect to sorters
-      console.log('DeviceManager: Starting to connect to sorters...');
-      console.log('DeviceManager: Number of sorters to connect:', settings.sorters.length);
       for (let i = 0; i < settings.sorters.length; i++) {
         const sorter = settings.sorters[i];
-        console.log(`Processing sorter ${i}:`, sorter.name);
         const deviceName = DeviceName[`SORTER_${i}` as keyof typeof DeviceName];
-        console.log(`Attempting to connect to sorter ${deviceName} at ${sorter.serialPort}`);
         try {
           await this.connectDevice(deviceName, sorter.serialPort, {
             deviceType: 'sorter',
@@ -83,18 +73,16 @@ export class DeviceManager extends BaseComponent {
             SPEED: sorter.speed,
             ROW_MAJOR_ORDER: sorter.rowMajorOrder,
           });
-          console.log(`Successfully connected to sorter ${deviceName}`);
         } catch (error) {
-          console.error(`Failed to connect to sorter ${deviceName} at ${sorter.serialPort}:`, error);
+          console.error(`\x1b[33mFailed to connect to sorter ${deviceName} at ${sorter.serialPort}:\x1b[0m`, error);
           // Continue with other sorters even if one fails
           continue;
         }
       }
-      console.log('Finished processing all sorters');
 
       this.setStatus(ComponentStatus.READY);
     } catch (error) {
-      console.error('Error in device manager initialization:', error);
+      console.error('\x1b[33mError in device manager initialization:\x1b[0m', error);
       this.setError(error instanceof Error ? error.message : 'Unknown error initializing device manager');
     }
   }
@@ -117,7 +105,7 @@ export class DeviceManager extends BaseComponent {
           });
         });
       } catch (error) {
-        console.error(`Error closing device ${deviceName}:`, error);
+        console.error(`\x1b[33mError closing device ${deviceName}:\x1b[0m`, error);
       }
     }
     this.devices.clear();
@@ -166,7 +154,6 @@ export class DeviceManager extends BaseComponent {
 
   private async createDevice(portName: string, config: ArduinoConfig): Promise<SerialPort | SerialPortMock> {
     const isDevMode = process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development';
-    console.log(`DeviceManager: Creating device at ${portName} (Dev mode: ${isDevMode})`);
     try {
       // Create the device without error callback in constructor
       const device = isDevMode
@@ -184,13 +171,12 @@ export class DeviceManager extends BaseComponent {
 
         device.on('open', () => {
           clearTimeout(timeout);
-          console.log(`Successfully opened device at ${portName}`);
           resolve();
         });
 
         device.on('error', (err) => {
           clearTimeout(timeout);
-          console.error(`Error opening device at ${portName}:`, err);
+          console.error(`\x1b[33mError opening device at ${portName}:\x1b[0m`, err);
           reject(err);
         });
       });
@@ -201,7 +187,7 @@ export class DeviceManager extends BaseComponent {
 
       return device;
     } catch (error) {
-      console.error(`Error creating device at ${portName}:`, error);
+      console.error(`\x1b[33mError creating device at ${portName}:\x1b[0m`, error);
       throw error;
     }
   }
@@ -241,15 +227,15 @@ export class DeviceManager extends BaseComponent {
   }
 
   private handleDeviceData(portName: string, data: string): void {
-    console.log(`\x1b[1m${portName}\x1b[0m:`, data);
-    if (data.includes('Ready')) {
-      // Find the device info by port name
-      const deviceInfo = Array.from(this.devices.values()).find((info) => info.portName === portName);
-      if (!deviceInfo) {
-        console.error(`No device info found for port ${portName}`);
-        return;
-      }
+    // Find the device info by port name
+    const deviceInfo = Array.from(this.devices.values()).find((info) => info.portName === portName);
+    if (!deviceInfo) {
+      console.error(`\x1b[33mNo device info found for port ${portName}\x1b[0m`);
+      return;
+    }
+    console.log(`\x1b[1m${deviceInfo.deviceName}\x1b[0m:`, data);
 
+    if (data.includes('Ready')) {
       let configMessage = '';
       switch (deviceInfo.config.deviceType) {
         case 'sorter':
@@ -282,7 +268,7 @@ export class DeviceManager extends BaseComponent {
 
     deviceInfo.device.write(formattedMessage, (err: Error | null) => {
       if (err) {
-        console.error(`Error sending message to ${deviceName}:`, err);
+        console.error(`\x1b[33mError sending message to ${deviceName}:\x1b[0m`, err);
         this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, err.message);
       }
     });

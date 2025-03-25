@@ -20,6 +20,7 @@ const SortPage = () => {
           <SorterControllerButton />
           <ConveyorButton />
           <HomeSorterButton />
+          <SorterPositionDisplay />
           <div>{`${ppmCount} PPM (last 10min)`}</div>
         </div>
         <div className="col-span-3 w-full">
@@ -31,7 +32,6 @@ const SortPage = () => {
         </div>
       </div>
       <div className="w-full">
-        <SorterPositionDisplay />
         <DetectionPairDisplay />
       </div>
     </div>

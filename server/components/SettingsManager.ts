@@ -36,7 +36,7 @@ export class SettingsManager extends BaseComponent {
       try {
         await callback(settings);
       } catch (error) {
-        console.error('Error in settings update callback:', error);
+        console.error('\x1b[33mError in settings update callback:\x1b[0m', error);
       }
     }
   }
