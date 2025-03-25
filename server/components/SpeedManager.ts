@@ -82,22 +82,44 @@ export class SpeedManager extends BaseComponent {
     // find updated move and jet times
     const oldArrivalTime = targetArrivalTime - arrivalTimeDelay;
 
-    startOfSlowdown = Math.max(startOfSlowdown, Date.now());
+    // startOfSlowdown = Math.max(startOfSlowdown, Date.now());
 
     // find new speed percent
     const tooSmallTimeDif = oldArrivalTime - startOfSlowdown;
     const targetTimeDif = targetArrivalTime - startOfSlowdown;
+
+    // Safety check to prevent division by zero or negative numbers
+    if (targetTimeDif <= 0) {
+      console.warn('Invalid time difference in computeSlowDownPercent, using default speed');
+      return 1.0; // Return 100% speed as fallback
+    }
+
     const speedPercent = tooSmallTimeDif / targetTimeDif;
+
+    if (speedPercent < 0.5) {
+      console.log('==========================================');
+      console.log('speedPercent TOO SMALL:');
+      console.log('computed speedPercent:', speedPercent);
+      console.log('tooSmallTimeDif:', tooSmallTimeDif);
+      console.log('targetTimeDif:', targetTimeDif);
+      console.log('oldArrivalTime:', oldArrivalTime);
+      console.log('startOfSlowdown:', startOfSlowdown);
+      console.log('targetArrivalTime:', targetArrivalTime);
+      console.log('arrivalTimeDelay:', arrivalTimeDelay);
+      console.log('==========================================');
+    }
     return speedPercent;
   }
 
   public scheduleConveyorSpeedChange(speed: number, atTime: number): NodeJS.Timeout {
     if (speed < MIN_SLOWDOWN_PERCENT * this.defaultSpeed || speed > this.defaultSpeed) {
       console.error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
+      console.error(`scheduleConveyorSpeedChange: speed ${speed} is out of range`);
     }
 
     // normalize speed from pixels per millisecond to conveyor motor rpm 0-60 for arduino
     const rpm_speed = Math.round((speed / this.defaultSpeed) * DEFAULT_CONVEYOR_RPM);
+    console.log('calculated rpm_speed:', rpm_speed);
 
     return setTimeout(() => {
       this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_SPEED, rpm_speed);
