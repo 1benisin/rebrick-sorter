@@ -126,15 +126,16 @@ export class SystemCoordinator {
       const defaultSpeed = this.speedManager.getDefaultSpeed();
       const conveyorTravelTime = distanceToJet / defaultSpeed;
       const defaultArrivalTime = part.initialTime + conveyorTravelTime;
+      const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
 
       // Update part with calculated values
       part.jetTime = jetTime;
       part.moveTime = moveTime;
       part.moveFinishedTime = moveTime + travelTimeFromLastBin;
       part.defaultArrivalTime = defaultArrivalTime;
+      part.arrivalTimeDelay = arrivalTimeDelay;
 
       // if there is an arrival time delay, we need to slow down the part
-      const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
       if (arrivalTimeDelay > 0 && sorterPreviousPart) {
         // Calculate required slowdown percentage before applying it
         const slowdownPercent = this.speedManager.computeSlowDownPercent({
@@ -168,7 +169,6 @@ export class SystemCoordinator {
         // Update part with arrival time delay
         part.moveTime += arrivalTimeDelay;
         part.jetTime += arrivalTimeDelay;
-        part.arrivalTimeDelay = arrivalTimeDelay;
       }
 
       // Insert speed change

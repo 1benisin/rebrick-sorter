@@ -88,12 +88,6 @@ export class SpeedManager extends BaseComponent {
     const tooSmallTimeDif = oldArrivalTime - startOfSlowdown;
     const targetTimeDif = targetArrivalTime - startOfSlowdown;
 
-    // Safety check to prevent division by zero or negative numbers
-    if (targetTimeDif <= 0) {
-      console.warn('Invalid time difference in computeSlowDownPercent, using default speed');
-      return 1.0; // Return 100% speed as fallback
-    }
-
     const speedPercent = tooSmallTimeDif / targetTimeDif;
 
     if (speedPercent < 0.5) {
