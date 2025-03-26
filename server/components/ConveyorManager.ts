@@ -229,14 +229,14 @@ export class ConveyorManager extends BaseComponent {
   }
 
   private updateAllFutureParts(insertIndex: number): void {
-    console.log('updateAllFutureParts =============================================');
-    const filteredPartQueue = this.partQueue.map((p) => {
-      const { moveRef, jetRef, conveyorSpeedRef, ...rest } = p;
-      return rest;
-    });
-    console.log(filteredPartQueue);
-    console.log(insertIndex);
-    console.log('===============================================================');
+    // console.log('updateAllFutureParts =============================================');
+    // const filteredPartQueue = this.partQueue.map((p) => {
+    //   const { moveRef, jetRef, conveyorSpeedRef, ...rest } = p;
+    //   return rest;
+    // });
+    // console.log(filteredPartQueue);
+    // console.log(insertIndex);
+    // console.log('===============================================================');
     // Prevent recursive recalculation
     // - there should be no recursive recalculation because the partQueue is sorted by defaultArrivalTime
     // - if there is a recursive recalculation, it is because of a bug

@@ -5,9 +5,6 @@ import { ArduinoCommands } from '../../types/arduinoCommands.type';
 import { SettingsManager } from './SettingsManager';
 import { DeviceName } from '../../types/deviceName.type';
 
-export const FALL_TIME = 1000; // time it takes to fall down the tube
-export const MOVE_PAUSE_BUFFER = 500; // time buffer for part to fall out the tube
-
 export interface SorterManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
   socketManager: SocketManager;

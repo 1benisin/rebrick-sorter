@@ -47,7 +47,7 @@ const SerialPortFormInput: React.FC<SerialPortFormInputProps> = ({ control, name
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem>
+        <FormItem className="flex flex-1 flex-col justify-between">
           <FormLabel>{label}</FormLabel>
           {isLoading ? (
             <Select disabled>

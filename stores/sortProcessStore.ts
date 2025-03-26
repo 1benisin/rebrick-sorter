@@ -40,7 +40,7 @@ export type SortProcessState = {
   setSerialPorts: (ports: string[]) => void;
 
   // ---
-  handleJetFired: () => void;
+  handlePartSorted: () => void;
 };
 
 export const sortProcessStore = create<SortProcessState>((set) => ({
@@ -109,8 +109,8 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   serialPorts: [],
   setSerialPorts: (ports: string[]) => set({ serialPorts: ports }),
 
-  // --- handleJetFired - calculate ppm count
-  handleJetFired: () => {
+  // --- handlePar - calculate ppm count
+  handlePartSorted: () => {
     set((state) => {
       const timestamps = state.ppmTimestamps;
       const now = Date.now();

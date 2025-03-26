@@ -47,17 +47,16 @@ const SettingsForm = () => {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2 pt-2">
-        <Card className="grid w-full grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-1 p-2">
+        <Card className="flex w-full flex-row gap-2 p-3">
           <FormField
             control={form.control}
             name="conveyorSpeed"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-1 flex-col justify-between">
                 <FormLabel>Conveyor Speed</FormLabel>
                 <FormControl>
-                  <Input className="w-16" {...field} />
+                  <Input className="w-full" {...field} />
                 </FormControl>
-
                 <FormMessage />
               </FormItem>
             )}
@@ -66,12 +65,11 @@ const SettingsForm = () => {
             control={form.control}
             name="detectDistanceThreshold"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-1 flex-col justify-between">
                 <FormLabel>Detect Distance Threshold</FormLabel>
                 <FormControl>
-                  <Input className="w-16" {...field} />
+                  <Input className="w-full" {...field} />
                 </FormControl>
-
                 <FormMessage />
               </FormItem>
             )}
@@ -81,12 +79,11 @@ const SettingsForm = () => {
             control={form.control}
             name="classificationThresholdPercentage"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-1 flex-col justify-between">
                 <FormLabel>Classification Threshold Percentage</FormLabel>
                 <FormControl>
-                  <Input className="w-16" {...field} />
+                  <Input className="w-full" {...field} />
                 </FormControl>
-
                 <FormMessage />
               </FormItem>
             )}
@@ -95,12 +92,11 @@ const SettingsForm = () => {
             control={form.control}
             name="camera1VerticalPositionPercentage"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-1 flex-col justify-between">
                 <FormLabel>Camera1 Vertical Position </FormLabel>
                 <FormControl>
-                  <Input className="w-16" {...field} />
+                  <Input className="w-full" {...field} />
                 </FormControl>
-
                 <FormMessage />
               </FormItem>
             )}
@@ -109,19 +105,18 @@ const SettingsForm = () => {
             control={form.control}
             name="camera2VerticalPositionPercentage"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-1 flex-col justify-between">
                 <FormLabel>Camera2 Vertical Position</FormLabel>
                 <FormControl>
-                  <Input className="w-16" {...field} />
+                  <Input className="w-full" {...field} />
                 </FormControl>
-
                 <FormMessage />
               </FormItem>
             )}
           />
         </Card>
 
-        <Card className="grid w-full grid-cols-2 gap-4 p-4">
+        <Card className="flex w-full flex-row gap-2 p-3">
           <SerialPortFormInput control={form.control} name="conveyorJetsSerialPort" label="Conveyor Jets Serial Port" />
           <SerialPortFormInput control={form.control} name="hopperFeederSerialPort" label="Hopper Feeder Serial Port" />
         </Card>

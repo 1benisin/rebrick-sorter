@@ -2,12 +2,15 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { SettingsManager } from './components/SettingsManager';
 import { SocketManager } from './components/SocketManager';
 import { DeviceManager } from './components/DeviceManager';
-import { FALL_TIME, MOVE_PAUSE_BUFFER, SorterManager } from './components/SorterManager';
+import { SorterManager } from './components/SorterManager';
 import { ConveyorManager, MIN_SLOWDOWN_PERCENT } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
 import { Part } from '../types/part.type';
 import { DeviceName } from '../types/deviceName.type';
+
+export const FALL_TIME_SHORTEST = 1000;
+export const FALL_TIME_LONGEST = 1700;
 
 export class SystemCoordinator {
   private socketManager: SocketManager;
@@ -152,7 +155,8 @@ export class SystemCoordinator {
       fromBin: sorterPreviousPart?.bin,
       toBin: bin,
     });
-    const moveTime = jetTime + FALL_TIME - travelTimeFromPreviousBin;
+    const moveTime = jetTime + FALL_TIME_SHORTEST - travelTimeFromPreviousBin;
+    const moveFinishedTime = jetTime + FALL_TIME_LONGEST;
     // arrival time delay
     const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
     // conveyor speed
@@ -169,13 +173,13 @@ export class SystemCoordinator {
       bin,
       initialPosition,
       initialTime,
-      defaultArrivalTime: defaultArrivalTime,
-      jetTime: jetTime,
-      moveTime: moveTime,
-      moveFinishedTime: moveTime + travelTimeFromPreviousBin + MOVE_PAUSE_BUFFER,
-      arrivalTimeDelay: arrivalTimeDelay,
-      conveyorSpeed: conveyorSpeed,
-      conveyorSpeedTime: conveyorSpeedTime,
+      defaultArrivalTime,
+      jetTime,
+      moveTime,
+      moveFinishedTime,
+      arrivalTimeDelay,
+      conveyorSpeed,
+      conveyorSpeedTime,
       status: 'pending',
     };
 

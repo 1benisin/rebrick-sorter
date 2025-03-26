@@ -56,8 +56,8 @@ class SocketService implements Service {
       sortProcessStore.getState().setSerialPorts(ports);
     });
 
-    this.socket.on(AllEvents.JET_FIRED, () => {
-      sortProcessStore.getState().handleJetFired();
+    this.socket.on(AllEvents.PART_SORTED, () => {
+      sortProcessStore.getState().handlePartSorted();
     });
   }
 
