@@ -1,3 +1,5 @@
+import { SerialPort, SerialPortMock } from 'serialport';
+import { ArduinoConfig } from '../server/components/arduinoConfig.type';
 export enum DeviceName {
   CONVEYOR_JETS = 'conveyor_jets',
   HOPPER_FEEDER = 'hopper_feeder',
@@ -10,6 +12,6 @@ export enum DeviceName {
 export type DeviceInfo = {
   deviceName: DeviceName;
   portName: string;
-  device: any; // SerialPort | SerialPortMock
-  config: any; // ArduinoConfig
+  device: SerialPort | SerialPortMock;
+  config: ArduinoConfig;
 };

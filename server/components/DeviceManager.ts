@@ -266,7 +266,7 @@ export class DeviceManager extends BaseComponent {
     const message = data !== undefined ? `${command}${data}` : command;
     const formattedMessage = `<${message}>`;
 
-    deviceInfo.device.write(formattedMessage, (err: Error | null) => {
+    deviceInfo.device.write(formattedMessage, (err: Error | null | undefined) => {
       if (err) {
         console.error(`\x1b[33mError sending message to ${deviceName}:\x1b[0m`, err);
         this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, err.message);
