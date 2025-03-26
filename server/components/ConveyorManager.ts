@@ -7,6 +7,7 @@ import { SettingsManager } from './SettingsManager';
 import { SpeedManager } from './SpeedManager';
 import { SorterManager } from './SorterManager';
 import { DeviceName } from '../../types/deviceName.type';
+import { SortPartDto } from '../../types/sortPart.dto';
 
 export const MIN_SLOWDOWN_PERCENT = 0.5; // Minimum speed percentage before skipping a part
 export interface ConveyorManagerConfig extends ComponentConfig {
@@ -15,6 +16,7 @@ export interface ConveyorManagerConfig extends ComponentConfig {
   settingsManager: SettingsManager;
   speedManager: SpeedManager;
   sorterManager: SorterManager;
+  buildPart: (part: SortPartDto) => Part;
 }
 
 export class ConveyorManager extends BaseComponent {
@@ -23,6 +25,7 @@ export class ConveyorManager extends BaseComponent {
   private settingsManager: SettingsManager;
   private speedManager: SpeedManager;
   private sorterManager: SorterManager;
+  private buildPart: (part: SortPartDto) => Part;
 
   private sorterCount: number = 0;
   private jetPositionsStart: number[] = [];
@@ -36,6 +39,7 @@ export class ConveyorManager extends BaseComponent {
     this.settingsManager = config.settingsManager;
     this.speedManager = config.speedManager;
     this.sorterManager = config.sorterManager;
+    this.buildPart = config.buildPart;
   }
 
   public async initialize(): Promise<void> {
@@ -101,6 +105,17 @@ export class ConveyorManager extends BaseComponent {
     }, null);
   }
 
+  public findPreviousConveyorPart(defaultArrivalTime: number): Part | null {
+    return this.partQueue.reduce<Part | null>((acc, p) => {
+      if (p.defaultArrivalTime < defaultArrivalTime) return p;
+      return acc;
+    }, null);
+  }
+
+  public findNextConveyorPart(defaultArrivalTime: number): Part | null {
+    return this.partQueue.find((p) => p.defaultArrivalTime > defaultArrivalTime) || null;
+  }
+
   // find the timestamp when part has traveled a certain distance
   public findTimeAfterDistance = (startTime: number, distance: number) => {
     // sanity checks
@@ -108,11 +123,11 @@ export class ConveyorManager extends BaseComponent {
 
     if (distance === 0) return startTime; // exit condition
 
-    // If no parts in queue, use default speed for calculation
+    // If no parts in queue, use current speed for calculation
     if (this.partQueue.length === 0) {
-      const defaultSpeed = this.speedManager.getDefaultSpeed();
-      const timeNeeded = distance / defaultSpeed;
-      return startTime + timeNeeded;
+      const currentSpeed = this.speedManager.getCurrentSpeed();
+      const travelTime = distance / currentSpeed;
+      return startTime + travelTime;
     }
 
     let remainingDistance = distance;
@@ -124,8 +139,8 @@ export class ConveyorManager extends BaseComponent {
       // exit condition
       if (remainingDistance <= 1) break;
 
-      const { conveyorSpeed: speed, jetTime: speedStart } = this.partQueue[i];
-      let { jetTime: speedEnd } = this.partQueue[i + 1] || {};
+      const { conveyorSpeed: speed, conveyorSpeedTime: speedStart } = this.partQueue[i];
+      let { conveyorSpeedTime: speedEnd } = this.partQueue[i + 1] || {};
 
       // if no next speed change use 10 minutes from start as the end time
       speedEnd = speedEnd || speedStart + 10 * 60 * 1000;
@@ -160,98 +175,84 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public insertPart(part: Part): void {
-    // find the index to insert the part in the partQueue based on defaultArrivalTime
-    const curPartInsertIndex = this.partQueue.findIndex((p) => p.defaultArrivalTime > part.defaultArrivalTime); // returns -1 if not found or empty
-    // get the previous parts speed change
-    const prevConveyorSpeed =
-      this.partQueue[curPartInsertIndex - 1]?.conveyorSpeed || this.speedManager.getDefaultSpeed();
-    // schedule all part actions
-    part.moveRef = this.sorterManager.scheduleSorterMove(part.sorter, part.bin, part.moveTime);
-    part.jetRef = this.scheduleJetFire(part.sorter, part.jetTime, part);
-    part.conveyorSpeed = prevConveyorSpeed;
-    part.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(prevConveyorSpeed, part.jetTime);
+    // Find insertion index based on defaultArrivalTime
+    let insertIndex = this.partQueue.findIndex((p) => p.defaultArrivalTime > part.defaultArrivalTime);
+    insertIndex = insertIndex === -1 ? this.partQueue.length : insertIndex; // if no part found, insert at the end
 
-    // insert the part into the partQueue
-    this.partQueue.splice(curPartInsertIndex, 0, part);
+    // Schedule and assign all part actions
+    this.schedulePartActions(part);
 
-    // if part requires a slowdown delay
+    // Insert part at correct index
+    this.partQueue.splice(insertIndex, 0, part);
+
+    // if there is an arrival time delay, we need to slow down the part
     if (part.arrivalTimeDelay > 0) {
-      // find previous sorter part or just furthest part on conveyor
-      const startSlowdownIndex = this.partQueue.reduce((acc, p, i) => {
-        if (p.sorter === part.sorter) return i;
-        return acc;
-      }, 0);
-
-      const startOfSlowdown = this.partQueue[startSlowdownIndex].jetTime || Date.now();
-      const endOfSlowdown = part.jetTime;
-
-      // calculate slowdown percent
-      const slowdownPercent = this.speedManager.computeSlowDownPercent({
-        startOfSlowdown,
-        targetArrivalTime: part.jetTime,
-        arrivalTimeDelay: part.arrivalTimeDelay,
-      });
-
-      // update first part in slowdown. just needs conveyor speed changed
-      const firstPart = this.partQueue[startSlowdownIndex];
-      if (firstPart.conveyorSpeedRef) clearTimeout(firstPart.conveyorSpeedRef);
-      firstPart.conveyorSpeed = firstPart.conveyorSpeed * slowdownPercent;
-      firstPart.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
-        firstPart.conveyorSpeed,
-        firstPart.jetTime,
-      );
-      this.partQueue[startSlowdownIndex] = firstPart;
-
-      // update parts between startSlowdownIndex and curPartInsertIndex
-      for (let i = startSlowdownIndex + 1; i < curPartInsertIndex; i++) {
-        const p = this.partQueue[i];
-
-        // calculate the fraction of the slowdown that has passed
-        const fractionOfSlowdown = (p.jetTime - startOfSlowdown) / (endOfSlowdown - startOfSlowdown);
-        // calculate the delay by which to adjust the part actions
-        const delayBy = fractionOfSlowdown * part.arrivalTimeDelay;
-        // adjust part values
-        p.moveTime += delayBy;
-        p.moveFinishedTime += delayBy;
-        p.jetTime += delayBy;
-        p.conveyorSpeed = p.conveyorSpeed * slowdownPercent;
-        // cancel any existing part actions
-        if (p.moveRef) clearTimeout(p.moveRef);
-        if (p.jetRef) clearTimeout(p.jetRef);
-        if (p.conveyorSpeedRef) clearTimeout(p.conveyorSpeedRef);
-        // reschedule the part actions
-        p.moveRef = this.sorterManager.scheduleSorterMove(p.sorter, p.bin, p.moveTime);
-        p.jetRef = this.scheduleJetFire(p.sorter, p.jetTime, p);
-        p.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(p.conveyorSpeed, p.jetTime);
-
-        // update the part in the partQueue
-        this.partQueue[i] = p;
-      }
-
-      // Then update parts after curPartInsertIndex with full delay
-      for (let i = curPartInsertIndex + 1; i < this.partQueue.length; i++) {
-        const p = this.partQueue[i];
-
-        // adjust part values with full delay
-        p.moveTime += part.arrivalTimeDelay;
-        p.moveFinishedTime += part.arrivalTimeDelay;
-        p.jetTime += part.arrivalTimeDelay;
-        // cancel any existing part actions
-        if (p.moveRef) clearTimeout(p.moveRef);
-        if (p.jetRef) clearTimeout(p.jetRef);
-        if (p.conveyorSpeedRef) clearTimeout(p.conveyorSpeedRef);
-        // reschedule the part actions
-        p.moveRef = this.sorterManager.scheduleSorterMove(p.sorter, p.bin, p.moveTime);
-        p.jetRef = this.scheduleJetFire(p.sorter, p.jetTime, p);
-        p.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(p.conveyorSpeed, p.jetTime);
-
-        // update the part in the partQueue
-        this.partQueue[i] = p;
-      }
+      this.updateAllFutureParts(insertIndex);
+    } else {
+      this.updateNextPart(part.jetTime, insertIndex);
     }
+  }
 
-    // Limit queue to 50 parts
-    this.partQueue = this.partQueue.slice(-50);
+  private updateNextPart(nextPartSpeedTime: number, insertIndex: number): void {
+    // Find next conveyor part
+    const nextConveyorPart = this.partQueue[insertIndex];
+    if (nextConveyorPart) {
+      // Cancel next part's conveyor speed ref
+      if (nextConveyorPart.conveyorSpeedRef) {
+        clearTimeout(nextConveyorPart.conveyorSpeedRef);
+      }
+      // Update next part's conveyor speed time
+      nextConveyorPart.conveyorSpeedTime = nextPartSpeedTime;
+      // Reschedule conveyor speed change
+      nextConveyorPart.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
+        nextConveyorPart.conveyorSpeed,
+        nextConveyorPart.conveyorSpeedTime,
+      );
+    }
+  }
+
+  private updateAllFutureParts(insertIndex: number): void {
+    // Find all parts that come after current part
+    const partsToResort = this.partQueue.slice(insertIndex);
+
+    // Cancel all actions for parts to be resorted
+    this.cancelPartActions(partsToResort);
+
+    // Remove these parts from partQueue
+    this.partQueue = this.partQueue.slice(0, insertIndex);
+
+    // Resort all removed parts
+    partsToResort.forEach((p) => {
+      // Recalculate timings for each part
+      const recalculatedPart = this.buildPart({
+        partId: p.partId,
+        initialTime: p.initialTime,
+        initialPosition: p.initialPosition,
+        bin: p.bin,
+        sorter: p.sorter,
+      });
+      // Insert the recalculated part
+      this.insertPart(recalculatedPart);
+    });
+  }
+
+  private schedulePartActions(part: Part): void {
+    // Schedule move action
+    part.moveRef = this.sorterManager.scheduleSorterMove(part.sorter, part.bin, part.moveTime);
+
+    // Schedule jet action
+    part.jetRef = this.scheduleJetFire(part.sorter, part.jetTime, part);
+
+    // Schedule conveyor speed change
+    part.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(part.conveyorSpeed, part.conveyorSpeedTime);
+  }
+
+  private cancelPartActions(parts: Part[]): void {
+    parts.forEach((part) => {
+      if (part.moveRef) clearTimeout(part.moveRef);
+      if (part.jetRef) clearTimeout(part.jetRef);
+      if (part.conveyorSpeedRef) clearTimeout(part.conveyorSpeedRef);
+    });
   }
 
   public markPartSorted(initialTime: number): void {
@@ -259,14 +260,18 @@ export class ConveyorManager extends BaseComponent {
     if (partIndex !== -1) {
       const part = this.partQueue[partIndex];
       part.status = 'completed';
-      this.socketManager.emitPartSorted(part);
       this.partQueue[partIndex] = part;
+      this.socketManager.emitPartSorted(part);
     }
   }
 
   public filterQueue(): void {
     // only keep 'pending' parts
     this.partQueue = this.partQueue.filter((p) => p.status === 'pending');
+  }
+
+  public getPartQueue(): Part[] {
+    return this.partQueue;
   }
 
   protected notifyStatusChange(): void {

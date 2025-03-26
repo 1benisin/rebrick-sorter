@@ -12,6 +12,7 @@ export interface Part {
   defaultArrivalTime: number; // the time it takes for the part to reach the jet at default speed
   arrivalTimeDelay: number;
   conveyorSpeed: number;
+  conveyorSpeedTime: number;
   conveyorSpeedRef?: NodeJS.Timeout;
   status: 'pending' | 'completed' | 'skipped';
 }

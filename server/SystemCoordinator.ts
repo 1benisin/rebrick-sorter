@@ -2,7 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { SettingsManager } from './components/SettingsManager';
 import { SocketManager } from './components/SocketManager';
 import { DeviceManager } from './components/DeviceManager';
-import { FALL_TIME, SorterManager } from './components/SorterManager';
+import { FALL_TIME, MOVE_PAUSE_BUFFER, SorterManager } from './components/SorterManager';
 import { ConveyorManager, MIN_SLOWDOWN_PERCENT } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
@@ -54,6 +54,7 @@ export class SystemCoordinator {
       settingsManager: this.settingsManager,
       speedManager: this.speedManager,
       sorterManager: this.sorterManager,
+      buildPart: this.buildPart.bind(this),
     });
 
     // Setup socket connection handling
@@ -97,82 +98,30 @@ export class SystemCoordinator {
   // Event handlers
   private async handleSortPart(data: SortPartDto): Promise<void> {
     try {
-      const { initialTime, initialPosition, bin, sorter, partId } = data;
-
-      // Create new part
-      const part: Part = {
-        partId,
-        sorter,
-        bin,
-        initialPosition,
-        initialTime,
-        moveTime: 0, // Will be calculated below
-        moveFinishedTime: 0, // Will be calculated below
-        jetTime: 0, // Will be calculated below
-        defaultArrivalTime: 0, // Will be calculated below
-        arrivalTimeDelay: 0, // Will be calculated below
-        status: 'pending',
-        conveyorSpeed: this.speedManager.getDefaultSpeed(),
-      };
-
-      // calculate values
-      const jetPosition = this.conveyorManager.getJetPosition(sorter);
-      const distanceToJet = jetPosition - initialPosition;
-      const jetTime = this.conveyorManager.findTimeAfterDistance(initialTime, distanceToJet);
-      const sorterPreviousPart = this.conveyorManager.findPreviousSorterPart(sorter);
-
-      const travelTimeFromPreviousBin = this.sorterManager.getTravelTimeBetweenBins({
-        sorter,
-        fromBin: sorterPreviousPart?.bin,
-        toBin: bin,
-      });
-      const moveTime = jetTime + FALL_TIME - travelTimeFromPreviousBin;
-      const defaultSpeed = this.speedManager.getDefaultSpeed();
-      const conveyorTravelTime = distanceToJet / defaultSpeed;
-      const defaultArrivalTime = part.initialTime + conveyorTravelTime;
-      const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
-
-      // Update part with calculated values
-      part.jetTime = jetTime;
-      part.moveTime = moveTime;
-      part.moveFinishedTime = moveTime + travelTimeFromPreviousBin;
-      part.defaultArrivalTime = defaultArrivalTime;
-      part.arrivalTimeDelay = arrivalTimeDelay;
+      // Calculate all timings for the part
+      const part = this.buildPart(data);
 
       // if there is an arrival time delay, we need to slow down the part
-      if (arrivalTimeDelay > 0 && sorterPreviousPart) {
+      if (part.arrivalTimeDelay > 0) {
         // Calculate required slowdown percentage before applying it
-        const slowdownPercent = this.speedManager.computeSlowDownPercent({
-          startOfSlowdown: sorterPreviousPart.jetTime,
-          targetArrivalTime: jetTime + arrivalTimeDelay,
-          arrivalTimeDelay,
-        });
+        const targetJetTime = part.jetTime + part.arrivalTimeDelay;
+        const currentTimeGap = part.jetTime - part.conveyorSpeedTime;
+        const requiredTimeGap = targetJetTime - part.conveyorSpeedTime;
+        const slowdownPercent = currentTimeGap / requiredTimeGap;
+        const newSpeed = part.conveyorSpeed * slowdownPercent;
+        const minAllowedSpeed = this.speedManager.getDefaultSpeed() * MIN_SLOWDOWN_PERCENT;
 
-        // Check if slowdown would cause any part's speed to drop below minimum
-        const minAllowedSpeed = defaultSpeed * MIN_SLOWDOWN_PERCENT;
-
-        // Check all parts that would be affected by the slowdown
-        const startSlowdownIndex = this.conveyorManager
-          .getPartQueue()
-          .findIndex((p) => p.initialTime === sorterPreviousPart.initialTime);
-        const curPartInsertIndex = this.conveyorManager
-          .getPartQueue()
-          .findIndex((p) => p.defaultArrivalTime > part.defaultArrivalTime);
-
-        for (let i = startSlowdownIndex; i < curPartInsertIndex; i++) {
-          const p = this.conveyorManager.getPartQueue()[i];
-          if (p.conveyorSpeed * slowdownPercent < minAllowedSpeed) {
-            // Mark part as skipped and notify client
-            part.status = 'skipped';
-            this.socketManager.emitPartSorted(part);
-            this.socketManager.emitSortPartSuccess(true);
-            return;
-          }
+        if (newSpeed < minAllowedSpeed) {
+          part.status = 'skipped';
+          this.socketManager.emitPartSkipped(part);
+          return;
         }
 
         // Update part with arrival time delay
-        part.moveTime += arrivalTimeDelay;
-        part.jetTime += arrivalTimeDelay;
+        part.moveTime += part.arrivalTimeDelay;
+        part.moveFinishedTime += part.arrivalTimeDelay;
+        part.jetTime += part.arrivalTimeDelay;
+        part.conveyorSpeed = newSpeed;
       }
 
       // Insert speed change
@@ -180,12 +129,57 @@ export class SystemCoordinator {
 
       // filter partQueue
       this.conveyorManager.filterQueue();
-
-      this.socketManager.emitSortPartSuccess(true);
     } catch (error) {
       console.error('\x1b[33mError handling sort part:\x1b[0m', error);
-      this.socketManager.emitSortPartSuccess(false);
     }
+  }
+
+  private buildPart(data: SortPartDto): Part {
+    const { partId, initialTime, initialPosition, bin, sorter } = data;
+    // -- calculate part properties --
+    // default arrival time
+    const jetPosition = this.conveyorManager.getJetPosition(sorter);
+    const distanceToJet = jetPosition - initialPosition;
+    const defaultSpeed = this.speedManager.getDefaultSpeed();
+    const conveyorTravelTime = distanceToJet / defaultSpeed;
+    const defaultArrivalTime = initialTime + conveyorTravelTime;
+    // jet time
+    const jetTime = this.conveyorManager.findTimeAfterDistance(initialTime, distanceToJet);
+    // move time
+    const sorterPreviousPart = this.conveyorManager.findPreviousSorterPart(sorter);
+    const travelTimeFromPreviousBin = this.sorterManager.getTravelTimeBetweenBins({
+      sorter: sorter,
+      fromBin: sorterPreviousPart?.bin,
+      toBin: bin,
+    });
+    const moveTime = jetTime + FALL_TIME - travelTimeFromPreviousBin;
+    // arrival time delay
+    const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
+    // conveyor speed
+    const nextConveyorPart = this.conveyorManager.findNextConveyorPart(defaultArrivalTime);
+    const conveyorSpeed = nextConveyorPart?.conveyorSpeed || defaultSpeed;
+    // conveyor speed time
+    const previousConveyorPart = this.conveyorManager.findPreviousConveyorPart(defaultArrivalTime);
+    const conveyorSpeedTime = previousConveyorPart?.jetTime || initialTime;
+
+    // Create new part
+    const part: Part = {
+      partId,
+      sorter,
+      bin,
+      initialPosition,
+      initialTime,
+      defaultArrivalTime: defaultArrivalTime,
+      jetTime: jetTime,
+      moveTime: moveTime,
+      moveFinishedTime: moveTime + travelTimeFromPreviousBin + MOVE_PAUSE_BUFFER,
+      arrivalTimeDelay: arrivalTimeDelay,
+      conveyorSpeed: conveyorSpeed,
+      conveyorSpeedTime: conveyorSpeedTime,
+      status: 'pending',
+    };
+
+    return part;
   }
 
   private handleConveyorOnOff(): void {
