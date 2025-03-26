@@ -120,12 +120,13 @@ export class SystemCoordinator {
       const distanceToJet = jetPosition - initialPosition;
       const jetTime = this.conveyorManager.findTimeAfterDistance(initialTime, distanceToJet);
       const sorterPreviousPart = this.conveyorManager.findPreviousSorterPart(sorter);
+
       const travelTimeFromPreviousBin = this.sorterManager.getTravelTimeBetweenBins({
         sorter,
         fromBin: sorterPreviousPart?.bin,
         toBin: bin,
       });
-      const moveTime = Math.max(jetTime + FALL_TIME - travelTimeFromPreviousBin, 1);
+      const moveTime = jetTime + FALL_TIME - travelTimeFromPreviousBin;
       const defaultSpeed = this.speedManager.getDefaultSpeed();
       const conveyorTravelTime = distanceToJet / defaultSpeed;
       const defaultArrivalTime = part.initialTime + conveyorTravelTime;

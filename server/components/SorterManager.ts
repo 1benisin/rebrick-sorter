@@ -105,11 +105,13 @@ export class SorterManager extends BaseComponent {
 
   public async moveSorter(sorter: number, bin: number): Promise<void> {
     const maxBin = this.gridDimensions[sorter] * this.gridDimensions[sorter];
-    const constrainedBin = Math.max(1, Math.min(bin, maxBin));
+    if (bin < 1 || bin > maxBin) {
+      throw new Error(`Bin ${bin} is out of bounds for sorter ${sorter}. Valid range is 1 to ${maxBin}`);
+    }
     const deviceName = DeviceName[`SORTER_${sorter}` as keyof typeof DeviceName];
-    this.deviceManager.sendCommand(deviceName, ArduinoCommands.MOVE_TO_BIN, constrainedBin);
-    this.currentPositions[sorter] = constrainedBin;
-    this.socketManager.emitSorterPositionUpdate(sorter, constrainedBin);
+    this.deviceManager.sendCommand(deviceName, ArduinoCommands.MOVE_TO_BIN, bin);
+    this.currentPositions[sorter] = bin;
+    this.socketManager.emitSorterPositionUpdate(sorter, bin);
   }
 
   public getTravelTimeBetweenBins({
@@ -118,7 +120,7 @@ export class SorterManager extends BaseComponent {
     toBin,
   }: {
     sorter: number;
-    fromBin: number | undefined;
+    fromBin?: number;
     toBin: number;
   }): number {
     // if fromBin is not provided, use the current position of the sorter
