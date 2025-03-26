@@ -82,12 +82,12 @@ export class SocketManager extends BaseComponent {
 
   public emitPartSorted(part: Part): void {
     if (!this.socket) return;
-    this.socket.emit('partSorted', { part });
+    this.socket.emit(BackToFrontEvents.PART_SORTED, { part });
   }
 
   public emitPartSkipped(part: Part): void {
     if (!this.socket) return;
-    this.socket.emit('partSkipped', { part });
+    this.socket.emit(BackToFrontEvents.PART_SKIPPED, { part });
   }
 
   public emitConveyorSpeedUpdate(speed: number): void {
