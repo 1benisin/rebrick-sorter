@@ -31,6 +31,7 @@ export class ConveyorManager extends BaseComponent {
   private jetPositionsStart: number[] = [];
   private jetPositionsEnd: number[] = [];
   private partQueue: Part[] = [];
+  private speedLog: { time: number; speed: number }[] = [];
 
   constructor(config: ConveyorManagerConfig) {
     super('ConveyorManager');
@@ -57,6 +58,7 @@ export class ConveyorManager extends BaseComponent {
       this.jetPositionsStart = settings.sorters.map((sorter) => sorter.jetPositionStart);
       this.jetPositionsEnd = settings.sorters.map((sorter) => sorter.jetPositionEnd);
       this.partQueue = [];
+      this.speedLog = [];
 
       // Register for settings updates
       this.settingsManager.registerSettingsUpdateCallback(this.reinitialize.bind(this));
@@ -82,6 +84,7 @@ export class ConveyorManager extends BaseComponent {
       if (part.conveyorSpeedRef) clearTimeout(part.conveyorSpeedRef);
     });
     this.partQueue = [];
+    this.speedLog = [];
 
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
@@ -116,34 +119,45 @@ export class ConveyorManager extends BaseComponent {
     return this.partQueue.find((p) => p.defaultArrivalTime > defaultArrivalTime) || null;
   }
 
-  // find the timestamp when part has traveled a certain distance
+  public addSpeedToLog(time: number, speed: number): void {
+    this.speedLog.push({ time, speed });
+  }
+
   public findTimeAfterDistance = (startTime: number, distance: number) => {
     // sanity checks
     if (distance < 0) console.warn('findTimeAfterDistance: distance is negative');
 
     if (distance === 0) return startTime; // exit condition
 
-    // If no parts in queue, use current speed for calculation
-    if (this.partQueue.length === 0) {
+    // Combine historical speed changes from speedLog with future speed changes from partQueue
+    const allSpeedChanges: { time: number; speed: number }[] = [
+      // Add historical speed changes from speedLog
+      ...this.speedLog,
+      // Add future speed changes from partQueue
+      ...this.partQueue
+        .filter((part) => part.conveyorSpeedTime > Date.now()) // Only include future speed changes
+        .map((part) => ({
+          time: part.conveyorSpeedTime,
+          speed: part.conveyorSpeed,
+        })),
+    ].sort((a, b) => a.time - b.time); // Sort by time
+
+    // If no speed changes, use current speed
+    if (allSpeedChanges.length === 0) {
       const currentSpeed = this.speedManager.getCurrentSpeed();
       const travelTime = distance / currentSpeed;
       return startTime + travelTime;
     }
-
     let remainingDistance = distance;
     let finishTime = startTime;
 
-    // for each part and index in queue
-    // this assumes that the partQueue is sorted by defaultArrivalTime
-    for (let i = 0; i < this.partQueue.length; i++) {
-      // exit condition
+    // Calculate time based on all speed changes
+    for (let i = 0; i < allSpeedChanges.length; i++) {
       if (remainingDistance <= 1) break;
 
-      const { conveyorSpeed: speed, conveyorSpeedTime: speedStart } = this.partQueue[i];
-      let { conveyorSpeedTime: speedEnd } = this.partQueue[i + 1] || {};
-
+      const { speed, time: speedStart } = allSpeedChanges[i];
       // if no next speed change use 10 minutes from start as the end time
-      speedEnd = speedEnd || speedStart + 10 * 60 * 1000;
+      const speedEnd = allSpeedChanges[i + 1]?.time || speedStart + 10 * 60 * 1000;
 
       // use later start time
       const start = speedStart > startTime ? speedStart : startTime;
@@ -163,6 +177,7 @@ export class ConveyorManager extends BaseComponent {
       finishTime += timeTraveled;
       remainingDistance -= distanceTraveled;
     }
+
     return finishTime;
   };
 
@@ -207,6 +222,7 @@ export class ConveyorManager extends BaseComponent {
       nextConveyorPart.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
         nextConveyorPart.conveyorSpeed,
         nextConveyorPart.conveyorSpeedTime,
+        (time: number, speed: number) => this.addSpeedToLog(time, speed),
       );
     }
   }
@@ -244,7 +260,11 @@ export class ConveyorManager extends BaseComponent {
     part.jetRef = this.scheduleJetFire(part.sorter, part.jetTime, part);
 
     // Schedule conveyor speed change
-    part.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(part.conveyorSpeed, part.conveyorSpeedTime);
+    part.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
+      part.conveyorSpeed,
+      part.conveyorSpeedTime,
+      (time: number, speed: number) => this.addSpeedToLog(time, speed),
+    );
   }
 
   private cancelPartActions(parts: Part[]): void {
@@ -260,8 +280,8 @@ export class ConveyorManager extends BaseComponent {
     if (partIndex !== -1) {
       const part = this.partQueue[partIndex];
       part.status = 'completed';
-      this.partQueue[partIndex] = part;
       this.socketManager.emitPartSorted(part);
+      this.partQueue.splice(partIndex, 1);
     }
   }
 

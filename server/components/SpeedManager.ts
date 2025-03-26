@@ -105,7 +105,11 @@ export class SpeedManager extends BaseComponent {
     return speedPercent;
   }
 
-  public scheduleConveyorSpeedChange(speed: number, atTime: number): NodeJS.Timeout {
+  public scheduleConveyorSpeedChange(
+    speed: number,
+    atTime: number,
+    onSpeedChange: (time: number, speed: number) => void,
+  ): NodeJS.Timeout {
     if (speed < MIN_SLOWDOWN_PERCENT * this.defaultSpeed || speed > this.defaultSpeed) {
       console.error(`\x1b[33mscheduleConveyorSpeedChange: speed ${speed} is out of range\x1b[0m`);
     }
@@ -118,6 +122,7 @@ export class SpeedManager extends BaseComponent {
       this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_SPEED, rpm_speed);
       this.currentSpeed = speed;
       this.socketManager.emitConveyorSpeedUpdate(rpm_speed);
+      onSpeedChange(Date.now(), speed);
     }, atTime - Date.now());
   }
 
