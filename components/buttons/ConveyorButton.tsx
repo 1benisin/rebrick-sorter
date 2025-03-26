@@ -17,6 +17,7 @@ const CalibrationButton = () => {
     if (!socket) return;
     setIsRunning((prev) => !prev);
     socket.emit(AllEvents.CONVEYOR_ON_OFF, undefined);
+    console.log('Conveyor button clicked');
   };
 
   return (

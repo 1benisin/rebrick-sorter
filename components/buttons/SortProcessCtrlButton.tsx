@@ -7,19 +7,19 @@ import { Button } from '@/components/ui/button';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import serviceManager from '@/lib/services/ServiceManager';
 import { ServiceName } from '@/lib/services/Service.interface';
-import { AllEvents } from '@/types/socketMessage.type';
+import { AllEvents, FrontToBackEvents } from '@/types/socketMessage.type';
 
 const SortProcessCtrlButton = () => {
   const { isRunning } = sortProcessStore();
 
   const handleStartStop = () => {
     const sorterService = serviceManager.getService(ServiceName.SORTER);
-    if (!sorterService) return;
+    const socketService = serviceManager.getService(ServiceName.SOCKET);
+    if (!sorterService || !socketService) return;
 
     if (isRunning) {
       sorterService.stop();
-      const socket = serviceManager.getService(ServiceName.SOCKET);
-      if (!!socket) socket.emit(AllEvents.CLEAR_HARDWARE_ACTIONS, undefined);
+      socketService.emit(FrontToBackEvents.RESET_SORT_PROCESS, undefined);
     } else {
       sorterService.start();
     }

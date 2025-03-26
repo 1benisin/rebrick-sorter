@@ -22,7 +22,7 @@ volatile long encoderCount = 0;  // New encoder count variable
 // Update this value to match the motor's encoder resolution after gearing
 #define CONV_ENCODER_PPR 8400  // 64 CPR * 131.25 gear ratio
 
-int targetRPM = 40;          // Desired RPM (can be updated with an 'r' command)
+int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
 int currentRPM = 0;          // Measured RPM from the encoder
 int pwmValue = 0;            // Current PWM value (0-255)
 float kp = 1.0;              // Proportional gain (tune as needed)
@@ -64,7 +64,7 @@ void setup()
   digitalWrite(CONV_R_EN_PIN, LOW);
   analogWrite(CONV_RPWM_PIN, 0);
 
-  print("Ready");
+  Serial.println("Ready");
 }
 
 void processSettings(char *message) {
@@ -88,16 +88,16 @@ void processSettings(char *message) {
     }
 
     settingsInitialized = true;
-    print("Settings updated");
+    Serial.println("Settings updated");
   } else {
-    print("Error: Not enough settings provided");
+    Serial.println("Error: Not enough settings provided");
   }
 }
 
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    print("Settings not initialized");
+    Serial.println("Settings not initialized");
     return;
   }
 
@@ -122,18 +122,17 @@ void processMessage(char *message) {
         lastControlMillis = millis();
         encoderCount = 0;  // Reset encoder count when starting
       }
-      print(conveyorOn ? "on" : "off");
+      Serial.println(conveyorOn ? "conveyor on" : "conveyor off");
       break;
     }
 
-    case 'c': { // Set target RPM (formerly 'r')
-      int previousTargetRPM = targetRPM; //store the value before it is changed
+    case 'c': { // Set target RPM 
       targetRPM = constrain(actionValue, 10, 60); // Constrain to safe range
 
       if (actionValue < 10 || actionValue > 60){
-        Serial.print("Target RPM outside of bounds [10 - 60],");
+        Serial.print("RPM constrained to bounds [10 - 60]: ");
       } else {
-        Serial.print("Target RPM updated: ");
+        Serial.print("RPM updated: ");
       }
       
       Serial.println(targetRPM);
@@ -142,7 +141,8 @@ void processMessage(char *message) {
     
     // jet fire
     case 'j': {  // action value is the jet number
-      print(actionValue);
+      Serial.print("Jet fire: ");
+      Serial.println(actionValue);
       if(actionValue >= 0 && actionValue < 4) {
         int jetPin;
         switch(actionValue) {
@@ -158,13 +158,13 @@ void processMessage(char *message) {
         jetEndTime[actionValue] = jetStartTime + JET_FIRE_TIMES[actionValue];
       }
       else {
-        print("no matching jet number");
+        Serial.println("no matching jet number");
       }
       break;
     }
 
     default: {
-      print("no matching serial communication");
+      Serial.println("no matching serial communication");
       break;
     }
   }
@@ -195,7 +195,7 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        print("Error: Message too long");
+        Serial.println("Error: Message too long");
       }
     }
   }
@@ -250,25 +250,3 @@ int getJetPin(int jetNumber) {
     default: return -1;
   }
 }
-
-void print(String a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(int a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(char *a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(float a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(bool a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-

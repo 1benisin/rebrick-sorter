@@ -141,10 +141,6 @@ class SortProcessControllerService implements Service {
                 classification as ClassificationItem,
               );
               this.updateDetectionPairGroupValue(group.id, 'indexUsedToClassify', lastDetectionIndex);
-              // update PPM (parts per minute) count if no skip sort error
-              if (!reason) {
-                sortProcessStore.getState().updatePPMCount();
-              }
             })
             .catch((error) => {
               console.error(`Error classifying detection pair: ${error}`);

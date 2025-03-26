@@ -15,7 +15,7 @@ import JetButton from '@/components/buttons/JetButton';
 const SettingsPage = () => {
   return (
     <div className="p-4">
-      <StatusIndicator />
+      {/* <StatusIndicator /> */}
       <DualVideo />
       <div className="flex items-end gap-2 pt-2">
         <CalibrationButton />

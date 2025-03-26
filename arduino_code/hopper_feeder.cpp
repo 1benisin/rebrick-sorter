@@ -3,8 +3,8 @@
 
 #define AUTO_DISABLE true
 
-#define FEEDER_DEBUG true
-#define HOPPER_DEBUG true
+#define FEEDER_DEBUG false
+#define HOPPER_DEBUG false
 
 #define ENABLE_PIN 6
 #define DIR_PIN 5
@@ -21,28 +21,21 @@
 int hopperStepsPerAction = 2020; // motor steps it takes to move from top to bottom
 unsigned long prevHopperTime = 0;  // will store the last time the task was run
 const long hopperWaitTime = 10;  // interval at which to run the task (milliseconds)
-unsigned long hopperActionInterval = 20000; // 21000 // time between hopper moving down then up
 bool settingsInitialized = false;
 
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *stepper = NULL;
  
- // --- Depth Sensor Variables
+// --- Depth Sensor Variables
 unsigned short lenth_val = 0;
 unsigned char i2c_rx_buf[16];
-// unsigned char device1 = 82; // 82 is factory default
 unsigned char depthSensorAddress = 80;
  
-
 // -- Feeder Variables
 #define FEEDER_ENABLE_PIN 11
 #define FEEDER_MOTOR_PIN1 8
 #define FEEDER_MOTOR_PIN2 7
-int motorSpeed = 200; // up to 255
 unsigned long previousMillis = 0;
-const long delayStoppingInterval = 5;
-const long pauseInterval = 1000; // time between short move vibrations 1500
-const long shortMoveInterval = 250;
 unsigned long totalFeederRunTime = 0;
 unsigned long feederStartTime = 0;
 
@@ -82,7 +75,7 @@ void setup() {
 
     stepper->move(100);
   }
-  print("Ready"); 
+  Serial.println("Ready"); 
 }
 
 void startMotor() {
@@ -219,7 +212,7 @@ void checkHopper()
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    print("Settings not initialized");
+    Serial.println("Settings not initialized");
     return;
   }
 
@@ -242,12 +235,12 @@ void processMessage(char *message) {
         stepper->forceStop();
         currHopperState = HopperState::waiting_top;
       }
-      print(message[1] == '1' ? "on" : "off");
+      Serial.println(message[1] == '1' ? "hopper on" : "hopper off");
       break;
     }
 
     default: {
-      print("no matching serial communication");
+      Serial.println("no matching serial communication");
       break;
     }
   }
@@ -275,9 +268,9 @@ void processSettings(char *message) {
     SHORT_MOVE_INTERVAL = values[4];
 
     settingsInitialized = true;
-    print("Settings updated");
+    Serial.println("Settings updated");
   } else {
-    print("Error: Not enough settings provided");
+    Serial.println("Error: Not enough settings provided");
   }
 }
 
@@ -307,34 +300,13 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        print("Error: Message too long");
+        Serial.println("Error: Message too long");
       }
     }
   }
 
   checkFeeder();
   checkHopper();
-}
-
-void print(String a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(int a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(char *a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(float a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(bool a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
 }
 
 void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr) 

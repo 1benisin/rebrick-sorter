@@ -47,18 +47,6 @@ class SocketService implements Service {
   private setupEventListeners(): void {
     if (!this.socket) return;
 
-    this.socket.on(AllEvents.LOG_PART_QUEUE_SUCCESS, (data: any) => {
-      console.log('Part Queue: ', data);
-    });
-
-    this.socket.on(AllEvents.LOG_SPEED_QUEUE_SUCCESS, (data: any) => {
-      console.log('Speed Queue: ', data);
-    });
-
-    this.socket.on(AllEvents.INIT_HARDWARE_SUCCESS, (success: boolean) => {
-      console.log('INIT_HARDWARE_SUCCESS result: ', success);
-    });
-
     this.socket.on(AllEvents.CONVEYOR_SPEED_UPDATE, (speed: number) => {
       console.log('CONVEYOR_SPEED_UPDATE: ', speed);
       sortProcessStore.getState().setConveyorSpeed(speed);
@@ -66,6 +54,10 @@ class SocketService implements Service {
 
     this.socket.on(AllEvents.LIST_SERIAL_PORTS_SUCCESS, (ports: string[]) => {
       sortProcessStore.getState().setSerialPorts(ports);
+    });
+
+    this.socket.on(AllEvents.PART_SORTED, () => {
+      sortProcessStore.getState().handlePartSorted();
     });
   }
 
@@ -79,6 +71,7 @@ class SocketService implements Service {
 
   public emit<K extends keyof EventPayloads>(event: K, data: EventPayloads[K]): void {
     if (this.socket && this.state === ServiceState.INITIALIZED) {
+      console.log('Emitting event: ', event, data);
       this.socket.emit(event, data);
     } else {
       console.error('Cannot emit event: socket is not initialized');
