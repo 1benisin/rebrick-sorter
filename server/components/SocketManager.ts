@@ -2,7 +2,7 @@ import { Socket } from 'socket.io';
 import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent';
 import { SettingsType } from '../../types/settings.type';
 import { BackToFrontEvents, FrontToBackEvents } from '../../types/socketMessage.type';
-import { Part } from '../../types/hardwareTypes';
+import { Part } from '../../types/part.type';
 import { SortPartDto } from '../../types/sortPart.dto';
 
 export interface SocketManagerConfig extends ComponentConfig {

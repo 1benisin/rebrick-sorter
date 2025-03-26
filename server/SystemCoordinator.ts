@@ -6,7 +6,7 @@ import { FALL_TIME, SorterManager } from './components/SorterManager';
 import { ConveyorManager, MIN_SLOWDOWN_PERCENT } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
-import { Part } from '../types/hardwareTypes.d';
+import { Part } from '../types/part.type';
 import { DeviceName } from '../types/deviceName.type';
 
 export class SystemCoordinator {

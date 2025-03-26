@@ -2,7 +2,7 @@ import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent
 import { DeviceManager } from './DeviceManager';
 import { SocketManager } from './SocketManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
-import { Part } from '../../types/hardwareTypes.d';
+import { Part } from '../../types/part.type';
 import { SettingsManager } from './SettingsManager';
 import { SpeedManager } from './SpeedManager';
 import { SorterManager } from './SorterManager';
@@ -265,25 +265,8 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public filterQueue(): void {
-    // -- filter partQueue
-    let lastSorterPartIndexes = new Array(this.sorterCount).fill(0);
-    let lastPartJettedIndex = 0;
-
-    // get index of last part for each sorter
-    // and index of last part jetted
-    this.partQueue.forEach((p, i) => {
-      lastSorterPartIndexes[p.sorter] = i;
-      if (p.jetTime < Date.now() && p.jetTime > this.partQueue[lastPartJettedIndex].jetTime) lastPartJettedIndex = i;
-    });
-
-    // slice partQueue to keep all parts that haven't been jetted yet
-    // and to keep at least one part for each sorter
-    const sliceIndex = Math.min(...lastSorterPartIndexes, lastPartJettedIndex);
-    this.partQueue = this.partQueue.slice(sliceIndex);
-  }
-
-  public getPartQueue(): Part[] {
-    return this.partQueue;
+    // only keep 'pending' parts
+    this.partQueue = this.partQueue.filter((p) => p.status === 'pending');
   }
 
   protected notifyStatusChange(): void {

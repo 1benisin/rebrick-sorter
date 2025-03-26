@@ -1,5 +1,3 @@
-// types/hardwareTypes.d.ts
-
 export interface Part {
   partId: string;
   sorter: number;
