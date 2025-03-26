@@ -1,7 +1,13 @@
 export type ArduinoConfig = SorterInitConfig | ConveyorJetsInitConfig | HopperFeederInitConfig;
 
+export enum DeviceType {
+  SORTER = 'sorter',
+  CONVEYOR_JETS = 'conveyor_jets',
+  HOPPER_FEEDER = 'hopper_feeder',
+}
+
 export type SorterInitConfig = {
-  deviceType: 'sorter';
+  deviceType: DeviceType.SORTER;
   GRID_DIMENSION: number;
   X_OFFSET: number;
   Y_OFFSET: number;
@@ -14,13 +20,13 @@ export type SorterInitConfig = {
 };
 
 export type ConveyorJetsInitConfig = {
-  deviceType: 'conveyor_jets';
+  deviceType: DeviceType.CONVEYOR_JETS;
   JET_START_POSITIONS: number[];
   JET_END_POSITIONS: number[];
 };
 
 export interface HopperFeederInitConfig {
-  deviceType: 'hopper_feeder';
+  deviceType: DeviceType.HOPPER_FEEDER;
   HOPPER_ACTION_INTERVAL: number;
   MOTOR_SPEED: number;
   DELAY_STOPPING_INTERVAL: number;

@@ -91,7 +91,7 @@ void setup() {
   pinMode(X_STOP_PIN, INPUT_PULLUP);
   pinMode(Y_STOP_PIN, INPUT_PULLUP);
 
-  Serial.print("Ready"); // Indicate that the Arduino is ready to receive config init settings message
+  Serial.println("Ready"); // Indicate that the Arduino is ready to receive config init settings message
 }
 
 // ______________________________ FUNCTIONS ______________________________
@@ -155,16 +155,16 @@ void processSettings(char *message) {
     yStepper->setSpeedInUs(settings.SPEED);
 
     settingsInitialized = true; // Settings have been received and processed
-    Serial.print("Settings updated");
+    Serial.println("Settings updated");
   } else {
-    Serial.print("Error: Not enough settings provided");
+    Serial.println("Error: Not enough settings provided");
   }
 }
 
 
 void processMessage(char *message) {
   if (!settingsInitialized && message[0] != 's') {
-    Serial.print("Settings not initialized");
+    Serial.println("Settings not initialized");
     return;
   }
 
@@ -216,7 +216,7 @@ void processMessage(char *message) {
       break;
     }
     default:
-      Serial.print("No matching serial communication");
+      Serial.println("No matching serial communication");
       break;
   }
 }
@@ -248,7 +248,7 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        Serial.print("Error: Message too long");
+        Serial.println("Error: Message too long");
       }
     }
   }

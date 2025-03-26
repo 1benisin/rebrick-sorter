@@ -64,7 +64,7 @@ void setup()
   digitalWrite(CONV_R_EN_PIN, LOW);
   analogWrite(CONV_RPWM_PIN, 0);
 
-  Serial.print("Ready");
+  Serial.println("Ready");
 }
 
 void processSettings(char *message) {
@@ -88,16 +88,16 @@ void processSettings(char *message) {
     }
 
     settingsInitialized = true;
-    Serial.print("Settings updated");
+    Serial.println("Settings updated");
   } else {
-    Serial.print("Error: Not enough settings provided");
+    Serial.println("Error: Not enough settings provided");
   }
 }
 
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    Serial.print("Settings not initialized");
+    Serial.println("Settings not initialized");
     return;
   }
 
@@ -122,7 +122,7 @@ void processMessage(char *message) {
         lastControlMillis = millis();
         encoderCount = 0;  // Reset encoder count when starting
       }
-      Serial.print(conveyorOn ? "on" : "off");
+      Serial.println(conveyorOn ? "conveyor on" : "conveyor off");
       break;
     }
 
@@ -158,13 +158,13 @@ void processMessage(char *message) {
         jetEndTime[actionValue] = jetStartTime + JET_FIRE_TIMES[actionValue];
       }
       else {
-        Serial.print("no matching jet number");
+        Serial.println("no matching jet number");
       }
       break;
     }
 
     default: {
-      Serial.print("no matching serial communication");
+      Serial.println("no matching serial communication");
       break;
     }
   }
@@ -195,7 +195,7 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        Serial.print("Error: Message too long");
+        Serial.println("Error: Message too long");
       }
     }
   }

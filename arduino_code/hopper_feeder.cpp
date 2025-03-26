@@ -75,7 +75,7 @@ void setup() {
 
     stepper->move(100);
   }
-  Serial.print("Ready"); 
+  Serial.println("Ready"); 
 }
 
 void startMotor() {
@@ -212,7 +212,7 @@ void checkHopper()
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    Serial.print("Settings not initialized");
+    Serial.println("Settings not initialized");
     return;
   }
 
@@ -235,12 +235,12 @@ void processMessage(char *message) {
         stepper->forceStop();
         currHopperState = HopperState::waiting_top;
       }
-      Serial.print(message[1] == '1' ? "on" : "off");
+      Serial.println(message[1] == '1' ? "hopper on" : "hopper off");
       break;
     }
 
     default: {
-      Serial.print("no matching serial communication");
+      Serial.println("no matching serial communication");
       break;
     }
   }
@@ -268,9 +268,9 @@ void processSettings(char *message) {
     SHORT_MOVE_INTERVAL = values[4];
 
     settingsInitialized = true;
-    Serial.print("Settings updated");
+    Serial.println("Settings updated");
   } else {
-    Serial.print("Error: Not enough settings provided");
+    Serial.println("Error: Not enough settings provided");
   }
 }
 
@@ -300,7 +300,7 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        Serial.print("Error: Message too long");
+        Serial.println("Error: Message too long");
       }
     }
   }
