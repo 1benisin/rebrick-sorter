@@ -64,7 +64,7 @@ void setup()
   digitalWrite(CONV_R_EN_PIN, LOW);
   analogWrite(CONV_RPWM_PIN, 0);
 
-  print("Ready");
+  Serial.print("Ready");
 }
 
 void processSettings(char *message) {
@@ -88,16 +88,16 @@ void processSettings(char *message) {
     }
 
     settingsInitialized = true;
-    print("Settings updated");
+    Serial.print("Settings updated");
   } else {
-    print("Error: Not enough settings provided");
+    Serial.print("Error: Not enough settings provided");
   }
 }
 
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    print("Settings not initialized");
+    Serial.print("Settings not initialized");
     return;
   }
 
@@ -122,7 +122,7 @@ void processMessage(char *message) {
         lastControlMillis = millis();
         encoderCount = 0;  // Reset encoder count when starting
       }
-      print(conveyorOn ? "on" : "off");
+      Serial.print(conveyorOn ? "on" : "off");
       break;
     }
 
@@ -130,9 +130,9 @@ void processMessage(char *message) {
       targetRPM = constrain(actionValue, 10, 60); // Constrain to safe range
 
       if (actionValue < 10 || actionValue > 60){
-        Serial.print("Target RPM constrained to bounds [10 - 60]: ");
+        Serial.print("RPM constrained to bounds [10 - 60]: ");
       } else {
-        Serial.print("Target RPM updated: ");
+        Serial.print("RPM updated: ");
       }
       
       Serial.println(targetRPM);
@@ -141,7 +141,8 @@ void processMessage(char *message) {
     
     // jet fire
     case 'j': {  // action value is the jet number
-      print(actionValue);
+      Serial.print("Jet fire: ");
+      Serial.println(actionValue);
       if(actionValue >= 0 && actionValue < 4) {
         int jetPin;
         switch(actionValue) {
@@ -157,13 +158,13 @@ void processMessage(char *message) {
         jetEndTime[actionValue] = jetStartTime + JET_FIRE_TIMES[actionValue];
       }
       else {
-        print("no matching jet number");
+        Serial.print("no matching jet number");
       }
       break;
     }
 
     default: {
-      print("no matching serial communication");
+      Serial.print("no matching serial communication");
       break;
     }
   }
@@ -194,7 +195,7 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        print("Error: Message too long");
+        Serial.print("Error: Message too long");
       }
     }
   }
@@ -249,25 +250,3 @@ int getJetPin(int jetNumber) {
     default: return -1;
   }
 }
-
-void print(String a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(int a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(char *a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(float a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-void print(bool a) { 
-  Serial.print("Main: ");
-  Serial.println(a);
-}
-

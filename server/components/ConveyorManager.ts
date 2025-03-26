@@ -32,6 +32,7 @@ export class ConveyorManager extends BaseComponent {
   private jetPositionsEnd: number[] = [];
   private partQueue: Part[] = [];
   private speedLog: { time: number; speed: number }[] = [];
+  private isRecalculating: boolean = false;
 
   constructor(config: ConveyorManagerConfig) {
     super('ConveyorManager');
@@ -228,28 +229,48 @@ export class ConveyorManager extends BaseComponent {
   }
 
   private updateAllFutureParts(insertIndex: number): void {
-    // Find all parts that come after current part
-    const partsToResort = this.partQueue.slice(insertIndex);
-
-    // Cancel all actions for parts to be resorted
-    this.cancelPartActions(partsToResort);
-
-    // Remove these parts from partQueue
-    this.partQueue = this.partQueue.slice(0, insertIndex);
-
-    // Resort all removed parts
-    partsToResort.forEach((p) => {
-      // Recalculate timings for each part
-      const recalculatedPart = this.buildPart({
-        partId: p.partId,
-        initialTime: p.initialTime,
-        initialPosition: p.initialPosition,
-        bin: p.bin,
-        sorter: p.sorter,
-      });
-      // Insert the recalculated part
-      this.insertPart(recalculatedPart);
+    console.log('updateAllFutureParts =============================================');
+    const filteredPartQueue = this.partQueue.map((p) => {
+      const { moveRef, jetRef, conveyorSpeedRef, ...rest } = p;
+      return rest;
     });
+    console.log(filteredPartQueue);
+    console.log(insertIndex);
+    console.log('===============================================================');
+    // Prevent recursive recalculation
+    // - there should be no recursive recalculation because the partQueue is sorted by defaultArrivalTime
+    // - if there is a recursive recalculation, it is because of a bug
+    if (this.isRecalculating) {
+      console.error('\x1b[33mError: recursive recalculation\x1b[0m');
+      return;
+    }
+    this.isRecalculating = true;
+
+    try {
+      // Find all parts that come after current part
+      const partsToResort = this.partQueue.slice(insertIndex + 1);
+      // Remove partsToResort from partQueue
+      this.partQueue = this.partQueue.slice(0, insertIndex + 1);
+
+      // Cancel all actions for parts to be resorted
+      this.cancelPartActions(partsToResort);
+
+      // Resort all removed parts
+      partsToResort.forEach((p) => {
+        // Recalculate timings for each part
+        const recalculatedPart = this.buildPart({
+          partId: p.partId,
+          initialTime: p.initialTime,
+          initialPosition: p.initialPosition,
+          bin: p.bin,
+          sorter: p.sorter,
+        });
+        // Insert the recalculated part
+        this.insertPart(recalculatedPart);
+      });
+    } finally {
+      this.isRecalculating = false;
+    }
   }
 
   private schedulePartActions(part: Part): void {

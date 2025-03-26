@@ -75,7 +75,7 @@ void setup() {
 
     stepper->move(100);
   }
-  print("Ready"); 
+  Serial.print("Ready"); 
 }
 
 void startMotor() {
@@ -212,7 +212,7 @@ void checkHopper()
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    print("Settings not initialized");
+    Serial.print("Settings not initialized");
     return;
   }
 
@@ -235,12 +235,12 @@ void processMessage(char *message) {
         stepper->forceStop();
         currHopperState = HopperState::waiting_top;
       }
-      print(message[1] == '1' ? "on" : "off");
+      Serial.print(message[1] == '1' ? "on" : "off");
       break;
     }
 
     default: {
-      print("no matching serial communication");
+      Serial.print("no matching serial communication");
       break;
     }
   }
@@ -268,9 +268,9 @@ void processSettings(char *message) {
     SHORT_MOVE_INTERVAL = values[4];
 
     settingsInitialized = true;
-    print("Settings updated");
+    Serial.print("Settings updated");
   } else {
-    print("Error: Not enough settings provided");
+    Serial.print("Error: Not enough settings provided");
   }
 }
 
@@ -300,34 +300,13 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        print("Error: Message too long");
+        Serial.print("Error: Message too long");
       }
     }
   }
 
   checkFeeder();
   checkHopper();
-}
-
-void print(String a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(int a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(char *a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(float a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
-}
-void print(bool a) { 
-  Serial.print("Hopper: ");
-  Serial.println(a);
 }
 
 void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr) 
