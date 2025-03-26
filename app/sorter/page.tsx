@@ -14,7 +14,7 @@ const SortPage = () => {
   const ppmCount = sortProcessStore((state) => state.ppmCount);
   return (
     <div>
-      <StatusIndicator />
+      {/* <StatusIndicator /> */}
       <div className="grid grid-cols-6">
         <div className="flex flex-col">
           <SorterControllerButton />
