@@ -11,6 +11,7 @@ export enum FrontToBackEvents {
   FIRE_JET = 'fire-jet',
   LIST_SERIAL_PORTS = 'list-serial-ports',
   RESET_SORT_PROCESS = 'reset-sort-process',
+  UPDATE_FEEDER_SETTINGS = 'update-feeder-settings',
 }
 
 export enum BackToFrontEvents {
@@ -40,6 +41,12 @@ export interface EventPayloads {
   [FrontToBackEvents.FIRE_JET]: { sorter: number };
   [FrontToBackEvents.LIST_SERIAL_PORTS]: void;
   [FrontToBackEvents.RESET_SORT_PROCESS]: void;
+  [FrontToBackEvents.UPDATE_FEEDER_SETTINGS]: {
+    vibrationSpeed: number;
+    stopDelay: number;
+    pauseTime: number;
+    shortMoveTime: number;
+  };
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.SORT_PART_SUCCESS]: { success: boolean };
   [BackToFrontEvents.CONVEYOR_SPEED_UPDATE]: number;

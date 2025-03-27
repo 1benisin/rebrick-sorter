@@ -13,6 +13,12 @@ export interface SocketManagerConfig extends ComponentConfig {
   onFireJet: (data: { sorter: number }) => void;
   onListSerialPorts: () => Promise<void>;
   onResetSortProcess: () => void;
+  onUpdateFeederSettings: (data: {
+    vibrationSpeed: number;
+    stopDelay: number;
+    pauseTime: number;
+    shortMoveTime: number;
+  }) => void;
 }
 
 export class SocketManager extends BaseComponent {
@@ -57,6 +63,7 @@ export class SocketManager extends BaseComponent {
     this.socket.on(FrontToBackEvents.FIRE_JET, this.handlers.onFireJet);
     this.socket.on(FrontToBackEvents.LIST_SERIAL_PORTS, this.handlers.onListSerialPorts);
     this.socket.on(FrontToBackEvents.RESET_SORT_PROCESS, this.handlers.onResetSortProcess);
+    this.socket.on(FrontToBackEvents.UPDATE_FEEDER_SETTINGS, this.handlers.onUpdateFeederSettings);
 
     this.socket.on('disconnect', () => {
       this.setStatus(ComponentStatus.UNINITIALIZED);
