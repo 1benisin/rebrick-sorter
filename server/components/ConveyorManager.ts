@@ -129,8 +129,22 @@ export class ConveyorManager extends BaseComponent {
     return this.partQueue.find((p) => p.defaultArrivalTime > defaultArrivalTime) || null;
   }
 
+  private trimSpeedLog(): void {
+    if (this.partQueue.length === 0) {
+      this.speedLog = [];
+      return;
+    }
+
+    // Find earliest initial time among all parts
+    const earliestInitialTime = Math.min(...this.partQueue.map((p) => p.initialTime));
+
+    // Remove all speed log entries before the earliest part's initial time
+    this.speedLog = this.speedLog.filter((entry) => entry.time >= earliestInitialTime);
+  }
+
   public addSpeedToLog(time: number, speed: number): void {
     this.speedLog.push({ time, speed });
+    this.trimSpeedLog();
   }
 
   public findTimeAfterDistance = (startTime: number, distance: number) => {
