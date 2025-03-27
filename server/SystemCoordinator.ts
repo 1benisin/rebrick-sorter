@@ -9,8 +9,8 @@ import { SortPartDto } from '../types/sortPart.dto';
 import { Part } from '../types/part.type';
 import { DeviceName } from '../types/deviceName.type';
 
-export const FALL_TIME_SHORTEST = 1000;
-export const FALL_TIME_LONGEST = 1700;
+export const FALL_TIME_SHORTEST = 1200;
+export const FALL_TIME_LONGEST = 2000;
 
 export class SystemCoordinator {
   private socketManager: SocketManager;
@@ -162,7 +162,9 @@ export class SystemCoordinator {
     // conveyor speed
     const nextConveyorPart = this.conveyorManager.findNextConveyorPart(defaultArrivalTime);
     const conveyorSpeed = nextConveyorPart?.conveyorSpeed || defaultSpeed;
-    const conveyorSpeedTime = nextConveyorPart?.conveyorSpeedTime || Date.now();
+    // conveyor speed time
+    const previousConveyorPart = this.conveyorManager.findPreviousConveyorPart(defaultArrivalTime);
+    const conveyorSpeedTime = previousConveyorPart?.jetTime || Date.now();
 
     // Create new part
     const part: Part = {

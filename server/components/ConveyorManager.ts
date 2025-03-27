@@ -10,6 +10,13 @@ import { DeviceName } from '../../types/deviceName.type';
 import { SortPartDto } from '../../types/sortPart.dto';
 
 export const MIN_SLOWDOWN_PERCENT = 0.5; // Minimum speed percentage before skipping a part
+
+interface ReturnToDefaultSpeed {
+  time: number;
+  speed: number;
+  ref: NodeJS.Timeout;
+}
+
 export interface ConveyorManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
   socketManager: SocketManager;
@@ -26,14 +33,12 @@ export class ConveyorManager extends BaseComponent {
   private speedManager: SpeedManager;
   private sorterManager: SorterManager;
   private buildPart: (part: SortPartDto) => Part;
-
-  private sorterCount: number = 0;
   private jetPositionsStart: number[] = [];
   private jetPositionsEnd: number[] = [];
   private partQueue: Part[] = [];
   private speedLog: { time: number; speed: number }[] = [];
   private isRecalculating: boolean = false;
-  private returnToDefaultConveyorSpeedRef: NodeJS.Timeout | null = null;
+  private returnToDefaultConveyorSpeed: ReturnToDefaultSpeed | null = null;
 
   constructor(config: ConveyorManagerConfig) {
     super('ConveyorManager');
@@ -56,7 +61,6 @@ export class ConveyorManager extends BaseComponent {
       }
 
       // Initialize from settings
-      this.sorterCount = settings.sorters.length;
       this.jetPositionsStart = settings.sorters.map((sorter) => sorter.jetPositionStart);
       this.jetPositionsEnd = settings.sorters.map((sorter) => sorter.jetPositionEnd);
       this.partQueue = [];
@@ -85,9 +89,9 @@ export class ConveyorManager extends BaseComponent {
       if (part.jetRef) clearTimeout(part.jetRef);
       if (part.conveyorSpeedRef) clearTimeout(part.conveyorSpeedRef);
     });
-    if (this.returnToDefaultConveyorSpeedRef) {
-      clearTimeout(this.returnToDefaultConveyorSpeedRef);
-      this.returnToDefaultConveyorSpeedRef = null;
+    if (this.returnToDefaultConveyorSpeed) {
+      clearTimeout(this.returnToDefaultConveyorSpeed.ref);
+      this.returnToDefaultConveyorSpeed = null;
     }
     this.partQueue = [];
     this.speedLog = [];
@@ -135,7 +139,7 @@ export class ConveyorManager extends BaseComponent {
 
     if (distance === 0) return startTime; // exit condition
 
-    // Combine historical speed changes from speedLog with future speed changes from partQueue
+    // Combine historical speed changes from speedLog with future speed changes from partQueue and return to default speed
     const allSpeedChanges: { time: number; speed: number }[] = [
       // Add historical speed changes from speedLog
       ...this.speedLog,
@@ -146,6 +150,15 @@ export class ConveyorManager extends BaseComponent {
           time: part.conveyorSpeedTime,
           speed: part.conveyorSpeed,
         })),
+      // Add return to default speed if it exists and is in the future
+      ...(this.returnToDefaultConveyorSpeed
+        ? [
+            {
+              time: this.returnToDefaultConveyorSpeed.time,
+              speed: this.returnToDefaultConveyorSpeed.speed,
+            },
+          ]
+        : []),
     ].sort((a, b) => a.time - b.time); // Sort by time
 
     // If no speed changes, use current speed
@@ -197,17 +210,17 @@ export class ConveyorManager extends BaseComponent {
 
   private scheduleReturnToDefaultSpeed(jetTime: number): void {
     // Cancel existing return to default speed timer if it exists
-    if (this.returnToDefaultConveyorSpeedRef) {
-      clearTimeout(this.returnToDefaultConveyorSpeedRef);
+    if (this.returnToDefaultConveyorSpeed) {
+      clearTimeout(this.returnToDefaultConveyorSpeed.ref);
     }
 
     // Schedule new return to default speed timer
     const defaultSpeed = this.speedManager.getDefaultSpeed();
-    this.returnToDefaultConveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
-      defaultSpeed,
-      jetTime,
-      (time: number, speed: number) => this.addSpeedToLog(time, speed),
+
+    const ref = this.speedManager.scheduleConveyorSpeedChange(defaultSpeed, jetTime, (time: number, speed: number) =>
+      this.addSpeedToLog(time, speed),
     );
+    this.returnToDefaultConveyorSpeed = { time: jetTime, speed: defaultSpeed, ref };
   }
 
   public insertPart(part: Part): void {
