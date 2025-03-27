@@ -162,9 +162,7 @@ export class SystemCoordinator {
     // conveyor speed
     const nextConveyorPart = this.conveyorManager.findNextConveyorPart(defaultArrivalTime);
     const conveyorSpeed = nextConveyorPart?.conveyorSpeed || defaultSpeed;
-    // conveyor speed time
-    const previousConveyorPart = this.conveyorManager.findPreviousConveyorPart(defaultArrivalTime);
-    const conveyorSpeedTime = previousConveyorPart?.jetTime || initialTime;
+    const conveyorSpeedTime = nextConveyorPart?.conveyorSpeedTime || Date.now();
 
     // Create new part
     const part: Part = {

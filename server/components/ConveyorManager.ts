@@ -33,6 +33,7 @@ export class ConveyorManager extends BaseComponent {
   private partQueue: Part[] = [];
   private speedLog: { time: number; speed: number }[] = [];
   private isRecalculating: boolean = false;
+  private returnToDefaultConveyorSpeedRef: NodeJS.Timeout | null = null;
 
   constructor(config: ConveyorManagerConfig) {
     super('ConveyorManager');
@@ -84,6 +85,10 @@ export class ConveyorManager extends BaseComponent {
       if (part.jetRef) clearTimeout(part.jetRef);
       if (part.conveyorSpeedRef) clearTimeout(part.conveyorSpeedRef);
     });
+    if (this.returnToDefaultConveyorSpeedRef) {
+      clearTimeout(this.returnToDefaultConveyorSpeedRef);
+      this.returnToDefaultConveyorSpeedRef = null;
+    }
     this.partQueue = [];
     this.speedLog = [];
 
@@ -190,9 +195,25 @@ export class ConveyorManager extends BaseComponent {
     }, delay);
   }
 
+  private scheduleReturnToDefaultSpeed(jetTime: number): void {
+    // Cancel existing return to default speed timer if it exists
+    if (this.returnToDefaultConveyorSpeedRef) {
+      clearTimeout(this.returnToDefaultConveyorSpeedRef);
+    }
+
+    // Schedule new return to default speed timer
+    const defaultSpeed = this.speedManager.getDefaultSpeed();
+    this.returnToDefaultConveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
+      defaultSpeed,
+      jetTime,
+      (time: number, speed: number) => this.addSpeedToLog(time, speed),
+    );
+  }
+
   public insertPart(part: Part): void {
     // Find insertion index based on defaultArrivalTime
     let insertIndex = this.partQueue.findIndex((p) => p.defaultArrivalTime > part.defaultArrivalTime);
+    const isInsertAtEnd = insertIndex === -1;
     insertIndex = insertIndex === -1 ? this.partQueue.length : insertIndex; // if no part found, insert at the end
 
     // Schedule and assign all part actions
@@ -202,7 +223,10 @@ export class ConveyorManager extends BaseComponent {
     this.partQueue.splice(insertIndex, 0, part);
 
     // if there is an arrival time delay, we need to slow down the part
-    if (part.arrivalTimeDelay > 0) {
+    if (isInsertAtEnd) {
+      // Reschedule return to default speed for the new last part
+      this.scheduleReturnToDefaultSpeed(part.jetTime);
+    } else if (part.arrivalTimeDelay > 0) {
       this.updateAllFutureParts(insertIndex);
     } else {
       this.updateNextPart(part.jetTime, insertIndex);
@@ -211,7 +235,7 @@ export class ConveyorManager extends BaseComponent {
 
   private updateNextPart(nextPartSpeedTime: number, insertIndex: number): void {
     // Find next conveyor part
-    const nextConveyorPart = this.partQueue[insertIndex];
+    const nextConveyorPart = this.partQueue[insertIndex + 1];
     if (nextConveyorPart) {
       // Cancel next part's conveyor speed ref
       if (nextConveyorPart.conveyorSpeedRef) {
@@ -307,8 +331,11 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public filterQueue(): void {
-    // only keep 'pending' parts
-    this.partQueue = this.partQueue.filter((p) => p.status === 'pending');
+    // keep last part to leave conveyor onward
+    const lastRecentPartToLeaveConveyor = this.partQueue.find((p) => p.defaultArrivalTime < Date.now());
+    if (lastRecentPartToLeaveConveyor) {
+      this.partQueue = this.partQueue.slice(this.partQueue.indexOf(lastRecentPartToLeaveConveyor));
+    }
   }
 
   public getPartQueue(): Part[] {
