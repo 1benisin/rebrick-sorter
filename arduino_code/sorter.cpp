@@ -15,6 +15,24 @@
 #define X_STOP_PIN 11
 #define Y_STOP_PIN 12
 
+// Homing state machine
+enum HomingState {
+  NOT_HOMING,
+  HOMING_START,
+  HOMING_Y_BACKWARD,
+  HOMING_X_BACKWARD,
+  HOMING_Y_OFFSET,
+  HOMING_X_OFFSET,
+  HOMING_WAIT_FOR_OFFSET,
+  HOMING_COMPLETE,
+  HOMING_ERROR
+};
+
+HomingState currentHomingState = NOT_HOMING;
+unsigned long homingStartMillis = 0;
+const unsigned long HOMING_TIMEOUT_MS = 30000; // 30 seconds timeout per axis move
+const int HOMING_BACKOFF_STEPS = 100; // Steps to back off after hitting switch
+
 // Device settings struct
 typedef struct {
   int   GRID_DIMENSION;
@@ -168,6 +186,20 @@ void processMessage(char *message) {
     return;
   }
 
+  // Prevent most commands during active homing (allow 's' maybe?)
+  if (currentHomingState != NOT_HOMING && currentHomingState != HOMING_COMPLETE && currentHomingState != HOMING_ERROR) {
+    if (message[0] != 'a') { // Allow trying to home again if in error state
+      Serial.println("Busy: Homing in progress.");
+      return;
+    }
+  }
+
+  // If in error state, only allow 'a' to retry
+  if (currentHomingState == HOMING_ERROR && message[0] != 'a') {
+    Serial.println("Error: Homing failed. Please retry homing ('a').");
+    return;
+  }
+
   switch (message[0]) {
     case 's':
       processSettings(message);
@@ -182,14 +214,19 @@ void processMessage(char *message) {
       buffer[3] = '\0';
 
       int binNum = atoi(buffer);
-      binNum = constrain(binNum, 1, settings.GRID_DIMENSION * settings.GRID_DIMENSION); // prevent out of bounds bin number
+      binNum = constrain(binNum, 1, settings.GRID_DIMENSION * settings.GRID_DIMENSION);
       
-      if (curBin != binNum) { // if not at bin already 
-        // make move
+      if (curBin != binNum) {
         curBin = binNum;
         moveToBin(binNum);
+        moveCompleteSent = false;
+      } else {
+        // Already at the bin, send MC immediately if needed
+        if (moveCompleteSent) {
+          Serial.print("MC: ");
+          Serial.println(curBin);
+        }
       }
-      moveCompleteSent = false;
       break;
     }
 
@@ -202,21 +239,128 @@ void processMessage(char *message) {
       Serial.print("centerBin: ");
       Serial.println(centerBin);
       moveToBin(centerBin);
+      moveCompleteSent = false;
       break;
     }
-
 
     // HOMING PROCEDURE
     case 'a': {
-      homing = true;
-      xStepper->setSpeedInUs(settings.HOMING_SPEED);
-      xStepper->runBackward();
-      yStepper->setSpeedInUs(settings.HOMING_SPEED);
-      yStepper->runBackward();
+      if (currentHomingState != NOT_HOMING && currentHomingState != HOMING_COMPLETE && currentHomingState != HOMING_ERROR) {
+        Serial.println("Error: Homing already in progress.");
+        break;
+      }
+      if (!settingsInitialized) {
+        Serial.println("Error: Settings not initialized. Cannot home.");
+        break;
+      }
+      if (xStepper->isRunning() || yStepper->isRunning()) {
+        Serial.println("Error: Steppers busy. Cannot start homing.");
+        break;
+      }
+
+      Serial.println("Homing sequence initiated...");
+      currentHomingState = HOMING_START;
       break;
     }
+
     default:
       Serial.println("No matching serial communication");
+      break;
+  }
+}
+
+// Helper function to check endstop with optional debounce
+bool checkEndstop(int pin) {
+  if (digitalRead(pin) == LOW) {
+    // Simple debounce - wait 5ms and check again
+    delay(5);
+    return digitalRead(pin) == LOW;
+  }
+  return false;
+}
+
+void handleHoming() {
+  switch (currentHomingState) {
+    case HOMING_START:
+      // Start Y axis first
+      Serial.println("Homing Y axis...");
+      yStepper->setSpeedInUs(settings.HOMING_SPEED);
+      yStepper->runBackward();
+      homingStartMillis = millis();
+      currentHomingState = HOMING_Y_BACKWARD;
+      break;
+
+    case HOMING_Y_BACKWARD:
+      if (checkEndstop(Y_STOP_PIN)) {
+        Serial.println("Y endstop hit.");
+        yStepper->forceStop();
+        yStepper->move(-HOMING_BACKOFF_STEPS, true); // Back off slowly
+        yStepper->setCurrentPosition(0);
+
+        // Now start X axis homing
+        Serial.println("Homing X axis...");
+        xStepper->setSpeedInUs(settings.HOMING_SPEED);
+        xStepper->runBackward();
+        homingStartMillis = millis();
+        currentHomingState = HOMING_X_BACKWARD;
+
+      } else if (millis() - homingStartMillis > HOMING_TIMEOUT_MS) {
+        Serial.println("Error: Homing Y timed out!");
+        xStepper->forceStop();
+        yStepper->forceStop();
+        currentHomingState = HOMING_ERROR;
+      }
+      break;
+
+    case HOMING_X_BACKWARD:
+      if (checkEndstop(X_STOP_PIN)) {
+        Serial.println("X endstop hit.");
+        xStepper->forceStop();
+        xStepper->move(-HOMING_BACKOFF_STEPS, true); // Back off slowly
+        xStepper->setCurrentPosition(0);
+
+        // Both axes homed, now move to offsets (non-blocking)
+        Serial.println("Moving to offsets...");
+        xStepper->setSpeedInUs(settings.SPEED);
+        yStepper->setSpeedInUs(settings.SPEED);
+
+        bool xMoveStarted = (xStepper->moveTo(settings.X_OFFSET) == FastAccelStepper::MOVE_OK);
+        bool yMoveStarted = (yStepper->moveTo(settings.Y_OFFSET) == FastAccelStepper::MOVE_OK);
+
+        if (xMoveStarted || yMoveStarted) {
+          currentHomingState = HOMING_WAIT_FOR_OFFSET;
+        } else {
+          currentHomingState = HOMING_COMPLETE;
+          Serial.println("Homing complete (already at offsets).");
+          curBin = 0;
+        }
+
+      } else if (millis() - homingStartMillis > HOMING_TIMEOUT_MS) {
+        Serial.println("Error: Homing X timed out!");
+        xStepper->forceStop();
+        yStepper->forceStop();
+        currentHomingState = HOMING_ERROR;
+      }
+      break;
+
+    case HOMING_WAIT_FOR_OFFSET:
+      if (!xStepper->isRunning() && !yStepper->isRunning()) {
+        Serial.println("Homing complete.");
+        currentHomingState = HOMING_COMPLETE;
+        curBin = 0;
+      }
+      break;
+
+    case HOMING_COMPLETE:
+      currentHomingState = NOT_HOMING;
+      break;
+
+    case HOMING_ERROR:
+      // Stay in error state until next homing command
+      break;
+
+    case NOT_HOMING:
+    default:
       break;
   }
 }
@@ -253,34 +397,16 @@ void loop() {
     }
   }
 
-  // Check if the move is complete and send a message if it is
-  if (!moveCompleteSent && !xStepper->isRunning() && !yStepper->isRunning()) {
-    Serial.print("MC: "); // Send message over serial
-    Serial.println(curBin);
-    moveCompleteSent = true; // Set the flag to indicate that the message has been sent
-  }
+  // Handle the homing state machine
+  handleHoming();
 
-  // Check X-axis endstop if homing
-  if (homing && !digitalRead(X_STOP_PIN)) {
-    xStepper->forceStop();
-    xStepper->setCurrentPosition(0);
-    xStepper->setSpeedInUs(settings.SPEED);
-    xStepper->moveTo(settings.X_OFFSET, true);
-    // if other motor is done moving home, set homing to false
-    if (!yStepper->isRunning()) {
-      homing = false;
-    }
-  }
-
-  // Check Y-axis endstop if homing
-  if (homing && !digitalRead(Y_STOP_PIN)) {
-    yStepper->forceStop();
-    yStepper->setCurrentPosition(0);
-    yStepper->setSpeedInUs(settings.SPEED);
-    yStepper->moveTo(settings.Y_OFFSET, true);
-    // if other motor is done moving home, set homing to false
-    if (!xStepper->isRunning()) {
-      homing = false;
+  // Check if a non-homing move is complete and send a message if it is
+  // Make sure not to send MC during homing offset moves
+  if (currentHomingState == NOT_HOMING || currentHomingState == HOMING_COMPLETE) {
+    if (!moveCompleteSent && !xStepper->isRunning() && !yStepper->isRunning()) {
+      Serial.print("MC: "); // Send message over serial
+      Serial.println(curBin);
+      moveCompleteSent = true; // Set the flag to indicate that the message has been sent
     }
   }
 }
