@@ -324,8 +324,8 @@ void handleHoming() {
         xStepper->setSpeedInUs(settings.SPEED);
         yStepper->setSpeedInUs(settings.SPEED);
 
-        bool xMoveStarted = (xStepper->moveTo(settings.X_OFFSET) == FastAccelStepper::MOVE_OK);
-        bool yMoveStarted = (yStepper->moveTo(settings.Y_OFFSET) == FastAccelStepper::MOVE_OK);
+        bool xMoveStarted = (xStepper->moveTo(settings.X_OFFSET) == MOVE_OK);
+        bool yMoveStarted = (yStepper->moveTo(settings.Y_OFFSET) == MOVE_OK);
 
         if (xMoveStarted || yMoveStarted) {
           currentHomingState = HOMING_WAIT_FOR_OFFSET;
