@@ -108,6 +108,13 @@ void checkFeeder() {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
 
+  // If FEEDER_PAUSE_TIME is 0, run continuously at FEEDER_VIBRATION_SPEED
+  if (FEEDER_PAUSE_TIME == 0) {
+    startMotor();
+    analogWrite(FEEDER_ENABLE_PIN, FEEDER_VIBRATION_SPEED);
+    return;
+  }
+
   switch (currFeederState) {
     case FeederState::start_moving: {
       startMotor(); 
