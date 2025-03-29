@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import serviceManager from '@/lib/services/ServiceManager';
 import { ServiceName } from '@/lib/services/Service.interface';
 
-const ConveyorCalibrationButton = () => {
+const CalibrationButton = () => {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationResult, setCalibrationResult] = useState<number | null>(null);
 
@@ -37,4 +37,4 @@ const ConveyorCalibrationButton = () => {
   );
 };
 
-export default ConveyorCalibrationButton;
+export default CalibrationButton;

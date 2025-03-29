@@ -18,33 +18,33 @@
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
 // Hopper Variables
-int hopperStepsPerAction = 2020; // motor steps it takes to move from top to bottom
-unsigned long prevHopperTime = 0;  // will store the last time the task was run
-const long hopperWaitTime = 10;  // interval at which to run the task (milliseconds)
+int hopperFullStrokeSteps = 2020; // motor steps it takes to move from top to bottom
+unsigned long lastHopperActionTime = 0;  // will store the last time the task was run
+const long hopperBottomWaitTime = 10;  // interval at which to run the task (milliseconds)
 bool settingsInitialized = false;
 
 FastAccelStepperEngine engine = FastAccelStepperEngine();
-FastAccelStepper *stepper = NULL;
+FastAccelStepper *hopperStepper = NULL;
  
 // --- Depth Sensor Variables
-unsigned short lenth_val = 0;
-unsigned char i2c_rx_buf[16];
-unsigned char depthSensorAddress = 80;
+unsigned short distanceReading = 0;
+unsigned char i2cReceiveBuffer[16];
+unsigned char distanceSensorAddress = 80;
  
 // -- Feeder Variables
 #define FEEDER_ENABLE_PIN 11
 #define FEEDER_MOTOR_PIN1 8
 #define FEEDER_MOTOR_PIN2 7
-unsigned long previousMillis = 0;
-unsigned long totalFeederRunTime = 0;
-unsigned long feederStartTime = 0;
+unsigned long lastFeederActionTime = 0;
+unsigned long totalFeederVibrationTime = 0;
+unsigned long feederVibrationStartTime = 0;
 
 // Settings from server
-int HOPPER_ACTION_INTERVAL = 20000;
-int MOTOR_SPEED = 200;
-int DELAY_STOPPING_INTERVAL = 5;
-int PAUSE_INTERVAL = 1000;
-int SHORT_MOVE_INTERVAL = 250;
+int HOPPER_CYCLE_INTERVAL = 20000;  // Time between hopper cycles
+int FEEDER_VIBRATION_SPEED = 200;   // Speed of feeder vibration
+int FEEDER_STOP_DELAY = 5;          // Delay before stopping feeder after part detection
+int FEEDER_PAUSE_TIME = 1000;       // Time to pause between feeder movements
+int FEEDER_SHORT_MOVE_TIME = 250;   // Duration of short feeder movement
 
 void setup() {
 
@@ -62,18 +62,18 @@ void setup() {
 
 
   engine.init();
-  stepper = engine.stepperConnectToPin(STEP_PIN);
+  hopperStepper = engine.stepperConnectToPin(STEP_PIN);
 
-  if (stepper) {
-    stepper->setDirectionPin(DIR_PIN, true, 2000); // DIR_PIN, dirHighCountsUp = true, dir_change_delay_us = 1000
+  if (hopperStepper) {
+    hopperStepper->setDirectionPin(DIR_PIN, true, 2000); // DIR_PIN, dirHighCountsUp = true, dir_change_delay_us = 1000
     if (AUTO_DISABLE) {
-      stepper->setEnablePin(ENABLE_PIN, true); // low_active_enables_stepper = false 
-      stepper->setAutoEnable(true);
+      hopperStepper->setEnablePin(ENABLE_PIN, true); // low_active_enables_stepper = false 
+      hopperStepper->setAutoEnable(true);
     }
-    stepper->setSpeedInUs(SPEED);  // the parameter is us/step !!!
-    stepper->setAcceleration(ACCELERATION);
+    hopperStepper->setSpeedInUs(SPEED);  // the parameter is us/step !!!
+    hopperStepper->setAcceleration(ACCELERATION);
 
-    stepper->move(100);
+    hopperStepper->move(100);
   }
   Serial.println("Ready"); 
 }
@@ -103,7 +103,7 @@ void checkFeeder() {
   unsigned long currentMillis = millis();
 
   // Add sensor reading debug
-  int distance = ReadDistance(depthSensorAddress);
+  int distance = ReadDistance(distanceSensorAddress);
   if (FEEDER_DEBUG && distance < 50) {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
@@ -111,8 +111,8 @@ void checkFeeder() {
   switch (currFeederState) {
     case FeederState::start_moving: {
       startMotor(); 
-      analogWrite(FEEDER_ENABLE_PIN, MOTOR_SPEED);
-      feederStartTime = currentMillis;
+      analogWrite(FEEDER_ENABLE_PIN, FEEDER_VIBRATION_SPEED);
+      feederVibrationStartTime = currentMillis;
       currFeederState = FeederState::moving;
       break;
     }
@@ -120,27 +120,27 @@ void checkFeeder() {
     case FeederState::moving: 
       if (distance < 50) {
         currFeederState = FeederState::part_detected;
-        previousMillis = currentMillis;
+        lastFeederActionTime = currentMillis;
       }
       break;
     
     case FeederState::part_detected:
-      if (currentMillis - previousMillis >= DELAY_STOPPING_INTERVAL) {
+      if (currentMillis - lastFeederActionTime >= FEEDER_STOP_DELAY) {
         stopMotor();
-        totalFeederRunTime += currentMillis - feederStartTime;
+        totalFeederVibrationTime += currentMillis - feederVibrationStartTime;
         currFeederState = FeederState::paused;
-        previousMillis = currentMillis;
+        lastFeederActionTime = currentMillis;
       }
       break;
 
     case FeederState::paused:
-      if (currentMillis - previousMillis >= PAUSE_INTERVAL) {
-        if (ReadDistance(depthSensorAddress) < 50) { 
+      if (currentMillis - lastFeederActionTime >= FEEDER_PAUSE_TIME) {
+        if (ReadDistance(distanceSensorAddress) < 50) { 
           startMotor(); 
-          analogWrite(FEEDER_ENABLE_PIN, MOTOR_SPEED);
-          feederStartTime = currentMillis;
+          analogWrite(FEEDER_ENABLE_PIN, FEEDER_VIBRATION_SPEED);
+          feederVibrationStartTime = currentMillis;
           currFeederState = FeederState::short_move;
-          previousMillis = currentMillis;
+          lastFeederActionTime = currentMillis;
         } else {
           currFeederState = FeederState::start_moving;
         }
@@ -148,11 +148,11 @@ void checkFeeder() {
       break;
 
     case FeederState::short_move:
-      if (currentMillis - previousMillis >= SHORT_MOVE_INTERVAL) {
+      if (currentMillis - lastFeederActionTime >= FEEDER_SHORT_MOVE_TIME) {
         stopMotor();
-        totalFeederRunTime += currentMillis - feederStartTime;
+        totalFeederVibrationTime += currentMillis - feederVibrationStartTime;
         currFeederState = FeederState::paused;
-        previousMillis = currentMillis;
+        lastFeederActionTime = currentMillis;
       }
       break;
   }
@@ -165,6 +165,7 @@ enum class HopperState : uint8_t {
   moving_up,
   waiting_top,
 };
+
 static HopperState currHopperState = HopperState::waiting_top;
 
 void checkHopper()
@@ -174,35 +175,33 @@ void checkHopper()
   switch (currHopperState)
   {
   case HopperState::moving_down: 
-    if (digitalRead(STOP_PIN) == LOW || !stepper->isRunning()) {
-      stepper->forceStopAndNewPosition(0);
-      prevHopperTime = currentMillis;      
+    if (digitalRead(STOP_PIN) == LOW || !hopperStepper->isRunning()) {
+      hopperStepper->forceStopAndNewPosition(0);
+      lastHopperActionTime = currentMillis;      
       currHopperState = HopperState::waiting_bottom;
     }
     break;
 
   case HopperState::waiting_bottom:
-    if (currentMillis - prevHopperTime >= hopperWaitTime) {
-      stepper->move(hopperStepsPerAction);
+    if (currentMillis - lastHopperActionTime >= hopperBottomWaitTime) {
+      hopperStepper->move(hopperFullStrokeSteps);
       currHopperState = HopperState::moving_up;
     } 
     break;
 
   case HopperState::moving_up:
-    if (!stepper->isRunning()) {
+    if (!hopperStepper->isRunning()) {
       currHopperState = HopperState::waiting_top;
     } 
     break;
 
   case HopperState::waiting_top: 
-    unsigned long currVibrationExceedsInterval = currentMillis - feederStartTime >= HOPPER_ACTION_INTERVAL;
-    if (totalFeederRunTime >= HOPPER_ACTION_INTERVAL || currVibrationExceedsInterval) {
+    if (totalFeederVibrationTime >= HOPPER_CYCLE_INTERVAL) {
       if (HOPPER_DEBUG) {
         Serial.println("HOPPER: Starting new cycle - moving down");
       }
-      if (currVibrationExceedsInterval) feederStartTime = currentMillis;
-      totalFeederRunTime = 0;
-      stepper->move(-hopperStepsPerAction-20);
+      totalFeederVibrationTime = 0;
+      hopperStepper->move(-hopperFullStrokeSteps-20);
       currHopperState = HopperState::moving_down;
     } 
     break;
@@ -228,11 +227,11 @@ void processMessage(char *message) {
         if (HOPPER_DEBUG) {
           Serial.println("HOPPER: Starting new cycle - moving down");
         }
-        stepper->move(-hopperStepsPerAction-20);
+        hopperStepper->move(-hopperFullStrokeSteps-20);
         currHopperState = HopperState::moving_down;
       } else {
         // Stop hopper
-        stepper->forceStop();
+        hopperStepper->forceStop();
         currHopperState = HopperState::waiting_top;
       }
       Serial.println(message[1] == '1' ? "hopper on" : "hopper off");
@@ -248,7 +247,8 @@ void processMessage(char *message) {
 
 void processSettings(char *message) {
   // Parse settings from message
-  // Expected format: 's,<HOPPER_ACTION_INTERVAL>,<MOTOR_SPEED>,<DELAY_STOPPING_INTERVAL>,<PAUSE_INTERVAL>,<SHORT_MOVE_INTERVAL>'
+  // Expected format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>'
+  // Note: The 's' character is the command identifier, followed by 5 comma-separated settings values
   char *token;
   int values[5]; // Array to hold 5 setting values
   int valueIndex = 0;
@@ -256,21 +256,22 @@ void processSettings(char *message) {
   // Skip 's,' and start tokenizing
   token = strtok(&message[2], ",");
   while (token != NULL && valueIndex < 5) {
-    values[valueIndex++] = atoi(token);
+    values[valueIndex] = atoi(token);
+    valueIndex++;  // Increment the index after assigning the value
     token = strtok(NULL, ",");
   }
 
   if (valueIndex >= 5) { // Ensure we have all required settings
-    HOPPER_ACTION_INTERVAL = values[0];
-    MOTOR_SPEED = values[1];
-    DELAY_STOPPING_INTERVAL = values[2];
-    PAUSE_INTERVAL = values[3];
-    SHORT_MOVE_INTERVAL = values[4];
+    HOPPER_CYCLE_INTERVAL = values[0];
+    FEEDER_VIBRATION_SPEED = values[1];
+    FEEDER_STOP_DELAY = values[2];
+    FEEDER_PAUSE_TIME = values[3];
+    FEEDER_SHORT_MOVE_TIME = values[4];
 
     settingsInitialized = true;
     Serial.println("Settings updated");
   } else {
-    Serial.println("Error: Not enough settings provided");
+    Serial.println("Error: Invalid number of settings provided");
   }
 }
 
@@ -329,16 +330,15 @@ void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, uns
 }
  
 int ReadDistance(unsigned char device){
-    SensorRead(0x00, i2c_rx_buf, 2, device);
-    lenth_val=i2c_rx_buf[0];
-    lenth_val=lenth_val<<8;
-    lenth_val|=i2c_rx_buf[1];
-    return lenth_val;
+    SensorRead(0x00, i2cReceiveBuffer, 2, device);
+    distanceReading=i2cReceiveBuffer[0];
+    distanceReading=distanceReading<<8;
+    distanceReading|=i2cReceiveBuffer[1];
+    return distanceReading;
 }
 
 
-// CHANGE DEVICE I2C ADDRESS_____________________________________________________________________________
-
+// HOW TO CHANGE DEPTH SENSOR DEVICE I2C ADDRESS_____________________________________________________________________________
 
 // the address specified in the datasheet is 164 (0xa4)
 // but i2c adressing uses the high 7 bits so it's 82
@@ -371,3 +371,5 @@ int ReadDistance(unsigned char device){
 //  // 160 # 80
 //  delay(60000);
 //}
+// _____________________________________________________________________________
+
