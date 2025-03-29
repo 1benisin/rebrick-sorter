@@ -53,11 +53,6 @@ export const settingsSchema = z.object({
   videoStreamId1: z.string().default(''), // deviceId
   videoStreamId2: z.string().default(''), // deviceId
   sorters: z.array(sorterSettingsSchema).default([]),
-  feederVibrationSpeed: z.coerce.number().min(0).max(255).default(200),
-  feederStopDelay: z.coerce.number().min(0).default(5),
-  feederPauseTime: z.coerce.number().min(0).default(1000),
-  feederShortMoveTime: z.coerce.number().min(0).default(250),
-  hopperCycleInterval: z.coerce.number().min(0).default(20000),
 });
 
 export type SettingsType = z.infer<typeof settingsSchema>;

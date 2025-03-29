@@ -30,7 +30,6 @@ export class SystemCoordinator {
       onFireJet: this.handleFireJet.bind(this),
       onListSerialPorts: this.handleListSerialPorts.bind(this),
       onResetSortProcess: this.handleResetSortProcess.bind(this),
-      onUpdateFeederSettings: this.handleUpdateFeederSettings.bind(this),
     });
 
     this.settingsManager = new SettingsManager(this.socketManager);
@@ -39,9 +38,6 @@ export class SystemCoordinator {
       socketManager: this.socketManager,
       settingsManager: this.settingsManager,
     });
-
-    // Register device manager as a callback for settings updates
-    this.settingsManager.registerSettingsUpdateCallback(this.deviceManager.updateSettings.bind(this.deviceManager));
 
     this.speedManager = new SpeedManager({
       deviceManager: this.deviceManager,
@@ -218,17 +214,5 @@ export class SystemCoordinator {
 
   private handleResetSortProcess(): void {
     this.conveyorManager.reinitialize();
-  }
-
-  private handleUpdateFeederSettings(data: {
-    vibrationSpeed: number;
-    stopDelay: number;
-    pauseTime: number;
-    shortMoveTime: number;
-    hopperCycleInterval: number;
-  }): void {
-    // Send settings to Arduino in the format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>'
-    const message = `s,${data.hopperCycleInterval},${data.vibrationSpeed},${data.stopDelay},${data.pauseTime},${data.shortMoveTime}`;
-    this.deviceManager.sendCommand(DeviceName.HOPPER_FEEDER, message);
   }
 }

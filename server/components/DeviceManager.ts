@@ -45,11 +45,11 @@ export class DeviceManager extends BaseComponent {
         try {
           await this.connectDevice(DeviceName.HOPPER_FEEDER, settings.hopperFeederSerialPort, {
             deviceType: DeviceType.HOPPER_FEEDER,
-            HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
-            FEEDER_VIBRATION_SPEED: settings.feederVibrationSpeed,
-            FEEDER_STOP_DELAY: settings.feederStopDelay,
-            FEEDER_PAUSE_TIME: settings.feederPauseTime,
-            FEEDER_SHORT_MOVE_TIME: settings.feederShortMoveTime,
+            HOPPER_ACTION_INTERVAL: 20000,
+            MOTOR_SPEED: 200,
+            DELAY_STOPPING_INTERVAL: 5,
+            PAUSE_INTERVAL: 1000,
+            SHORT_MOVE_INTERVAL: 250,
           });
         } catch (error) {
           console.error('\x1b[33mFailed to connect to hopper feeder device:\x1b[0m', error);
@@ -220,11 +220,11 @@ export class DeviceManager extends BaseComponent {
   private buildHopperFeederInitMessage(config: ArduinoConfig): string {
     if (config.deviceType !== 'hopper_feeder') return '';
     const configValues = [
-      config.HOPPER_CYCLE_INTERVAL,
-      config.FEEDER_VIBRATION_SPEED,
-      config.FEEDER_STOP_DELAY,
-      config.FEEDER_PAUSE_TIME,
-      config.FEEDER_SHORT_MOVE_TIME,
+      config.HOPPER_ACTION_INTERVAL,
+      config.MOTOR_SPEED,
+      config.DELAY_STOPPING_INTERVAL,
+      config.PAUSE_INTERVAL,
+      config.SHORT_MOVE_INTERVAL,
     ];
     return 's,' + configValues.join(',');
   }
@@ -292,78 +292,5 @@ export class DeviceManager extends BaseComponent {
     }
     const ports = await SerialPort.list();
     return ports.map((port) => port.path);
-  }
-
-  public async updateSettings(): Promise<void> {
-    try {
-      // Get latest settings
-      const settings = this.settingsManager.getSettings();
-      if (!settings) {
-        throw new Error('Settings not available');
-      }
-
-      // Update hopper feeder settings if connected
-      const hopperFeeder = this.devices.get(DeviceName.HOPPER_FEEDER);
-      if (hopperFeeder) {
-        const config = {
-          ...hopperFeeder.config,
-          HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
-          FEEDER_VIBRATION_SPEED: settings.feederVibrationSpeed,
-          FEEDER_STOP_DELAY: settings.feederStopDelay,
-          FEEDER_PAUSE_TIME: settings.feederPauseTime,
-          FEEDER_SHORT_MOVE_TIME: settings.feederShortMoveTime,
-        };
-        this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
-        const configMessage = this.buildHopperFeederInitMessage(config);
-        if (configMessage) {
-          this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
-        }
-      }
-
-      // Update sorter settings if connected
-      for (let i = 0; i < settings.sorters.length; i++) {
-        const sorter = settings.sorters[i];
-        const deviceName = DeviceName[`SORTER_${i}` as keyof typeof DeviceName];
-        const sorterDevice = this.devices.get(deviceName);
-
-        if (sorterDevice) {
-          const config = {
-            ...sorterDevice.config,
-            GRID_DIMENSION: sorter.gridDimension,
-            X_OFFSET: sorter.xOffset,
-            Y_OFFSET: sorter.yOffset,
-            X_STEPS_TO_LAST: sorter.xStepsToLast,
-            Y_STEPS_TO_LAST: sorter.yStepsToLast,
-            ACCELERATION: sorter.acceleration,
-            HOMING_SPEED: sorter.homingSpeed,
-            SPEED: sorter.speed,
-            ROW_MAJOR_ORDER: sorter.rowMajorOrder,
-          };
-          this.devices.set(deviceName, { ...sorterDevice, config });
-          const configMessage = this.buildSorterInitMessage(config);
-          if (configMessage) {
-            this.sendCommand(deviceName, configMessage);
-          }
-        }
-      }
-
-      // Update conveyor jets settings if connected
-      const conveyorJets = this.devices.get(DeviceName.CONVEYOR_JETS);
-      if (conveyorJets) {
-        const config = {
-          ...conveyorJets.config,
-          JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
-          JET_END_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionEnd),
-        };
-        this.devices.set(DeviceName.CONVEYOR_JETS, { ...conveyorJets, config });
-        const configMessage = this.buildConveyorJetsInitMessage(config);
-        if (configMessage) {
-          this.sendCommand(DeviceName.CONVEYOR_JETS, configMessage);
-        }
-      }
-    } catch (error) {
-      console.error('\x1b[33mError updating device settings:\x1b[0m', error);
-      this.setError(error instanceof Error ? error.message : 'Unknown error updating device settings');
-    }
   }
 }
