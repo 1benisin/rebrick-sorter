@@ -57,6 +57,7 @@ export const settingsSchema = z.object({
   feederStopDelay: z.coerce.number().min(0).default(5),
   feederPauseTime: z.coerce.number().min(0).default(1000),
   feederShortMoveTime: z.coerce.number().min(0).default(250),
+  hopperCycleInterval: z.coerce.number().min(0).default(20000),
 });
 
 export type SettingsType = z.infer<typeof settingsSchema>;

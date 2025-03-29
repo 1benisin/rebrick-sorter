@@ -165,6 +165,7 @@ enum class HopperState : uint8_t {
   moving_up,
   waiting_top,
 };
+
 static HopperState currHopperState = HopperState::waiting_top;
 
 void checkHopper()
@@ -195,12 +196,10 @@ void checkHopper()
     break;
 
   case HopperState::waiting_top: 
-    unsigned long timeSinceLastVibration = currentMillis - feederVibrationStartTime >= HOPPER_CYCLE_INTERVAL;
-    if (totalFeederVibrationTime >= HOPPER_CYCLE_INTERVAL || timeSinceLastVibration) {
+    if (totalFeederVibrationTime >= HOPPER_CYCLE_INTERVAL) {
       if (HOPPER_DEBUG) {
         Serial.println("HOPPER: Starting new cycle - moving down");
       }
-      if (timeSinceLastVibration) feederVibrationStartTime = currentMillis;
       totalFeederVibrationTime = 0;
       hopperStepper->move(-hopperFullStrokeSteps-20);
       currHopperState = HopperState::moving_down;
@@ -249,6 +248,7 @@ void processMessage(char *message) {
 void processSettings(char *message) {
   // Parse settings from message
   // Expected format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>'
+  // Note: The 's' character is the command identifier, followed by 5 comma-separated settings values
   char *token;
   int values[5]; // Array to hold 5 setting values
   int valueIndex = 0;
@@ -256,7 +256,8 @@ void processSettings(char *message) {
   // Skip 's,' and start tokenizing
   token = strtok(&message[2], ",");
   while (token != NULL && valueIndex < 5) {
-    values[valueIndex++] = atoi(token);
+    values[valueIndex] = atoi(token);
+    valueIndex++;  // Increment the index after assigning the value
     token = strtok(NULL, ",");
   }
 
@@ -270,7 +271,7 @@ void processSettings(char *message) {
     settingsInitialized = true;
     Serial.println("Settings updated");
   } else {
-    Serial.println("Error: Not enough settings provided");
+    Serial.println("Error: Invalid number of settings provided");
   }
 }
 

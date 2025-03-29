@@ -175,6 +175,19 @@ const SettingsForm = () => {
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="hopperCycleInterval"
+            render={({ field }) => (
+              <FormItem className="flex flex-1 flex-col justify-between">
+                <FormLabel>Hopper Cycle Interval (ms)</FormLabel>
+                <FormControl>
+                  <Input className="w-full" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </Card>
 
         {/* sorter settings array */}

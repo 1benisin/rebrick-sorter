@@ -18,6 +18,7 @@ export interface SocketManagerConfig extends ComponentConfig {
     stopDelay: number;
     pauseTime: number;
     shortMoveTime: number;
+    hopperCycleInterval: number;
   }) => void;
 }
 

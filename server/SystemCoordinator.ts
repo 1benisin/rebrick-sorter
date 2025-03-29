@@ -41,7 +41,7 @@ export class SystemCoordinator {
     });
 
     // Register device manager as a callback for settings updates
-    this.settingsManager.registerSettingsUpdateCallback(this.deviceManager.reinitialize.bind(this.deviceManager));
+    this.settingsManager.registerSettingsUpdateCallback(this.deviceManager.updateSettings.bind(this.deviceManager));
 
     this.speedManager = new SpeedManager({
       deviceManager: this.deviceManager,
@@ -225,9 +225,10 @@ export class SystemCoordinator {
     stopDelay: number;
     pauseTime: number;
     shortMoveTime: number;
+    hopperCycleInterval: number;
   }): void {
     // Send settings to Arduino in the format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>'
-    const message = `s,20000,${data.vibrationSpeed},${data.stopDelay},${data.pauseTime},${data.shortMoveTime}`;
+    const message = `s,${data.hopperCycleInterval},${data.vibrationSpeed},${data.stopDelay},${data.pauseTime},${data.shortMoveTime}`;
     this.deviceManager.sendCommand(DeviceName.HOPPER_FEEDER, message);
   }
 }
