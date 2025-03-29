@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSocket } from '@/components/hooks/useSocket';
 import { AllEvents } from '@/types/socketMessage.type';
@@ -22,6 +22,16 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
   const [calibrationResult, setCalibrationResult] = useState<number | null>(null);
   const [initialTime, setInitialTime] = useState<number | null>(null);
   const { socket } = useSocket();
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  // Cleanup timeout on unmount or when calibration stops
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCalibrate = async () => {
     if (!socket) return;
@@ -36,6 +46,8 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
     let firstDetectionTime: number | null = null;
 
     const detectPart = async () => {
+      if (!isCalibrating) return; // Stop if calibration was cancelled
+
       const detectionPairs = await detector.detect();
       if (detectionPairs.length > 0) {
         // Get the detection with the centroid furthest to the right
@@ -68,12 +80,13 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
             setInitialTime(middleDetection.timestamp);
             setCalibrationResult(Math.round(middleDetection.x));
           }
+          setIsCalibrating(false);
           return; // Stop recursive calls
         }
       }
 
       // Schedule next detection
-      setTimeout(detectPart, 100);
+      timeoutRef.current = setTimeout(detectPart, 100);
     };
 
     // Start the recursive detection
