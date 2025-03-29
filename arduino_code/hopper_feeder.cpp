@@ -32,9 +32,8 @@ unsigned char i2cReceiveBuffer[16];
 unsigned char distanceSensorAddress = 80;
  
 // -- Feeder Variables
-#define FEEDER_ENABLE_PIN 11
-#define FEEDER_MOTOR_PIN1 8
-#define FEEDER_MOTOR_PIN2 7
+#define FEEDER_RPWM_PIN 11    // Changed from FEEDER_ENABLE_PIN
+#define FEEDER_R_EN_PIN 8     // Changed from FEEDER_MOTOR_PIN1
 unsigned long lastFeederActionTime = 0;
 unsigned long totalFeederVibrationTime = 0;
 unsigned long feederVibrationStartTime = 0;
@@ -51,12 +50,12 @@ void setup() {
   Wire.begin(); 
   Serial.begin(9600,SERIAL_8N1);
 
-  pinMode(FEEDER_ENABLE_PIN, OUTPUT);
-  pinMode(FEEDER_MOTOR_PIN1, OUTPUT);
-  pinMode(FEEDER_MOTOR_PIN2, OUTPUT);
+  pinMode(FEEDER_RPWM_PIN, OUTPUT);
+  pinMode(FEEDER_R_EN_PIN, OUTPUT);
 
-  // set motor direction
-  startMotor();
+  // Initialize motor control pins
+  digitalWrite(FEEDER_R_EN_PIN, LOW);
+  analogWrite(FEEDER_RPWM_PIN, 0);
 
   pinMode(STOP_PIN, INPUT);  
 
@@ -79,14 +78,13 @@ void setup() {
 }
 
 void startMotor() {
-  digitalWrite(FEEDER_MOTOR_PIN1, LOW);
-  digitalWrite(FEEDER_MOTOR_PIN2, HIGH);
+  digitalWrite(FEEDER_R_EN_PIN, HIGH);
+  analogWrite(FEEDER_RPWM_PIN, FEEDER_VIBRATION_SPEED);
 }
 
 void stopMotor() {
-  digitalWrite(FEEDER_MOTOR_PIN1, LOW);
-  digitalWrite(FEEDER_MOTOR_PIN2, LOW);
-  analogWrite(FEEDER_ENABLE_PIN, 0);
+  digitalWrite(FEEDER_R_EN_PIN, LOW);
+  analogWrite(FEEDER_RPWM_PIN, 0);
 }
 
 enum class FeederState : uint8_t {
@@ -113,7 +111,6 @@ void checkFeeder() {
   switch (currFeederState) {
     case FeederState::start_moving: {
       startMotor(); 
-      analogWrite(FEEDER_ENABLE_PIN, FEEDER_VIBRATION_SPEED);
       feederVibrationStartTime = currentMillis;
       currFeederState = FeederState::moving;
       break;
@@ -144,7 +141,6 @@ void checkFeeder() {
       if (currentMillis - lastFeederActionTime >= FEEDER_PAUSE_TIME) {
         if (ReadDistance(distanceSensorAddress) < 50) { 
           startMotor(); 
-          analogWrite(FEEDER_ENABLE_PIN, FEEDER_VIBRATION_SPEED);
           feederVibrationStartTime = currentMillis;
           currFeederState = FeederState::short_move;
           lastFeederActionTime = currentMillis;
