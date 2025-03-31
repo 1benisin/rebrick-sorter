@@ -46,6 +46,7 @@ export interface EventPayloads {
     stopDelay: number;
     pauseTime: number;
     shortMoveTime: number;
+    longMoveTime: number;
     hopperCycleInterval: number;
   };
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };

@@ -32,4 +32,5 @@ export interface HopperFeederInitConfig {
   FEEDER_STOP_DELAY: number;
   FEEDER_PAUSE_TIME: number;
   FEEDER_SHORT_MOVE_TIME: number;
+  FEEDER_LONG_MOVE_TIME: number;
 }
