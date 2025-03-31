@@ -22,13 +22,16 @@ volatile long encoderCount = 0;  // New encoder count variable
 // Update this value to match the motor's encoder resolution after gearing
 #define CONV_ENCODER_PPR 8400  // 64 CPR * 131.25 gear ratio
 
-int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
+int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
 int minRPM = 30;             // Minimum allowed RPM
+int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
 int currentRPM = 0;          // Measured RPM from the encoder
 int pwmValue = 0;            // Current PWM value (0-255)
-float kp = 1.0;              // Proportional gain (tune as needed)
+float kp = 2.0;              // Proportional gain (tuned for better response)
+float ki = 0.1;              // Integral gain for steady-state error
+float integralError = 0;     // Integral of the error
 unsigned long lastControlMillis = 0;
-const unsigned long controlInterval = 100;  // Interval for RPM/control update (ms)
+const unsigned long controlInterval = 50;  // Reduced interval for more frequent updates (ms)
 
 // New ISR functions
 void readEncoderA() {
@@ -70,9 +73,9 @@ void setup()
 
 void processSettings(char *message) {
   // Parse settings from message
-  // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<TARGET_RPM>,<MIN_RPM>'
+  // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<MAX_RPM>,<MIN_RPM>'
   char *token;
-  int values[6]; // Array to hold 4 fire time values, target RPM, and min RPM
+  int values[6]; // Array to hold 4 fire time values, max RPM, and min RPM
   int valueIndex = 0;
 
   // Skip 's,' and start tokenizing
@@ -88,7 +91,7 @@ void processSettings(char *message) {
       JET_FIRE_TIMES[i] = values[i];
     }
     // Store RPM settings
-    targetRPM = values[4];
+    maxConveyorRPM = values[4];
     minRPM = values[5];
 
     settingsInitialized = true;
@@ -119,24 +122,27 @@ void processMessage(char *message) {
         digitalWrite(CONV_R_EN_PIN, LOW);
         analogWrite(CONV_RPWM_PIN, 0);
         pwmValue = 0;
+        integralError = 0;  // Reset integral error when stopping
       } else {
         digitalWrite(CONV_R_EN_PIN, HIGH);
-        pwmValue = 100;  // Starting PWM value
-        analogWrite(CONV_RPWM_PIN, pwmValue);
         lastControlMillis = millis();
         encoderCount = 0;  // Reset encoder count when starting
+        integralError = 0;  // Reset integral error when starting
+        targetRPM = maxConveyorRPM;
       }
       Serial.println(conveyorOn ? "conveyor on" : "conveyor off");
       break;
     }
 
     case 'c': { // Set target RPM 
-      targetRPM = constrain(actionValue, minRPM, 60); // Constrain to safe range between minRPM and 60
+      targetRPM = constrain(actionValue, minRPM, maxConveyorRPM); // Constrain to safe range between minRPM and maxConveyorRPM
 
-      if (actionValue < minRPM || actionValue > 60){
-        Serial.print("RPM constrained to bounds [");
+      if (actionValue < minRPM || actionValue > maxConveyorRPM){
+        Serial.print("RPM constrained to hardware bounds [");
         Serial.print(minRPM);
-        Serial.print(" - 60]: ");
+        Serial.print(" - ");
+        Serial.print(maxConveyorRPM);
+        Serial.print("]: ");
       } else {
         Serial.print("RPM updated: ");
       }
@@ -216,12 +222,16 @@ void loop() {
       encoderCount = 0;
       interrupts();
       
-      // Calculate RPM
+      // Calculate RPM with improved accuracy
       currentRPM = (abs(count) * 60000L) / (CONV_ENCODER_PPR * controlInterval);
       
-      // Proportional control: adjust PWM based on RPM error
+      // PI control: adjust PWM based on RPM error
       int error = targetRPM - currentRPM;
-      pwmValue += (int)(kp * error);
+      integralError += error;
+      integralError = constrain(integralError, -100, 100);  // Anti-windup
+      
+      // Calculate new PWM value using PI control
+      pwmValue += (int)(kp * error + ki * integralError);
       pwmValue = constrain(pwmValue, 0, 255);
       
       // Update motor speed

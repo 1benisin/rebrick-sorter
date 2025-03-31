@@ -103,7 +103,9 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
 
     // Calculate the distance based on time and default speed
     const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-    const { conveyorSpeed } = settingsService.getSettings();
+    const settings = settingsService.getSettings();
+
+    const conveyorSpeed = settings?.conveyorSpeed ?? 0; // calibration result will end up being 0 if settings are not available
     const timeElapsed = Date.now() - initialTime;
     const distance = Math.round(timeElapsed * conveyorSpeed);
 

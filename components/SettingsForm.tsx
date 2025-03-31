@@ -63,10 +63,10 @@ const SettingsForm = () => {
           />
           <FormField
             control={form.control}
-            name="conveyorRPM"
+            name="maxConveyorRPM"
             render={({ field }) => (
               <FormItem className="flex flex-1 flex-col justify-between">
-                <FormLabel>Conveyor RPM</FormLabel>
+                <FormLabel>Maximum Conveyor RPM</FormLabel>
                 <FormControl>
                   <Input className="w-full" {...field} />
                 </FormControl>

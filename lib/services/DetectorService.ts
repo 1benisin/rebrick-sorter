@@ -146,8 +146,8 @@ class DetectorService implements Service {
         lastPosition = nextDetection.centroid;
         lastTimestamp = nextDetection.timestamp;
 
-        // Add safety timeout after 100 iterations
-        if (iterationCount > 150) {
+        // Add safety timeout after 200 iterations
+        if (iterationCount > 200) {
           console.log('Calibration timeout after 150 iterations');
           throw new Error('Calibration timeout - unable to collect enough samples');
         }

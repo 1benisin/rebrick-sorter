@@ -122,7 +122,8 @@ export class SystemCoordinator {
           this.socketManager.emitPartSkipped(part);
           return;
         }
-        const minAllowedSpeed = this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.conveyorRPM);
+        const minAllowedSpeed =
+          this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.maxConveyorRPM);
 
         if (newSpeed < minAllowedSpeed) {
           part.status = 'skipped';
