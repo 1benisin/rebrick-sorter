@@ -215,7 +215,9 @@ export class DeviceManager extends BaseComponent {
   private buildConveyorJetsInitMessage(config: ArduinoConfig): string {
     if (config.deviceType !== 'conveyor_jets') return '';
     const jetFireTimes = config.JET_END_POSITIONS.map((end, index) => end - config.JET_START_POSITIONS[index]);
-    return 's,' + jetFireTimes.join(',');
+    const settings = this.settingsManager.getSettings();
+    if (!settings) return '';
+    return 's,' + jetFireTimes.join(',') + ',' + settings.maxConveyorRPM + ',' + settings.minConveyorRPM;
   }
 
   private buildHopperFeederInitMessage(config: ArduinoConfig): string {

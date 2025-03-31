@@ -4,9 +4,7 @@ import { SocketManager } from './SocketManager';
 import { SettingsManager } from './SettingsManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
 import { DeviceName } from '../../types/deviceName.type';
-import { MIN_SLOWDOWN_PERCENT } from './ConveyorManager';
 
-const DEFAULT_CONVEYOR_RPM = 60; // 60 rpm is the maximum speed for the conveyor motor
 export interface SpeedManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
   socketManager: SocketManager;
@@ -110,12 +108,18 @@ export class SpeedManager extends BaseComponent {
     atTime: number,
     onSpeedChange: (time: number, speed: number) => void,
   ): NodeJS.Timeout {
-    if (speed < MIN_SLOWDOWN_PERCENT * this.defaultSpeed || speed > this.defaultSpeed) {
+    const settings = this.settingsManager.getSettings();
+    if (!settings) {
+      throw new Error('Settings not available');
+    }
+
+    const minSpeedPercent = settings.minConveyorRPM / settings.maxConveyorRPM;
+    if (speed < minSpeedPercent * this.defaultSpeed || speed > this.defaultSpeed) {
       console.error(`\x1b[33mscheduleConveyorSpeedChange: speed ${speed} is out of range\x1b[0m`);
     }
 
-    // normalize speed from pixels per millisecond to conveyor motor rpm 0-60 for arduino
-    const rpm_speed = Math.round((speed / this.defaultSpeed) * DEFAULT_CONVEYOR_RPM);
+    // normalize speed from pixels per millisecond to conveyor motor rpm using the actual maxConveyorRPM setting
+    const rpm_speed = Math.round((speed / this.defaultSpeed) * settings.maxConveyorRPM);
     console.log('calculated rpm_speed:', rpm_speed);
 
     return setTimeout(() => {

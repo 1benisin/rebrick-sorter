@@ -3,7 +3,7 @@ import { SettingsManager } from './components/SettingsManager';
 import { SocketManager } from './components/SocketManager';
 import { DeviceManager } from './components/DeviceManager';
 import { SorterManager } from './components/SorterManager';
-import { ConveyorManager, MIN_SLOWDOWN_PERCENT } from './components/ConveyorManager';
+import { ConveyorManager } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
 import { Part } from '../types/part.type';
@@ -116,7 +116,14 @@ export class SystemCoordinator {
         const requiredTimeGap = targetJetTime - part.conveyorSpeedTime;
         const slowdownPercent = currentTimeGap / requiredTimeGap;
         const newSpeed = part.conveyorSpeed * slowdownPercent;
-        const minAllowedSpeed = this.speedManager.getDefaultSpeed() * MIN_SLOWDOWN_PERCENT;
+        const settings = this.settingsManager.getSettings();
+        if (!settings) {
+          part.status = 'skipped';
+          this.socketManager.emitPartSkipped(part);
+          return;
+        }
+        const minAllowedSpeed =
+          this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.maxConveyorRPM);
 
         if (newSpeed < minAllowedSpeed) {
           part.status = 'skipped';

@@ -37,6 +37,14 @@ export type SorterSettingsType = z.infer<typeof sorterSettingsSchema>;
 
 export const settingsSchema = z.object({
   conveyorSpeed: z.coerce.number().min(0, { message: 'Conveyor speed must be a non-negative number' }).default(1),
+  maxConveyorRPM: z.coerce
+    .number()
+    .min(0, { message: 'Maximum conveyor RPM must be a non-negative number' })
+    .default(60),
+  minConveyorRPM: z.coerce
+    .number()
+    .min(0, { message: 'Minimum conveyor RPM must be a non-negative number' })
+    .default(30),
   detectDistanceThreshold: z.coerce
     .number()
     .min(1, { message: 'Detection threshold must be at least 1 unit' })
