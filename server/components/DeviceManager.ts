@@ -50,6 +50,7 @@ export class DeviceManager extends BaseComponent {
             FEEDER_STOP_DELAY: settings.feederStopDelay,
             FEEDER_PAUSE_TIME: settings.feederPauseTime,
             FEEDER_SHORT_MOVE_TIME: settings.feederShortMoveTime,
+            FEEDER_LONG_MOVE_TIME: settings.feederLongMoveTime,
           });
         } catch (error) {
           console.error('\x1b[33mFailed to connect to hopper feeder device:\x1b[0m', error);
@@ -227,6 +228,7 @@ export class DeviceManager extends BaseComponent {
       config.FEEDER_STOP_DELAY,
       config.FEEDER_PAUSE_TIME,
       config.FEEDER_SHORT_MOVE_TIME,
+      config.FEEDER_LONG_MOVE_TIME,
     ];
     return 's,' + configValues.join(',');
   }
@@ -240,7 +242,7 @@ export class DeviceManager extends BaseComponent {
     }
     console.log(`\x1b[1m${deviceName}\x1b[0m:`, data);
 
-    if (data.includes('Ready')) {
+    if (data.trim() === 'Ready') {
       let configMessage = '';
       switch (deviceInfo.config.deviceType) {
         case DeviceType.SORTER:
@@ -314,6 +316,7 @@ export class DeviceManager extends BaseComponent {
           FEEDER_STOP_DELAY: settings.feederStopDelay,
           FEEDER_PAUSE_TIME: settings.feederPauseTime,
           FEEDER_SHORT_MOVE_TIME: settings.feederShortMoveTime,
+          FEEDER_LONG_MOVE_TIME: settings.feederLongMoveTime,
         };
         this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
         const configMessage = this.buildHopperFeederInitMessage(config);

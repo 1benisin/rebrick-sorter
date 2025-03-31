@@ -1,10 +1,11 @@
 #include <Wire.h>
 #include "FastAccelStepper.h"
+#include <limits.h>
 
 #define AUTO_DISABLE true
 
 #define FEEDER_DEBUG false
-#define HOPPER_DEBUG false
+#define HOPPER_DEBUG true
 
 #define ENABLE_PIN 6
 #define DIR_PIN 5
@@ -40,10 +41,17 @@ unsigned long feederVibrationStartTime = 0;
 
 // Settings from server
 int HOPPER_CYCLE_INTERVAL = 20000;  // Time between hopper cycles
-int FEEDER_VIBRATION_SPEED = 200;   // Speed of feeder vibration
+int FEEDER_VIBRATION_SPEED = 90;   // Speed of feeder vibration
 int FEEDER_STOP_DELAY = 5;          // Delay before stopping feeder after part detection
 int FEEDER_PAUSE_TIME = 1000;       // Time to pause between feeder movements
 int FEEDER_SHORT_MOVE_TIME = 250;   // Duration of short feeder movement
+int FEEDER_LONG_MOVE_TIME = 2000;   // Maximum time to run feeder before stopping
+
+// Debug variables
+unsigned long lastDebugTime = 0;     // For controlling debug print frequency
+
+// Function declarations
+int ReadDistance(unsigned char device);
 
 void setup() {
 
@@ -116,28 +124,33 @@ void checkFeeder() {
       break;
     }
 
-    case FeederState::moving: 
-        // If FEEDER_PAUSE_TIME is 0, run continuously at FEEDER_VIBRATION_SPEED
+    case FeederState::moving: {
+    
+      // If FEEDER_PAUSE_TIME is 0, run continuously at FEEDER_VIBRATION_SPEED
       if (FEEDER_PAUSE_TIME == 0) {
-        totalFeederVibrationTime = currentMillis - feederVibrationStartTime;
         return;
       }
-      if (distance < 50) {
-        currFeederState = FeederState::part_detected;
+      
+      // Check both conditions: part detection or long move time elapsed
+      if (distance < 50 || (currentMillis - feederVibrationStartTime >= FEEDER_LONG_MOVE_TIME)) {
+      //  update total vibration time
+      totalFeederVibrationTime += currentMillis - feederVibrationStartTime;
         lastFeederActionTime = currentMillis;
+        currFeederState = FeederState::part_detected;
       }
       break;
+    }
     
-    case FeederState::part_detected:
+    case FeederState::part_detected: {
       if (currentMillis - lastFeederActionTime >= FEEDER_STOP_DELAY) {
         stopMotor();
-        totalFeederVibrationTime += currentMillis - feederVibrationStartTime;
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
       break;
+    }
 
-    case FeederState::paused:
+    case FeederState::paused: {
       if (currentMillis - lastFeederActionTime >= FEEDER_PAUSE_TIME) {
         if (ReadDistance(distanceSensorAddress) < 50) { 
           startMotor(); 
@@ -149,8 +162,9 @@ void checkFeeder() {
         }
       }
       break;
+    }
 
-    case FeederState::short_move:
+    case FeederState::short_move: {
       if (currentMillis - lastFeederActionTime >= FEEDER_SHORT_MOVE_TIME) {
         stopMotor();
         totalFeederVibrationTime += currentMillis - feederVibrationStartTime;
@@ -158,6 +172,7 @@ void checkFeeder() {
         lastFeederActionTime = currentMillis;
       }
       break;
+    }
   }
 }
 
@@ -177,37 +192,50 @@ void checkHopper()
 
   switch (currHopperState)
   {
-  case HopperState::moving_down: 
-    if (digitalRead(STOP_PIN) == LOW || !hopperStepper->isRunning()) {
-      hopperStepper->forceStopAndNewPosition(0);
-      lastHopperActionTime = currentMillis;      
-      currHopperState = HopperState::waiting_bottom;
+    case HopperState::waiting_top: 
+    if (HOPPER_DEBUG) {
+      if (currentMillis - lastDebugTime >= 5000) {  // Print every 5 seconds
+        Serial.print("HOPPER: Current vibration time: ");
+        Serial.print(totalFeederVibrationTime);
+        Serial.print(" / ");
+        Serial.print(HOPPER_CYCLE_INTERVAL);
+        Serial.print(" (");
+        Serial.print((totalFeederVibrationTime * 100) / HOPPER_CYCLE_INTERVAL);
+        Serial.println("%)");
+        lastDebugTime = currentMillis;
+      }
     }
-    break;
-
-  case HopperState::waiting_bottom:
-    if (currentMillis - lastHopperActionTime >= hopperBottomWaitTime) {
-      hopperStepper->move(hopperFullStrokeSteps);
-      currHopperState = HopperState::moving_up;
-    } 
-    break;
-
-  case HopperState::moving_up:
-    if (!hopperStepper->isRunning()) {
-      currHopperState = HopperState::waiting_top;
-    } 
-    break;
-
-  case HopperState::waiting_top: 
     if (totalFeederVibrationTime >= HOPPER_CYCLE_INTERVAL) {
       if (HOPPER_DEBUG) {
-        Serial.println("HOPPER: Starting new cycle - moving down");
+        Serial.print("HOPPER: Starting new cycle - moving down. Total vibration time: ");
+        Serial.println(totalFeederVibrationTime);
       }
       totalFeederVibrationTime = 0;
       hopperStepper->move(-hopperFullStrokeSteps-20);
       currHopperState = HopperState::moving_down;
     } 
     break;
+
+    case HopperState::moving_down: 
+      if (digitalRead(STOP_PIN) == LOW || !hopperStepper->isRunning()) {
+        hopperStepper->forceStopAndNewPosition(0);
+        lastHopperActionTime = currentMillis;      
+        currHopperState = HopperState::waiting_bottom;
+      }
+      break;
+
+    case HopperState::waiting_bottom:
+      if (currentMillis - lastHopperActionTime >= hopperBottomWaitTime) {
+        hopperStepper->move(hopperFullStrokeSteps);
+        currHopperState = HopperState::moving_up;
+      } 
+      break;
+
+    case HopperState::moving_up:
+      if (!hopperStepper->isRunning()) {
+        currHopperState = HopperState::waiting_top;
+      } 
+      break;
   }
 }
 
@@ -250,32 +278,38 @@ void processMessage(char *message) {
 
 void processSettings(char *message) {
   // Parse settings from message
-  // Expected format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>'
-  // Note: The 's' character is the command identifier, followed by 5 comma-separated settings values
+  // Expected format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>'
+  // Note: The 's' character is the command identifier, followed by 6 comma-separated settings values
+  
+  // Validate message format
+  if (message[0] != 's' || message[1] != ',') {
+    Serial.println("Error: Invalid message format");
+    return;
+  }
+
   char *token;
-  int values[5]; // Array to hold 5 setting values
+  int values[6]; // Array to hold 6 setting values
   int valueIndex = 0;
+  bool parseError = false;
 
   // Skip 's,' and start tokenizing
   token = strtok(&message[2], ",");
-  while (token != NULL && valueIndex < 5) {
+  while (token != NULL && valueIndex < 6) {
     values[valueIndex] = atoi(token);
     valueIndex++;  // Increment the index after assigning the value
     token = strtok(NULL, ",");
   }
 
-  if (valueIndex >= 5) { // Ensure we have all required settings
-    HOPPER_CYCLE_INTERVAL = values[0];
-    FEEDER_VIBRATION_SPEED = values[1];
-    FEEDER_STOP_DELAY = values[2];
-    FEEDER_PAUSE_TIME = values[3];
-    FEEDER_SHORT_MOVE_TIME = values[4];
+  // Apply settings if all validations pass
+  HOPPER_CYCLE_INTERVAL = values[0];
+  FEEDER_VIBRATION_SPEED = values[1];
+  FEEDER_STOP_DELAY = values[2];
+  FEEDER_PAUSE_TIME = values[3];
+  FEEDER_SHORT_MOVE_TIME = values[4];
+  FEEDER_LONG_MOVE_TIME = values[5];
 
-    settingsInitialized = true;
-    Serial.println("Settings updated");
-  } else {
-    Serial.println("Error: Invalid number of settings provided");
-  }
+  settingsInitialized = true;
+  Serial.println("Settings updated successfully");
 }
 
 #define START_MARKER '<'
