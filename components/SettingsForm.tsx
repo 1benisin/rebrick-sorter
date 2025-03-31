@@ -177,6 +177,19 @@ const SettingsForm = () => {
           />
           <FormField
             control={form.control}
+            name="feederLongMoveTime"
+            render={({ field }) => (
+              <FormItem className="flex flex-1 flex-col justify-between">
+                <FormLabel>Feeder Long Move Time (ms)</FormLabel>
+                <FormControl>
+                  <Input className="w-full" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="hopperCycleInterval"
             render={({ field }) => (
               <FormItem className="flex flex-1 flex-col justify-between">
