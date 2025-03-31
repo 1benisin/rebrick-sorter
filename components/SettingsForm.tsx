@@ -63,6 +63,32 @@ const SettingsForm = () => {
           />
           <FormField
             control={form.control}
+            name="conveyorRPM"
+            render={({ field }) => (
+              <FormItem className="flex flex-1 flex-col justify-between">
+                <FormLabel>Conveyor RPM</FormLabel>
+                <FormControl>
+                  <Input className="w-full" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="minConveyorRPM"
+            render={({ field }) => (
+              <FormItem className="flex flex-1 flex-col justify-between">
+                <FormLabel>Minimum Conveyor RPM</FormLabel>
+                <FormControl>
+                  <Input className="w-full" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="detectDistanceThreshold"
             render={({ field }) => (
               <FormItem className="flex flex-1 flex-col justify-between">

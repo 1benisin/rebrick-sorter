@@ -9,8 +9,6 @@ import { SorterManager } from './SorterManager';
 import { DeviceName } from '../../types/deviceName.type';
 import { SortPartDto } from '../../types/sortPart.dto';
 
-export const MIN_SLOWDOWN_PERCENT = 0.5; // Minimum speed percentage before skipping a part
-
 interface ReturnToDefaultSpeed {
   time: number;
   speed: number;

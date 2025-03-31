@@ -23,6 +23,7 @@ volatile long encoderCount = 0;  // New encoder count variable
 #define CONV_ENCODER_PPR 8400  // 64 CPR * 131.25 gear ratio
 
 int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
+int minRPM = 30;             // Minimum allowed RPM
 int currentRPM = 0;          // Measured RPM from the encoder
 int pwmValue = 0;            // Current PWM value (0-255)
 float kp = 1.0;              // Proportional gain (tune as needed)
@@ -69,23 +70,26 @@ void setup()
 
 void processSettings(char *message) {
   // Parse settings from message
-  // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>'
+  // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<TARGET_RPM>,<MIN_RPM>'
   char *token;
-  int values[4]; // Array to hold 4 fire time values
+  int values[6]; // Array to hold 4 fire time values, target RPM, and min RPM
   int valueIndex = 0;
 
   // Skip 's,' and start tokenizing
   token = strtok(&message[2], ",");
-  while (token != NULL && valueIndex < 4) {
+  while (token != NULL && valueIndex < 6) {
     values[valueIndex++] = atoi(token);
     token = strtok(NULL, ",");
   }
 
-  if (valueIndex >= 4) { // Ensure we have all required settings
+  if (valueIndex >= 6) { // Ensure we have all required settings
     // Store fire times
     for(int i = 0; i < 4; i++) {
       JET_FIRE_TIMES[i] = values[i];
     }
+    // Store RPM settings
+    targetRPM = values[4];
+    minRPM = values[5];
 
     settingsInitialized = true;
     Serial.println("Settings updated");
@@ -127,10 +131,12 @@ void processMessage(char *message) {
     }
 
     case 'c': { // Set target RPM 
-      targetRPM = constrain(actionValue, 10, 60); // Constrain to safe range
+      targetRPM = constrain(actionValue, minRPM, 60); // Constrain to safe range between minRPM and 60
 
-      if (actionValue < 10 || actionValue > 60){
-        Serial.print("RPM constrained to bounds [10 - 60]: ");
+      if (actionValue < minRPM || actionValue > 60){
+        Serial.print("RPM constrained to bounds [");
+        Serial.print(minRPM);
+        Serial.print(" - 60]: ");
       } else {
         Serial.print("RPM updated: ");
       }
