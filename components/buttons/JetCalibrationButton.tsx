@@ -18,13 +18,12 @@ interface DetectionData {
 
 const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
   const [isCalibrating, setIsCalibrating] = useState(false);
-  const [isWaitingForFire, setIsWaitingForFire] = useState(false);
   const [calibrationResult, setCalibrationResult] = useState<number | null>(null);
   const [initialTime, setInitialTime] = useState<number | null>(null);
   const { socket } = useSocket();
   const timeoutRef = useRef<NodeJS.Timeout>();
 
-  // Cleanup timeout on unmount or when calibration stops
+  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -37,7 +36,6 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
     if (!socket) return;
 
     setIsCalibrating(true);
-    setIsWaitingForFire(true);
     setInitialTime(Date.now());
 
     // Get the detector service to track part position
@@ -46,14 +44,19 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
     let firstDetectionTime: number | null = null;
 
     const detectPart = async () => {
-      if (!isCalibrating) return; // Stop if calibration was cancelled
+      if (!isCalibrating) {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        return; // Stop if calibration was cancelled
+      }
 
       const detectionPairs = await detector.detect();
       if (detectionPairs.length > 0) {
         // Get the detection with the centroid furthest to the right
         const nextDetection = detectionPairs.reduce((acc, pair) => {
           const detection = pair[0];
-          return acc.centroid.x < detection.centroid.x ? acc : detection;
+          return acc.centroid.x > detection.centroid.x ? acc : detection;
         }, detectionPairs[0][0]);
 
         const currentTime = Date.now();
@@ -80,7 +83,6 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
             setInitialTime(middleDetection.timestamp);
             setCalibrationResult(Math.round(middleDetection.x));
           }
-          setIsCalibrating(false);
           return; // Stop recursive calls
         }
       }
@@ -106,7 +108,6 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
     const distance = Math.round(timeElapsed * conveyorSpeed);
 
     setCalibrationResult(distance);
-    setIsWaitingForFire(false);
     setIsCalibrating(false);
   };
 
@@ -116,10 +117,9 @@ const JetCalibrationButton = ({ jetNumber }: JetCalibrationButtonProps) => {
         type="button"
         className="bg-blue-500 hover:bg-blue-700"
         variant={isCalibrating ? 'outline' : 'default'}
-        onClick={isWaitingForFire ? handleFireJet : handleCalibrate}
-        disabled={isCalibrating && !isWaitingForFire}
+        onClick={isCalibrating ? handleFireJet : handleCalibrate}
       >
-        {isWaitingForFire ? `Fire Jet ${jetNumber}` : isCalibrating ? 'Calibrating...' : `Calibrate Jet ${jetNumber}`}
+        {isCalibrating ? `Fire Jet ${jetNumber}` : `Calibrate Jet ${jetNumber}`}
       </Button>
       {calibrationResult && <span className="text-sm">{calibrationResult}</span>}
     </div>
