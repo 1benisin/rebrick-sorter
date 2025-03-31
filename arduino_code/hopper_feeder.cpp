@@ -114,6 +114,8 @@ void checkFeeder() {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
 
+
+
   switch (currFeederState) {
     case FeederState::start_moving: {
       startMotor(); 
