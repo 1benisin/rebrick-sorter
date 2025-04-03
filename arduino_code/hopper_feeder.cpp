@@ -252,6 +252,28 @@ void processMessage(char *message) {
       break;
     }
 
+    case 'p': { // pause time update
+      // Format: 'p,<new_pause_time>'
+      if (message[1] != ',') {
+        Serial.println("Error: Invalid pause time message format");
+        return;
+      }
+      
+      char *token = strtok(&message[2], ",");
+      if (!token) {
+        Serial.println("Error: Missing pause time value");
+        return;
+      }
+      
+      FEEDER_PAUSE_TIME = atoi(token);
+      
+      if (FEEDER_DEBUG) {
+        Serial.print("Pause time updated to: ");
+        Serial.println(FEEDER_PAUSE_TIME);
+      }
+      break;
+    }
+
     case 'o': { // hopper on/off
       if (message[1] == '1') {
         // Start hopper cycle
