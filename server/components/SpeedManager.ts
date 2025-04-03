@@ -127,6 +127,11 @@ export class SpeedManager extends BaseComponent {
       this.currentSpeed = speed;
       this.socketManager.emitConveyorSpeedUpdate(rpm_speed);
       onSpeedChange(Date.now(), speed);
+
+      // Calculate and update hopper feeder pause time based on conveyor speed
+      const speedRatio = settings.conveyorSpeed / speed;
+      const newPauseTime = Math.round(settings.feederPauseTime * speedRatio);
+      this.deviceManager.updateFeederPauseTime(newPauseTime);
     }, atTime - Date.now());
   }
 

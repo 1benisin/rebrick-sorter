@@ -281,6 +281,24 @@ export class DeviceManager extends BaseComponent {
     });
   }
 
+  public updateFeederPauseTime(pauseTime: number): void {
+    const deviceInfo = this.devices.get(DeviceName.HOPPER_FEEDER);
+    if (!deviceInfo) {
+      console.warn('Hopper feeder device not found when trying to update pause time');
+      return;
+    }
+
+    const message = `p,${pauseTime}`;
+    const formattedMessage = `<${message}>`;
+
+    deviceInfo.device.write(formattedMessage, (err: Error | null | undefined) => {
+      if (err) {
+        console.error('\x1b[33mError sending pause time update to hopper feeder:\x1b[0m', err);
+        this.socketManager.emitComponentStatusUpdate(DeviceName.HOPPER_FEEDER, ComponentStatus.ERROR, err.message);
+      }
+    });
+  }
+
   protected notifyStatusChange(): void {
     this.socketManager.emitComponentStatusUpdate(this.getName(), this.getStatus(), this.getError());
   }
