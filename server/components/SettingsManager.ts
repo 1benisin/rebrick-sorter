@@ -71,7 +71,6 @@ export class SettingsManager extends BaseComponent {
         if (settingsData) {
           const settings = settingsSchema.parse(settingsData);
           this.settings = settings;
-          this.socketManager.emitSettingsUpdate(settings);
           await this.notifySettingsUpdateCallbacks(settings);
         }
       }
@@ -85,7 +84,6 @@ export class SettingsManager extends BaseComponent {
               try {
                 const settings = settingsSchema.parse(settingsData);
                 this.settings = settings;
-                this.socketManager.emitSettingsUpdate(settings);
                 await this.notifySettingsUpdateCallbacks(settings);
               } catch (error) {
                 this.setError(error instanceof Error ? error.message : 'Error processing settings update');

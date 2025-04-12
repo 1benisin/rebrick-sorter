@@ -72,11 +72,6 @@ export class SocketManager extends BaseComponent {
     });
   }
 
-  // Backend to Frontend events
-  public emitSettingsUpdate(settings: SettingsType): void {
-    this.socket?.emit(BackToFrontEvents.SETTINGS_UPDATE, settings);
-  }
-
   public emitComponentStatusUpdate(componentName: string, status: ComponentStatus, error: string | null): void {
     this.socket?.emit(BackToFrontEvents.COMPONENT_STATUS_UPDATE, {
       componentName,

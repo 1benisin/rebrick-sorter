@@ -22,7 +22,6 @@ export enum BackToFrontEvents {
   LIST_SERIAL_PORTS_SUCCESS = 'list-serial-ports-success',
   SORTER_MOVED = 'sorter-moved',
   JET_FIRED = 'jet-fired',
-  SETTINGS_UPDATE = 'settings-update',
   COMPONENT_STATUS_UPDATE = 'component-status-update',
   SORTER_POSITION_UPDATE = 'sorter-position-update',
   PART_SORTED = 'part-sorted',
@@ -56,7 +55,6 @@ export interface EventPayloads {
   [BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS]: string[];
   [BackToFrontEvents.SORTER_MOVED]: { sorter: number; bin: number };
   [BackToFrontEvents.JET_FIRED]: { sorter: number };
-  [BackToFrontEvents.SETTINGS_UPDATE]: any; // Replace with SettingsType
   [BackToFrontEvents.COMPONENT_STATUS_UPDATE]: {
     componentName: string;
     status: string;
