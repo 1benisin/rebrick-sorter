@@ -81,6 +81,9 @@ export class DeviceManager extends BaseComponent {
         }
       }
 
+      // Register for settings updates
+      this.settingsManager.registerSettingsUpdateCallback(this.updateSettings.bind(this));
+
       this.setStatus(ComponentStatus.READY);
     } catch (error) {
       console.error('\x1b[33mError in device manager initialization:\x1b[0m', error);
@@ -95,7 +98,7 @@ export class DeviceManager extends BaseComponent {
 
   public async deinitialize(): Promise<void> {
     // Unregister settings callback
-    this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
+    this.settingsManager.unregisterSettingsUpdateCallback(this.updateSettings.bind(this));
 
     for (const [deviceName, deviceInfo] of this.devices) {
       try {

@@ -40,9 +40,6 @@ export class SystemCoordinator {
       settingsManager: this.settingsManager,
     });
 
-    // Register device manager as a callback for settings updates
-    this.settingsManager.registerSettingsUpdateCallback(this.deviceManager.updateSettings.bind(this.deviceManager));
-
     this.speedManager = new SpeedManager({
       deviceManager: this.deviceManager,
       socketManager: this.socketManager,
