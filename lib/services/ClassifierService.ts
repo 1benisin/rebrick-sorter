@@ -36,25 +36,29 @@ class ClassifierService implements Service {
         return;
       }
 
-      // load bin lookup
-      const storageRef = ref(storage, 'bin_lookup_v3.json.gz');
-      const binLookupUrl = await getDownloadURL(storageRef);
-      const response = await axios.get(binLookupUrl, {
+      // load catalog data
+      const storageRef = ref(storage, 'catalogData_v3.json.gz');
+      const catalogUrl = await getDownloadURL(storageRef);
+      const response = await axios.get(catalogUrl, {
         responseType: 'arraybuffer',
       });
 
       const decompressed = pako.inflate(new Uint8Array(response.data), { to: 'string' });
-      const jsonData = JSON.parse(decompressed);
+      const catalogData = JSON.parse(decompressed);
 
-      const formattedBinLookup = jsonData.reduce(
-        (acc: Record<string, { bin: number; sorter: number }>, item: [string, number, string]) => {
-          const [partId, bin, sorter] = item;
-          if (!partId || !bin || !sorter) {
-            throw new Error(`Invalid bin lookup item: ${item}`);
+      // Transform catalog data into bin lookup format
+      const formattedBinLookup = catalogData.reduce(
+        (acc: Record<string, { bin: number; sorter: number }>, item: any) => {
+          if (item.bin) {
+            // Convert grid string to sorter number (e.g., "A1" -> 0, "B1" -> 1, etc.)
+            const sorterLetter = item.grid?.charAt(0) || 'A';
+            const sorterNumber = sorterLetter.charCodeAt(0) - 65; // Convert A to 0, B to 1, etc.
+
+            acc[item.id] = {
+              bin: item.bin,
+              sorter: sorterNumber,
+            };
           }
-
-          const sorterNumber = sorter.charCodeAt(0) - 65;
-          acc[partId] = { bin, sorter: sorterNumber };
           return acc;
         },
         {},
