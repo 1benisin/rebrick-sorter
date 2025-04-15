@@ -321,7 +321,6 @@ export class DeviceManager extends BaseComponent {
 
   public async updateSettings(): Promise<void> {
     try {
-      // Get latest settings
       const settings = this.settingsManager.getSettings();
       if (!settings) {
         throw new Error('Settings not available');
@@ -339,10 +338,14 @@ export class DeviceManager extends BaseComponent {
           FEEDER_SHORT_MOVE_TIME: settings.feederShortMoveTime,
           FEEDER_LONG_MOVE_TIME: settings.feederLongMoveTime,
         };
-        this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
-        const configMessage = this.buildHopperFeederInitMessage(config);
-        if (configMessage) {
-          this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
+
+        // Only send update if settings actually changed
+        if (JSON.stringify(config) !== JSON.stringify(hopperFeeder.config)) {
+          this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
+          const configMessage = this.buildHopperFeederInitMessage(config);
+          if (configMessage) {
+            this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
+          }
         }
       }
 
