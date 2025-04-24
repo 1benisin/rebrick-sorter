@@ -40,12 +40,12 @@ unsigned long totalFeederVibrationTime = 0;
 unsigned long feederVibrationStartTime = 0;
 
 // Settings from server
-int HOPPER_CYCLE_INTERVAL = 20000;  // Time between hopper cycles
-int FEEDER_VIBRATION_SPEED = 90;   // Speed of feeder vibration
-int FEEDER_STOP_DELAY = 5;          // Delay before stopping feeder after part detection
+int HOPPER_CYCLE_INTERVAL = 12000;  // Time between hopper cycles
+int FEEDER_VIBRATION_SPEED = 92;   // Speed of feeder vibration
+int FEEDER_STOP_DELAY = 1;          // Delay before stopping feeder after part detection
 int FEEDER_PAUSE_TIME = 1000;       // Time to pause between feeder movements
-int FEEDER_SHORT_MOVE_TIME = 250;   // Duration of short feeder movement
-int FEEDER_LONG_MOVE_TIME = 2000;   // Maximum time to run feeder before stopping
+int FEEDER_SHORT_MOVE_TIME = 60;   // Duration of short feeder movement
+int FEEDER_LONG_MOVE_TIME = 3000;   // Maximum time to run feeder before stopping
 
 // Debug variables
 unsigned long lastDebugTime = 0;     // For controlling debug print frequency
@@ -98,7 +98,6 @@ void stopMotor() {
 enum class FeederState : uint8_t {
   start_moving,
   moving,
-  part_detected,
   paused,
   short_move
 };
@@ -107,14 +106,14 @@ FeederState currFeederState = FeederState::start_moving;
 
 void checkFeeder() {
   unsigned long currentMillis = millis();
+  unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
 
   // Add sensor reading debug
   int distance = ReadDistance(distanceSensorAddress);
-  if (FEEDER_DEBUG && distance < 50) {
+  bool partDetected = distance < 50;
+  if (FEEDER_DEBUG && partDetected) {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
-
-
 
   switch (currFeederState) {
     case FeederState::start_moving: {
@@ -132,27 +131,19 @@ void checkFeeder() {
       }
       
       // Check both conditions: part detection or long move time elapsed
-      if (distance < 50 || (currentMillis - feederVibrationStartTime >= FEEDER_LONG_MOVE_TIME)) {
-      //  update total vibration time
-      totalFeederVibrationTime += currentMillis - feederVibrationStartTime;
-        lastFeederActionTime = currentMillis;
-        currFeederState = FeederState::part_detected;
-      }
-      break;
-    }
-    
-    case FeederState::part_detected: {
-      if (currentMillis - lastFeederActionTime >= FEEDER_STOP_DELAY) {
+      if (partDetected || (elapsedTime >= FEEDER_LONG_MOVE_TIME)) {
+        //  update total vibration time
+        totalFeederVibrationTime += elapsedTime;
         stopMotor();
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
       break;
     }
-
+    
     case FeederState::paused: {
       if (currentMillis - lastFeederActionTime >= FEEDER_PAUSE_TIME) {
-        if (ReadDistance(distanceSensorAddress) < 50) { 
+        if (partDetected) { 
           startMotor(); 
           feederVibrationStartTime = currentMillis;
           currFeederState = FeederState::short_move;
@@ -167,7 +158,7 @@ void checkFeeder() {
     case FeederState::short_move: {
       if (currentMillis - lastFeederActionTime >= FEEDER_SHORT_MOVE_TIME) {
         stopMotor();
-        totalFeederVibrationTime += currentMillis - feederVibrationStartTime;
+        totalFeederVibrationTime += elapsedTime;
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
