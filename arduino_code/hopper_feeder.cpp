@@ -143,6 +143,7 @@ void checkFeeder() {
     
     case FeederState::paused: {
       if (currentMillis - lastFeederActionTime >= FEEDER_PAUSE_TIME) {
+        
         if (partDetected) { 
           startMotor(); 
           feederVibrationStartTime = currentMillis;
@@ -156,7 +157,7 @@ void checkFeeder() {
     }
 
     case FeederState::short_move: {
-      if (currentMillis - lastFeederActionTime >= FEEDER_SHORT_MOVE_TIME) {
+      if (currentMillis - lastFeederActionTime >= FEEDER_SHORT_MOVE_TIME || !partDetected) {
         stopMotor();
         totalFeederVibrationTime += elapsedTime;
         currFeederState = FeederState::paused;
