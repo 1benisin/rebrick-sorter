@@ -201,6 +201,17 @@ void processSettings(char *message) {
     xStepper->setSpeedInUs(settings.SPEED);
     yStepper->setSpeedInUs(settings.SPEED);
 
+    // Reset all state variables to their initial values
+    currentHomingState = NOT_HOMING;
+    homingStartMillis = 0;
+    curBin = 0;
+    moveCompleteSent = true;
+    homing = false;
+
+    // Stop any ongoing movement
+    xStepper->forceStop();
+    yStepper->forceStop();
+
     settingsInitialized = true; // Settings have been received and processed
     Serial.println("Settings updated");
   } else {

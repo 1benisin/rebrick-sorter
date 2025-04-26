@@ -94,6 +94,22 @@ void processSettings(char *message) {
     maxConveyorRPM = values[4];
     minRPM = values[5];
 
+    // Reset all state variables to their initial values
+    for(int i = 0; i < 4; i++) {
+      jetActive[i] = false;
+      jetEndTime[i] = 0;
+    }
+    conveyorOn = false;
+    encoderCount = 0;
+    currentRPM = 0;
+    pwmValue = 0;
+    integralError = 0;
+    lastControlMillis = 0;
+
+    // Stop the conveyor motor
+    digitalWrite(CONV_R_EN_PIN, LOW);
+    analogWrite(CONV_RPWM_PIN, 0);
+
     settingsInitialized = true;
     Serial.println("Settings updated");
   } else {
