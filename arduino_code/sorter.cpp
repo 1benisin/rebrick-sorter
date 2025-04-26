@@ -1,3 +1,32 @@
+/*
+ * Serial Communication Protocol
+ * ----------------------------
+ * All messages must be wrapped in angle brackets < >
+ * 
+ * Commands:
+ * s,<GRID_DIMENSION>,<X_OFFSET>,<Y_OFFSET>,<X_STEPS_TO_LAST>,<Y_STEPS_TO_LAST>,<ACCELERATION>,<HOMING_SPEED>,<SPEED>,<ROW_MAJOR_ORDER>
+ *    - Initialize settings for the sorter
+ *    - Example: <s,3,100,100,1000,1000,10000,200,100,1>
+ * 
+ * m<BIN>
+ *    - Move sorter to specified bin number (1-based)
+ *    - Example: <m001> for bin 1
+ * 
+ * h
+ *    - Move sorter to center position
+ *    - Example: <h>
+ * 
+ * a
+ *    - Start homing sequence
+ *    - Example: <a>
+ * 
+ * Responses:
+ * MC: <BIN>
+ *    - Move Complete message sent when sorter reaches target position
+ *    - Example: MC: 1
+ * 
+ */
+
 #include "FastAccelStepper.h"
 #include <Wire.h>
 
