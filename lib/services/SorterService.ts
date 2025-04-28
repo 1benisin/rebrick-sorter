@@ -68,16 +68,25 @@ class SortProcessControllerService implements Service {
           continue;
         }
 
-        // Get current conveyor speed in pixels per millisecond from store
-        const currentConveyorSpeed = sortProcessStore.getState().conveyorSpeed;
-        // Calculate predicted position using pixels per millisecond speed
+        const currentSpeed = sortProcessStore.getState().conveyorSpeed;
         const predictedX = findPositionAtTime(
           lastDetection.centroid.x,
           lastDetection.timestamp,
           unmatchedDetection.timestamp,
-          currentConveyorSpeed,
+          currentSpeed,
         );
         const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
+
+        // Debug logging
+        console.log('Position calculation:', {
+          lastDetectionX: lastDetection.centroid.x,
+          unmatchedDetectionX: unmatchedDetection.centroid.x,
+          timeDiff: unmatchedDetection.timestamp - lastDetection.timestamp,
+          currentSpeed,
+          predictedX,
+          distanceBetweenDetections,
+          threshold: closestDistance,
+        });
 
         // distanceBetweenDetections is less than the maximum distance threshold for a match
         if (distanceBetweenDetections < closestDistance) {
