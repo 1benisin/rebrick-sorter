@@ -16,7 +16,9 @@ export class SpeedManager extends BaseComponent {
   private socketManager: SocketManager;
   private settingsManager: SettingsManager;
 
+  // Speed in pixels per millisecond - used for position calculations and frontend
   private defaultSpeed: number = 0;
+  // Current speed in pixels per millisecond
   private currentSpeed: number = 0;
 
   constructor(config: SpeedManagerConfig) {
@@ -36,7 +38,7 @@ export class SpeedManager extends BaseComponent {
         throw new Error('Settings not available');
       }
 
-      // Initialize from settings
+      // Initialize from settings - conveyorSpeed is in pixels per millisecond
       this.defaultSpeed = settings.conveyorSpeed;
       this.currentSpeed = this.defaultSpeed;
 
@@ -104,6 +106,7 @@ export class SpeedManager extends BaseComponent {
   }
 
   public scheduleConveyorSpeedChange(
+    // speed: pixels per millisecond - used for position calculations and frontend
     speed: number,
     atTime: number,
     onSpeedChange: (time: number, speed: number) => void,
@@ -118,14 +121,18 @@ export class SpeedManager extends BaseComponent {
       console.error(`\x1b[33mscheduleConveyorSpeedChange: speed ${speed} is out of range\x1b[0m`);
     }
 
-    // normalize speed from pixels per millisecond to conveyor motor rpm using the actual maxConveyorRPM setting
+    // Convert from pixels per millisecond to RPM for Arduino control
+    // This is the only place where we convert between the two speed types
     const rpm_speed = Math.round((speed / this.defaultSpeed) * settings.maxConveyorRPM);
     console.log('calculated rpm_speed:', rpm_speed);
 
     return setTimeout(() => {
+      // Send RPM speed to Arduino
       this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_SPEED, rpm_speed);
+      // Store pixels per millisecond speed for internal use
       this.currentSpeed = speed;
-      this.socketManager.emitConveyorSpeedUpdate(rpm_speed);
+      // Send pixels per millisecond speed to frontend for position calculations
+      this.socketManager.emitConveyorSpeedUpdate(speed);
       onSpeedChange(Date.now(), speed);
 
       // Calculate and update hopper feeder pause time based on conveyor speed

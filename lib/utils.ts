@@ -36,7 +36,13 @@ export function getFormattedTime(fromAccuracy: TimeUnit, toAccuracy: TimeUnit, t
   return formattedTimeParts.join(unitOrder.indexOf(toAccuracy) >= 2 ? ':' : '.');
 }
 
-export const findPositionAtTime = (startPos: number, startTime: number, endTime: number, conveyorSpeed: number) => {
+export const findPositionAtTime = (
+  startPos: number,
+  startTime: number,
+  endTime: number,
+  // conveyorSpeed: pixels per millisecond - used for position calculations
+  conveyorSpeed: number,
+) => {
   let timeDiff = endTime - startTime;
   return startPos - conveyorSpeed * timeDiff;
 };

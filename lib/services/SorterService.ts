@@ -68,7 +68,9 @@ class SortProcessControllerService implements Service {
           continue;
         }
 
+        // Get current conveyor speed in pixels per millisecond from store
         const currentConveyorSpeed = sortProcessStore.getState().conveyorSpeed;
+        // Calculate predicted position using pixels per millisecond speed
         const predictedX = findPositionAtTime(
           lastDetection.centroid.x,
           lastDetection.timestamp,
@@ -175,7 +177,9 @@ class SortProcessControllerService implements Service {
       const lastPair = group.detectionPairs[group.detectionPairs.length - 1];
       // find the predicted centroid of the last detection in the detection group
 
+      // Get current conveyor speed in pixels per millisecond from store
       const currentConveyorSpeed = sortProcessStore.getState().conveyorSpeed;
+      // Calculate distance traveled using pixels per millisecond speed
       const distanceTravelled = (Date.now() - lastPair[0].timestamp) * currentConveyorSpeed;
       const predictedX = lastPair[0].centroid.x - distanceTravelled;
       if (predictedX < 0) {
