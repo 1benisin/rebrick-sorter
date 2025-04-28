@@ -322,6 +322,15 @@ void processSettings(char *message) {
   FEEDER_SHORT_MOVE_TIME = values[4];
   FEEDER_LONG_MOVE_TIME = values[5];
 
+  // Reset all state variables to their initial values
+  currFeederState = FeederState::start_moving;
+  currHopperState = HopperState::waiting_top;
+  totalFeederVibrationTime = 0;
+  lastFeederActionTime = 0;
+  feederVibrationStartTime = 0;
+  lastHopperActionTime = 0;
+  lastDebugTime = 0;
+
   settingsInitialized = true;
   Serial.println("Settings updated successfully");
 }
