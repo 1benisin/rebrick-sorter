@@ -18,6 +18,50 @@
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
+// Sensor reading configuration
+#define SENSOR_READ_INTERVAL 50  // Read sensor every 50ms
+#define SENSOR_BUFFER_SIZE 5     // Number of readings to keep for filtering
+#define SENSOR_THRESHOLD 50      // Threshold for part detection
+
+// Sensor reading variables
+volatile bool newSensorReading = false;
+volatile unsigned short sensorReadings[SENSOR_BUFFER_SIZE];
+volatile int sensorBufferIndex = 0;
+volatile unsigned short filteredDistance = 0;
+
+// Timer interrupt setup
+void setupTimer() {
+  // Set up Timer1 for sensor reading
+  TCCR1A = 0;  // Clear TCCR1A register
+  TCCR1B = 0;  // Clear TCCR1B register
+  TCNT1 = 0;   // Initialize counter value to 0
+  
+  // Set compare match register for 50ms interval
+  // 16MHz / (prescaler * desired frequency) - 1
+  // 16MHz / (1024 * 20Hz) - 1 = 781
+  OCR1A = 781;
+  
+  TCCR1B |= (1 << WGM12);   // Turn on CTC mode
+  TCCR1B |= (1 << CS12) | (1 << CS10);  // Set CS12 and CS10 bits for 1024 prescaler
+  TIMSK1 |= (1 << OCIE1A);  // Enable timer compare interrupt
+}
+
+// Timer interrupt service routine
+ISR(TIMER1_COMPA_vect) {
+  unsigned short reading = ReadDistance(distanceSensorAddress);
+  sensorReadings[sensorBufferIndex] = reading;
+  sensorBufferIndex = (sensorBufferIndex + 1) % SENSOR_BUFFER_SIZE;
+  
+  // Calculate filtered value (simple moving average)
+  unsigned long sum = 0;
+  for(int i = 0; i < SENSOR_BUFFER_SIZE; i++) {
+    sum += sensorReadings[i];
+  }
+  filteredDistance = sum / SENSOR_BUFFER_SIZE;
+  
+  newSensorReading = true;
+}
+
 // Hopper Variables
 int hopperFullStrokeSteps = 2020; // motor steps it takes to move from top to bottom
 unsigned long lastHopperActionTime = 0;  // will store the last time the task was run
@@ -54,9 +98,15 @@ unsigned long lastDebugTime = 0;     // For controlling debug print frequency
 int ReadDistance(unsigned char device);
 
 void setup() {
-
   Wire.begin(); 
   Serial.begin(9600,SERIAL_8N1);
+
+  // Initialize sensor readings array
+  for(int i = 0; i < SENSOR_BUFFER_SIZE; i++) {
+    sensorReadings[i] = 0;
+  }
+
+  setupTimer();
 
   pinMode(FEEDER_RPWM_PIN, OUTPUT);
   pinMode(FEEDER_R_EN_PIN, OUTPUT);
@@ -67,17 +117,16 @@ void setup() {
 
   pinMode(STOP_PIN, INPUT);  
 
-
   engine.init();
   hopperStepper = engine.stepperConnectToPin(STEP_PIN);
 
   if (hopperStepper) {
-    hopperStepper->setDirectionPin(DIR_PIN, true, 2000); // DIR_PIN, dirHighCountsUp = true, dir_change_delay_us = 1000
+    hopperStepper->setDirectionPin(DIR_PIN, true, 2000);
     if (AUTO_DISABLE) {
-      hopperStepper->setEnablePin(ENABLE_PIN, true); // low_active_enables_stepper = false 
+      hopperStepper->setEnablePin(ENABLE_PIN, true);
       hopperStepper->setAutoEnable(true);
     }
-    hopperStepper->setSpeedInUs(SPEED);  // the parameter is us/step !!!
+    hopperStepper->setSpeedInUs(SPEED);
     hopperStepper->setAcceleration(ACCELERATION);
 
     hopperStepper->move(100);
@@ -108,9 +157,8 @@ void checkFeeder() {
   unsigned long currentMillis = millis();
   unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
 
-  // Add sensor reading debug
-  int distance = ReadDistance(distanceSensorAddress);
-  bool partDetected = distance < 50;
+  // Use filtered sensor reading
+  bool partDetected = filteredDistance < SENSOR_THRESHOLD;
   if (FEEDER_DEBUG && partDetected) {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
