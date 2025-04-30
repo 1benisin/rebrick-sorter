@@ -29,25 +29,37 @@ volatile unsigned short sensorReadings[SENSOR_BUFFER_SIZE];
 volatile int sensorBufferIndex = 0;
 volatile unsigned short filteredDistance = 0;
 
+// Depth Sensor Variables
+unsigned short distanceReading = 0;
+unsigned char i2cReceiveBuffer[16];
+unsigned char distanceSensorAddress = 80;
+
+// Function declarations
+int ReadDistance(unsigned char device);
+void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr);
+
 // Timer interrupt setup
 void setupTimer() {
-  // Set up Timer1 for sensor reading
-  TCCR1A = 0;  // Clear TCCR1A register
-  TCCR1B = 0;  // Clear TCCR1B register
-  TCNT1 = 0;   // Initialize counter value to 0
+  // Set up Timer2 for sensor reading
+  // Timer2 is 8-bit and won't conflict with other Arduino functions
+  TCCR2A = 0;  // Clear TCCR2A register
+  TCCR2B = 0;  // Clear TCCR2B register
+  TCNT2 = 0;   // Initialize counter value to 0
   
   // Set compare match register for 50ms interval
   // 16MHz / (prescaler * desired frequency) - 1
-  // 16MHz / (1024 * 20Hz) - 1 = 781
-  OCR1A = 781;
+  // 16MHz / (256 * 20Hz) - 1 = 3124
+  // Since Timer2 is 8-bit, we need to use a prescaler of 1024
+  // and adjust our interval to ~32ms (31.25Hz)
+  OCR2A = 249;  // (16MHz / (1024 * 31.25Hz)) - 1 = 249
   
-  TCCR1B |= (1 << WGM12);   // Turn on CTC mode
-  TCCR1B |= (1 << CS12) | (1 << CS10);  // Set CS12 and CS10 bits for 1024 prescaler
-  TIMSK1 |= (1 << OCIE1A);  // Enable timer compare interrupt
+  TCCR2A |= (1 << WGM21);   // Turn on CTC mode
+  TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);  // Set CS22, CS21, CS20 bits for 1024 prescaler
+  TIMSK2 |= (1 << OCIE2A);  // Enable timer compare interrupt
 }
 
 // Timer interrupt service routine
-ISR(TIMER1_COMPA_vect) {
+ISR(TIMER2_COMPA_vect) {
   unsigned short reading = ReadDistance(distanceSensorAddress);
   sensorReadings[sensorBufferIndex] = reading;
   sensorBufferIndex = (sensorBufferIndex + 1) % SENSOR_BUFFER_SIZE;
@@ -71,11 +83,6 @@ bool settingsInitialized = false;
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *hopperStepper = NULL;
  
-// --- Depth Sensor Variables
-unsigned short distanceReading = 0;
-unsigned char i2cReceiveBuffer[16];
-unsigned char distanceSensorAddress = 80;
- 
 // -- Feeder Variables
 #define FEEDER_RPWM_PIN 11    // Changed from FEEDER_ENABLE_PIN
 #define FEEDER_R_EN_PIN 8     // Changed from FEEDER_MOTOR_PIN1
@@ -93,9 +100,6 @@ int FEEDER_LONG_MOVE_TIME = 3000;   // Maximum time to run feeder before stoppin
 
 // Debug variables
 unsigned long lastDebugTime = 0;     // For controlling debug print frequency
-
-// Function declarations
-int ReadDistance(unsigned char device);
 
 void setup() {
   Wire.begin(); 
