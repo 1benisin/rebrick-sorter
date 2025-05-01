@@ -24,7 +24,7 @@
 #define SENSOR_THRESHOLD 50      // Threshold for part detection
 
 // Sensor reading variables
-volatile bool newSensorReading = false;
+volatile bool requestSensorRead = false;  // Flag to request sensor read
 volatile unsigned short sensorReadings[SENSOR_BUFFER_SIZE];
 volatile int sensorBufferIndex = 0;
 volatile unsigned short filteredDistance = 0;
@@ -37,6 +37,7 @@ unsigned char distanceSensorAddress = 80;
 // Function declarations
 int ReadDistance(unsigned char device);
 void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr);
+void handleSensorReading();  // New function declaration
 
 // Timer interrupt setup
 void setupTimer() {
@@ -46,32 +47,18 @@ void setupTimer() {
   TCCR2B = 0;  // Clear TCCR2B register
   TCNT2 = 0;   // Initialize counter value to 0
   
-  // Set compare match register for 50ms interval
-  // 16MHz / (prescaler * desired frequency) - 1
-  // 16MHz / (256 * 20Hz) - 1 = 3124
-  // Since Timer2 is 8-bit, we need to use a prescaler of 1024
-  // and adjust our interval to ~32ms (31.25Hz)
-  OCR2A = 249;  // (16MHz / (1024 * 31.25Hz)) - 1 = 249
+  // Set compare match register for ~32ms interval
+  // 16MHz / (1024 * 31.25Hz) - 1 = 249
+  OCR2A = 249;
   
   TCCR2A |= (1 << WGM21);   // Turn on CTC mode
   TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);  // Set CS22, CS21, CS20 bits for 1024 prescaler
   TIMSK2 |= (1 << OCIE2A);  // Enable timer compare interrupt
 }
 
-// Timer interrupt service routine
+// Timer interrupt service routine - MODIFIED to only set flag
 ISR(TIMER2_COMPA_vect) {
-  unsigned short reading = ReadDistance(distanceSensorAddress);
-  sensorReadings[sensorBufferIndex] = reading;
-  sensorBufferIndex = (sensorBufferIndex + 1) % SENSOR_BUFFER_SIZE;
-  
-  // Calculate filtered value (simple moving average)
-  unsigned long sum = 0;
-  for(int i = 0; i < SENSOR_BUFFER_SIZE; i++) {
-    sum += sensorReadings[i];
-  }
-  filteredDistance = sum / SENSOR_BUFFER_SIZE;
-  
-  newSensorReading = true;
+  requestSensorRead = true;
 }
 
 // Hopper Variables
@@ -135,7 +122,8 @@ void setup() {
 
     hopperStepper->move(100);
   }
-  Serial.println("Ready"); 
+  Serial.println("Ready");
+  sei();  // Enable global interrupts after setup
 }
 
 void startMotor() {
@@ -390,10 +378,37 @@ void processSettings(char *message) {
 #define START_MARKER '<'
 #define END_MARKER '>'
 
+// New function to handle sensor reading and filtering
+void handleSensorReading() {
+  // Read the actual sensor value
+  unsigned short currentReading = ReadDistance(distanceSensorAddress);
+
+  // Update buffer
+  sensorReadings[sensorBufferIndex] = currentReading;
+  sensorBufferIndex = (sensorBufferIndex + 1) % SENSOR_BUFFER_SIZE;
+
+  // Calculate filtered value (simple moving average)
+  unsigned long sum = 0;
+  for(int i = 0; i < SENSOR_BUFFER_SIZE; i++) {
+    sum += sensorReadings[i];
+  }
+  
+  // Update the shared volatile variable atomically
+  noInterrupts();
+  filteredDistance = sum / SENSOR_BUFFER_SIZE;
+  interrupts();
+}
+
 void loop() {
   static char message[MAX_MESSAGE_LENGTH];
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
+
+  // Check for sensor read request
+  if (requestSensorRead) {
+    requestSensorRead = false;  // Clear the flag immediately
+    handleSensorReading();      // Perform the I2C read and filtering
+  }
 
   // Check for serial messages
   while (Serial.available() > 0) {
