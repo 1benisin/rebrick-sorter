@@ -38,6 +38,10 @@ class SortProcessControllerService implements Service {
         return;
       }
 
+      // Initialize conveyor speed in the store from settings
+      const initialSpeed = settingsService.getSettings().conveyorSpeed;
+      sortProcessStore.getState().setConveyorSpeed(initialSpeed);
+
       this.status = ServiceState.INITIALIZED;
     } catch (error) {
       this.status = ServiceState.FAILED;
@@ -68,12 +72,13 @@ class SortProcessControllerService implements Service {
           continue;
         }
 
-        const currentSpeed = sortProcessStore.getState().conveyorSpeed;
+        const { conveyorSpeed: defaultSpeed, conveyorSpeedLog } = sortProcessStore.getState();
         const predictedX = findPositionAtTime(
           lastDetection.centroid.x,
           lastDetection.timestamp,
           unmatchedDetection.timestamp,
-          currentSpeed,
+          conveyorSpeedLog,
+          defaultSpeed,
         );
         const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
 
@@ -82,7 +87,9 @@ class SortProcessControllerService implements Service {
           lastDetectionX: lastDetection.centroid.x,
           unmatchedDetectionX: unmatchedDetection.centroid.x,
           timeDiff: unmatchedDetection.timestamp - lastDetection.timestamp,
-          currentSpeed,
+          speedLogUsed: conveyorSpeedLog.filter(
+            (log) => log.time >= lastDetection.timestamp && log.time <= unmatchedDetection.timestamp,
+          ),
           predictedX,
           distanceBetweenDetections,
           threshold: closestDistance,
