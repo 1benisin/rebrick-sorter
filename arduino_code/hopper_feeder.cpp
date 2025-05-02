@@ -4,7 +4,7 @@
 
 #define AUTO_DISABLE true
 
-#define FEEDER_DEBUG false
+#define FEEDER_DEBUG true
 #define HOPPER_DEBUG true
 
 #define ENABLE_PIN 6
@@ -403,6 +403,7 @@ void loop() {
   static char message[MAX_MESSAGE_LENGTH];
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
+  static unsigned long lastLoopDebugTime = 0; // Timer for debug prints
 
   // Check for sensor read request
   if (requestSensorRead) {
@@ -435,6 +436,23 @@ void loop() {
 
   checkFeeder();
   checkHopper();
+
+  // Debug prints (throttled)
+  unsigned long currentMillis = millis();
+  if (FEEDER_DEBUG && (currentMillis - lastLoopDebugTime >= 1000)) { // Print every second
+    lastLoopDebugTime = currentMillis;
+    bool partDetected = filteredDistance < SENSOR_THRESHOLD;
+    Serial.print("[DEBUG] Feeder State: ");
+    Serial.print((int)currFeederState);
+    Serial.print(", Part: ");
+    Serial.print(partDetected ? "Y" : "N");
+    Serial.print(", Dist: ");
+    Serial.print(filteredDistance);
+    Serial.print(", Thresh: ");
+    Serial.print(SENSOR_THRESHOLD);
+    Serial.print(", VibTime: ");
+    Serial.println(totalFeederVibrationTime);
+  }
 }
 
 void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr) 
