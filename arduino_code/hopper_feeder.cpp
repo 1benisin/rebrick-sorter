@@ -4,7 +4,7 @@
 
 #define AUTO_DISABLE true
 
-#define FEEDER_DEBUG true
+#define FEEDER_DEBUG false
 #define HOPPER_DEBUG true
 
 #define ENABLE_PIN 6
@@ -18,49 +18,6 @@
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
-// Sensor reading configuration
-#define SENSOR_READ_INTERVAL 50  // Read sensor every 50ms
-#define SENSOR_BUFFER_SIZE 5     // Number of readings to keep for filtering
-#define SENSOR_THRESHOLD 50      // Threshold for part detection
-
-// Sensor reading variables
-volatile bool requestSensorRead = false;  // Flag to request sensor read
-volatile unsigned short sensorReadings[SENSOR_BUFFER_SIZE];
-volatile int sensorBufferIndex = 0;
-volatile unsigned short filteredDistance = 0;
-
-// Depth Sensor Variables
-unsigned short distanceReading = 0;
-unsigned char i2cReceiveBuffer[16];
-unsigned char distanceSensorAddress = 80;
-
-// Function declarations
-int ReadDistance(unsigned char device);
-void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr);
-void handleSensorReading();  // New function declaration
-
-// Timer interrupt setup
-void setupTimer() {
-  // Set up Timer2 for sensor reading
-  // Timer2 is 8-bit and won't conflict with other Arduino functions
-  TCCR2A = 0;  // Clear TCCR2A register
-  TCCR2B = 0;  // Clear TCCR2B register
-  TCNT2 = 0;   // Initialize counter value to 0
-  
-  // Set compare match register for ~32ms interval
-  // 16MHz / (1024 * 31.25Hz) - 1 = 249
-  OCR2A = 249;
-  
-  TCCR2A |= (1 << WGM21);   // Turn on CTC mode
-  TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);  // Set CS22, CS21, CS20 bits for 1024 prescaler
-  TIMSK2 |= (1 << OCIE2A);  // Enable timer compare interrupt
-}
-
-// Timer interrupt service routine - MODIFIED to only set flag
-ISR(TIMER2_COMPA_vect) {
-  requestSensorRead = true;
-}
-
 // Hopper Variables
 int hopperFullStrokeSteps = 2020; // motor steps it takes to move from top to bottom
 unsigned long lastHopperActionTime = 0;  // will store the last time the task was run
@@ -69,6 +26,11 @@ bool settingsInitialized = false;
 
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *hopperStepper = NULL;
+ 
+// --- Depth Sensor Variables
+unsigned short distanceReading = 0;
+unsigned char i2cReceiveBuffer[16];
+unsigned char distanceSensorAddress = 80;
  
 // -- Feeder Variables
 #define FEEDER_RPWM_PIN 11    // Changed from FEEDER_ENABLE_PIN
@@ -88,16 +50,13 @@ int FEEDER_LONG_MOVE_TIME = 3000;   // Maximum time to run feeder before stoppin
 // Debug variables
 unsigned long lastDebugTime = 0;     // For controlling debug print frequency
 
+// Function declarations
+int ReadDistance(unsigned char device);
+
 void setup() {
+
   Wire.begin(); 
   Serial.begin(9600,SERIAL_8N1);
-
-  // Initialize sensor readings array
-  for(int i = 0; i < SENSOR_BUFFER_SIZE; i++) {
-    sensorReadings[i] = 0;
-  }
-
-  setupTimer();
 
   pinMode(FEEDER_RPWM_PIN, OUTPUT);
   pinMode(FEEDER_R_EN_PIN, OUTPUT);
@@ -108,22 +67,22 @@ void setup() {
 
   pinMode(STOP_PIN, INPUT);  
 
+
   engine.init();
   hopperStepper = engine.stepperConnectToPin(STEP_PIN);
 
   if (hopperStepper) {
-    hopperStepper->setDirectionPin(DIR_PIN, true, 2000);
+    hopperStepper->setDirectionPin(DIR_PIN, true, 2000); // DIR_PIN, dirHighCountsUp = true, dir_change_delay_us = 1000
     if (AUTO_DISABLE) {
-      hopperStepper->setEnablePin(ENABLE_PIN, true);
+      hopperStepper->setEnablePin(ENABLE_PIN, true); // low_active_enables_stepper = false 
       hopperStepper->setAutoEnable(true);
     }
-    hopperStepper->setSpeedInUs(SPEED);
+    hopperStepper->setSpeedInUs(SPEED);  // the parameter is us/step !!!
     hopperStepper->setAcceleration(ACCELERATION);
 
     hopperStepper->move(100);
   }
-  Serial.println("Ready");
-  sei();  // Enable global interrupts after setup
+  Serial.println("Ready"); 
 }
 
 void startMotor() {
@@ -149,8 +108,9 @@ void checkFeeder() {
   unsigned long currentMillis = millis();
   unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
 
-  // Use filtered sensor reading
-  bool partDetected = filteredDistance < SENSOR_THRESHOLD;
+  // Add sensor reading debug
+  int distance = ReadDistance(distanceSensorAddress);
+  bool partDetected = distance < 50;
   if (FEEDER_DEBUG && partDetected) {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
@@ -378,38 +338,10 @@ void processSettings(char *message) {
 #define START_MARKER '<'
 #define END_MARKER '>'
 
-// New function to handle sensor reading and filtering
-void handleSensorReading() {
-  // Read the actual sensor value
-  unsigned short currentReading = ReadDistance(distanceSensorAddress);
-
-  // Update buffer
-  sensorReadings[sensorBufferIndex] = currentReading;
-  sensorBufferIndex = (sensorBufferIndex + 1) % SENSOR_BUFFER_SIZE;
-
-  // Calculate filtered value (simple moving average)
-  unsigned long sum = 0;
-  for(int i = 0; i < SENSOR_BUFFER_SIZE; i++) {
-    sum += sensorReadings[i];
-  }
-  
-  // Update the shared volatile variable atomically
-  noInterrupts();
-  filteredDistance = sum / SENSOR_BUFFER_SIZE;
-  interrupts();
-}
-
 void loop() {
   static char message[MAX_MESSAGE_LENGTH];
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
-  static unsigned long lastLoopDebugTime = 0; // Timer for debug prints
-
-  // Check for sensor read request
-  if (requestSensorRead) {
-    requestSensorRead = false;  // Clear the flag immediately
-    handleSensorReading();      // Perform the I2C read and filtering
-  }
 
   // Check for serial messages
   while (Serial.available() > 0) {
@@ -436,23 +368,6 @@ void loop() {
 
   checkFeeder();
   checkHopper();
-
-  // Debug prints (throttled)
-  unsigned long currentMillis = millis();
-  if (FEEDER_DEBUG && (currentMillis - lastLoopDebugTime >= 1000)) { // Print every second
-    lastLoopDebugTime = currentMillis;
-    bool partDetected = filteredDistance < SENSOR_THRESHOLD;
-    Serial.print("[DEBUG] Feeder State: ");
-    Serial.print((int)currFeederState);
-    Serial.print(", Part: ");
-    Serial.print(partDetected ? "Y" : "N");
-    Serial.print(", Dist: ");
-    Serial.print(filteredDistance);
-    Serial.print(", Thresh: ");
-    Serial.print(SENSOR_THRESHOLD);
-    Serial.print(", VibTime: ");
-    Serial.println(totalFeederVibrationTime);
-  }
 }
 
 void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr) 
