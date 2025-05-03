@@ -38,6 +38,10 @@ class SortProcessControllerService implements Service {
         return;
       }
 
+      // Initialize conveyor speed in the store from settings
+      const initialSpeed = settingsService.getSettings().conveyorSpeed;
+      sortProcessStore.getState().setConveyorSpeed(initialSpeed);
+
       this.status = ServiceState.INITIALIZED;
     } catch (error) {
       this.status = ServiceState.FAILED;
@@ -68,17 +72,28 @@ class SortProcessControllerService implements Service {
           continue;
         }
 
-        const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-        const { conveyorSpeed } = settingsService.getSettings();
+        const { conveyorSpeed: defaultSpeed, conveyorSpeedLog } = sortProcessStore.getState();
         const predictedX = findPositionAtTime(
           lastDetection.centroid.x,
           lastDetection.timestamp,
           unmatchedDetection.timestamp,
-          conveyorSpeed,
+          conveyorSpeedLog,
+          defaultSpeed,
         );
-        // const distanceTravelled = (unmatchedDetection.timestamp - lastDetection.timestamp) * conveyorSpeed;
-        // const predictedX = lastDetection.centroid.x + distanceTravelled;
         const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
+
+        // Debug logging
+        console.log('Position calculation:', {
+          lastDetectionX: lastDetection.centroid.x,
+          unmatchedDetectionX: unmatchedDetection.centroid.x,
+          timeDiff: unmatchedDetection.timestamp - lastDetection.timestamp,
+          speedLogUsed: conveyorSpeedLog.filter(
+            (log) => log.time >= lastDetection.timestamp && log.time <= unmatchedDetection.timestamp,
+          ),
+          predictedX,
+          distanceBetweenDetections,
+          threshold: closestDistance,
+        });
 
         // distanceBetweenDetections is less than the maximum distance threshold for a match
         if (distanceBetweenDetections < closestDistance) {
@@ -178,10 +193,10 @@ class SortProcessControllerService implements Service {
       const lastPair = group.detectionPairs[group.detectionPairs.length - 1];
       // find the predicted centroid of the last detection in the detection group
 
-      const settingsService = serviceManager.getService(ServiceName.SETTINGS);
-      const { conveyorSpeed } = settingsService.getSettings();
-
-      const distanceTravelled = (Date.now() - lastPair[0].timestamp) * conveyorSpeed;
+      // Get current conveyor speed in pixels per millisecond from store
+      const currentConveyorSpeed = sortProcessStore.getState().conveyorSpeed;
+      // Calculate distance traveled using pixels per millisecond speed
+      const distanceTravelled = (Date.now() - lastPair[0].timestamp) * currentConveyorSpeed;
       const predictedX = lastPair[0].centroid.x - distanceTravelled;
       if (predictedX < 0) {
         group.offScreen = true;
