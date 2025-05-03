@@ -6,14 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { useSettings } from '@/components/hooks/useSettings';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { getSorterLetter } from '@/lib/utils'; // Import from utils
 
 // Helper function to map sorter index to letter
-const getSorterLetter = (index: number | string | undefined): string => {
-  if (index === undefined) return '?';
-  const numIndex = typeof index === 'string' ? parseInt(index, 10) : index;
-  if (isNaN(numIndex) || numIndex < 0 || numIndex > 3) return String(index); // Return original if invalid
-  return String.fromCharCode(65 + numIndex); // 65 is ASCII for 'A'
-};
+// const getSorterLetter = (index: number | string | undefined): string => {
+//   if (index === undefined) return '?';
+//   const numIndex = typeof index === 'string' ? parseInt(index, 10) : index;
+//   if (isNaN(numIndex) || numIndex < 0 || numIndex > 3) return String(index); // Return original if invalid
+//   return String.fromCharCode(65 + numIndex); // 65 is ASCII for 'A'
+// };
 
 const DetectionPairDisplay = () => {
   const detectionPairGroups = sortProcessStore((state) => state.detectionPairGroups);
