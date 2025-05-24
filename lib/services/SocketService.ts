@@ -59,6 +59,16 @@ class SocketService implements Service {
     this.socket.on(AllEvents.PART_SORTED, () => {
       sortProcessStore.getState().handlePartSorted();
     });
+
+    this.socket.on(
+      AllEvents.COMPONENT_STATUS_UPDATE,
+      (data: EventPayloads[typeof AllEvents.COMPONENT_STATUS_UPDATE]) => {
+        console.log('COMPONENT_STATUS_UPDATE:', data);
+        if (data.status === 'ERROR') {
+          sortProcessStore.getState().handleComponentError(data.componentName, data.error);
+        }
+      },
+    );
   }
 
   public getStatus(): ServiceState {

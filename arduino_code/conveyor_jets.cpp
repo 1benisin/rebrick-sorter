@@ -127,6 +127,11 @@ void processMessage(char *message) {
   int actionValue = atoi(message + 1); 
   switch (message[0]) {
 
+    case 'h': { // heartbeat
+      Serial.println("OK"); // Simple response to heartbeat
+      break;
+    }
+
     case 's': {
       processSettings(message);
       break;

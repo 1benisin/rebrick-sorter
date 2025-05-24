@@ -41,6 +41,10 @@ export type SortProcessState = {
 
   // ---
   handlePartSorted: () => void;
+
+  // --- Component Error Handling
+  componentErrors: { [key: string]: string | null };
+  handleComponentError: (componentName: string, error: string | null) => void;
 };
 
 export const sortProcessStore = create<SortProcessState>((set) => ({
@@ -122,6 +126,25 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
           : 0;
 
       return { ppmCount: Math.round(ppmCount), ppmTimestamps: updatedTimestamps };
+    });
+  },
+
+  // --- Component Error Handling
+  componentErrors: {},
+  handleComponentError: (componentName: string, error: string | null) => {
+    set((state) => {
+      // Update component errors
+      const componentErrors = { ...state.componentErrors, [componentName]: error };
+
+      // If there's an error, stop the sort process
+      if (error) {
+        return {
+          componentErrors,
+          isRunning: false,
+        };
+      }
+
+      return { componentErrors };
     });
   },
 }));

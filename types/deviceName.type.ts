@@ -9,9 +9,10 @@ export enum DeviceName {
   SORTER_3 = 'sorter_3',
 }
 
-export type DeviceInfo = {
+export interface DeviceInfo {
   deviceName: DeviceName;
   portName: string;
   device: SerialPort | SerialPortMock;
   config: ArduinoConfig;
-};
+  heartbeatTimeout?: NodeJS.Timeout;
+}

@@ -228,19 +228,24 @@ void processMessage(char *message) {
 
   // Prevent most commands during active homing (allow 's' maybe?)
   if (currentHomingState != NOT_HOMING && currentHomingState != HOMING_COMPLETE && currentHomingState != HOMING_ERROR) {
-    if (message[0] != 'a') { // Allow trying to home again if in error state
+    if (message[0] != 'a' && message[0] != 'h') { // Allow heartbeat during homing
       Serial.println("Busy: Homing in progress.");
       return;
     }
   }
 
-  // If in error state, only allow 'a' to retry
-  if (currentHomingState == HOMING_ERROR && message[0] != 'a') {
+  // If in error state, only allow 'a' to retry and heartbeat
+  if (currentHomingState == HOMING_ERROR && message[0] != 'a' && message[0] != 'h') {
     Serial.println("Error: Homing failed. Please retry homing ('a').");
     return;
   }
 
   switch (message[0]) {
+    case 'h': { // heartbeat
+      Serial.println("OK"); // Simple response to heartbeat
+      break;
+    }
+
     case 's':
       processSettings(message);
       break;
@@ -267,19 +272,6 @@ void processMessage(char *message) {
           Serial.println(curBin);
         }
       }
-      break;
-    }
-
-    // MOVE TO CENTER
-    case 'h': { 
-      int centerBin = ((settings.GRID_DIMENSION * settings.GRID_DIMENSION) + 1) / 2;
-      if (settings.ROW_MAJOR_ORDER) {
-        // Adjust center bin for row-major order if necessary
-      }
-      Serial.print("centerBin: ");
-      Serial.println(centerBin);
-      moveToBin(centerBin);
-      moveCompleteSent = false;
       break;
     }
 

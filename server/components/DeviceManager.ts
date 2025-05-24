@@ -14,6 +14,10 @@ export class DeviceManager extends BaseComponent {
   private devices: Map<DeviceName, DeviceInfo> = new Map();
   private socketManager: SocketManager;
   private settingsManager: SettingsManager;
+  private heartbeatIntervals: Map<DeviceName, NodeJS.Timeout> = new Map();
+  private readonly HEARTBEAT_INTERVAL = 60 * 1000; // 1 minute
+  private readonly RECONNECT_ATTEMPTS = 3;
+  private readonly RECONNECT_DELAY = 2000; // 2 seconds
 
   constructor(config: DeviceManagerConfig) {
     super('DeviceManager');
@@ -97,6 +101,11 @@ export class DeviceManager extends BaseComponent {
   }
 
   public async deinitialize(): Promise<void> {
+    // Stop all heartbeats
+    for (const deviceName of this.devices.keys()) {
+      this.stopHeartbeat(deviceName);
+    }
+
     // Unregister settings callback
     this.settingsManager.unregisterSettingsUpdateCallback(this.updateSettings.bind(this));
 
@@ -184,6 +193,11 @@ export class DeviceManager extends BaseComponent {
           console.error(`\x1b[33m Error opening device at ${portName}:\x1b[0m`, err);
           reject(err);
         });
+
+        device.on('close', () => {
+          console.log(`\x1b[33m Device ${deviceName} closed unexpectedly\x1b[0m`);
+          this.handleDeviceDisconnection(deviceName);
+        });
       });
 
       // Set up the parser to process incoming data
@@ -192,11 +206,85 @@ export class DeviceManager extends BaseComponent {
         this.handleDeviceData(deviceName, data);
       });
 
+      // Start heartbeat monitoring
+      this.startHeartbeat(deviceName);
+
       return device;
     } catch (error) {
       console.error(`\x1b[33mError creating device at ${portName}:\x1b[0m`, error);
       throw error;
     }
+  }
+
+  private startHeartbeat(deviceName: DeviceName): void {
+    // Clear any existing heartbeat
+    this.stopHeartbeat(deviceName);
+
+    const interval = setInterval(async () => {
+      try {
+        const deviceInfo = this.devices.get(deviceName);
+        if (!deviceInfo) return;
+
+        // Send a heartbeat command
+        this.sendCommand(deviceName, 'h');
+
+        // Set a timeout to check for response
+        const timeout = setTimeout(() => {
+          console.error(`\x1b[33mNo response from ${deviceName} during heartbeat check\x1b[0m`);
+          this.handleDeviceDisconnection(deviceName);
+        }, 2000);
+
+        // Store the timeout in the device info
+        deviceInfo.heartbeatTimeout = timeout;
+      } catch (error) {
+        console.error(`\x1b[33mError during heartbeat for ${deviceName}:\x1b[0m`, error);
+        this.handleDeviceDisconnection(deviceName);
+      }
+    }, this.HEARTBEAT_INTERVAL);
+
+    this.heartbeatIntervals.set(deviceName, interval);
+  }
+
+  private stopHeartbeat(deviceName: DeviceName): void {
+    const interval = this.heartbeatIntervals.get(deviceName);
+    if (interval) {
+      clearInterval(interval);
+      this.heartbeatIntervals.delete(deviceName);
+    }
+
+    const deviceInfo = this.devices.get(deviceName);
+    if (deviceInfo?.heartbeatTimeout) {
+      clearTimeout(deviceInfo.heartbeatTimeout);
+      deviceInfo.heartbeatTimeout = undefined;
+    }
+  }
+
+  private async handleDeviceDisconnection(deviceName: DeviceName): Promise<void> {
+    console.log(`\x1b[33mDevice ${deviceName} disconnected, attempting to reconnect...\x1b[0m`);
+    this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, 'Device disconnected');
+
+    // Stop the heartbeat
+    this.stopHeartbeat(deviceName);
+
+    // Attempt to reconnect
+    const deviceInfo = this.devices.get(deviceName);
+    if (!deviceInfo) return;
+
+    let attempts = 0;
+    while (attempts < this.RECONNECT_ATTEMPTS) {
+      try {
+        await this.disconnectDevice(deviceName);
+        await new Promise((resolve) => setTimeout(resolve, this.RECONNECT_DELAY));
+        await this.connectDevice(deviceName, deviceInfo.portName, deviceInfo.config);
+        console.log(`\x1b[32mSuccessfully reconnected to ${deviceName}\x1b[0m`);
+        return;
+      } catch (error) {
+        attempts++;
+        console.error(`\x1b[33mReconnection attempt ${attempts} failed for ${deviceName}:\x1b[0m`, error);
+      }
+    }
+
+    console.error(`\x1b[31mFailed to reconnect to ${deviceName} after ${this.RECONNECT_ATTEMPTS} attempts\x1b[0m`);
   }
 
   private buildSorterInitMessage(config: ArduinoConfig): string {
@@ -244,6 +332,12 @@ export class DeviceManager extends BaseComponent {
       return;
     }
     console.log(`\x1b[1m${deviceName}\x1b[0m:`, data);
+
+    // Clear heartbeat timeout if it exists
+    if (deviceInfo.heartbeatTimeout) {
+      clearTimeout(deviceInfo.heartbeatTimeout);
+      deviceInfo.heartbeatTimeout = undefined;
+    }
 
     if (data.trim() === 'Ready') {
       let configMessage = '';
