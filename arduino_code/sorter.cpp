@@ -13,7 +13,7 @@
  *    - Example: <m001> for bin 1
  * 
  * h
- *    - Move sorter to center position
+ *    - heartbeat status check
  *    - Example: <h>
  * 
  * a
