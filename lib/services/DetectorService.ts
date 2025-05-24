@@ -311,6 +311,17 @@ class DetectorService implements Service {
       };
     });
 
+    // Log initial predictions
+    console.log(
+      'Initial Predictions:',
+      taggedPredictions.map((p) => ({
+        isTopView: p.isTopView,
+        box: p.box,
+        centerX: p.box.left + p.box.width / 2,
+        centerY: p.box.top + p.box.height / 2,
+      })),
+    );
+
     // tag isTooCloseToScreenEdge
     taggedPredictions = taggedPredictions.map((prediction) => {
       const leftEdge = prediction.box.left;
@@ -329,61 +340,65 @@ class DetectorService implements Service {
     taggedPredictions = taggedPredictions.map((prediction, index, originalPs) => {
       if (!prediction.isTopView) return prediction; // skip non top view predictions
       const centerX = prediction.box.left + prediction.box.width / 2;
-      // for each prediction from the top view
-      // find the closest prediction not from the top view that has a center x within MIN_DETECT_DIST_PERCENT of the top view prediction
-      // and mark their index as matchingVerticalPairIndex as echothers index
+
+      // Log top view prediction being processed
+      console.log('Processing top view prediction:', {
+        index,
+        centerX,
+        box: prediction.box,
+      });
+
       let closestIndex = -1;
       let closestDistance = null;
       for (let i = 0; i < originalPs.length; i++) {
         if (originalPs[i].isTopView) continue; // skip top view predictions
         if (index === i) continue; // skip itself
-        const otherCenterX = originalPs[i].box.left + originalPs[i].box.width / 2;
-        const distance = Math.abs(centerX - otherCenterX);
+
+        // For side view, we need to flip the x-coordinate since the image is flipped
+        const sideViewCenterX = canvasDim.width - (originalPs[i].box.left + originalPs[i].box.width / 2);
+        const distance = Math.abs(centerX - sideViewCenterX);
+
+        // Log potential match
+        console.log('Potential match:', {
+          topViewIndex: index,
+          sideViewIndex: i,
+          topViewCenterX: centerX,
+          sideViewCenterX: sideViewCenterX,
+          originalSideViewCenterX: originalPs[i].box.left + originalPs[i].box.width / 2,
+          distance,
+          currentClosestDistance: closestDistance,
+        });
+
         if (closestDistance === null || distance < closestDistance) {
           closestDistance = distance;
           closestIndex = i;
         }
       }
-      const matchingVerticalPairIndex = closestIndex;
-      return {
-        ...prediction,
-        matchingVerticalPairIndex,
-      };
-    });
 
-    // tag isTooCloseToOtherDetection
-    taggedPredictions = taggedPredictions.map((prediction, index, originalPs) => {
-      if (!prediction.isTopView) return prediction; // skip non top view predictions
-      const leftEdge = prediction.box.left;
-      const rightEdge = prediction.box.left + prediction.box.width;
-
-      // Check if this box is too close to any other box
-      const isTooCloseToOtherDetection = originalPs.some((otherP, otherIndex) => {
-        if (!otherP.isTopView) return false; // Don't compare with non top view boxes
-        if (index === otherIndex) return false; // Don't compare a box with itself
-
-        const otherLeftEdge = otherP.box.left;
-        const otherRightEdge = otherP.box.left + otherP.box.width;
-
-        const min_dist = MIN_DETECT_DIST_PERCENT * canvasDim.width;
-
-        // Check for overlap
-        const isOverlapping = leftEdge < otherRightEdge && rightEdge > otherLeftEdge;
-        // Check closeness between box's left edge and other box's edges
-        const isLeftClose =
-          Math.abs(leftEdge - otherLeftEdge) < min_dist || Math.abs(leftEdge - otherRightEdge) < min_dist;
-        // Check closeness between box's right edge and other box's edges
-        const isRightClose =
-          Math.abs(rightEdge - otherLeftEdge) < min_dist || Math.abs(rightEdge - otherRightEdge) < min_dist;
-
-        return isOverlapping || isLeftClose || isRightClose;
+      // Log final match
+      console.log('Final match for top view prediction:', {
+        index,
+        matchedIndex: closestIndex,
+        distance: closestDistance,
       });
 
       return {
         ...prediction,
-        isTooCloseToOtherDetection,
+        matchingVerticalPairIndex: closestIndex,
       };
     });
+
+    // Log final tagged predictions
+    console.log(
+      'Final Tagged Predictions:',
+      taggedPredictions.map((p) => ({
+        isTopView: p.isTopView,
+        box: p.box,
+        centerX: p.box.left + p.box.width / 2,
+        centerY: p.box.top + p.box.height / 2,
+        matchingVerticalPairIndex: p.matchingVerticalPairIndex,
+      })),
+    );
 
     return taggedPredictions;
   }
@@ -469,24 +484,31 @@ class DetectorService implements Service {
       height * 0.6, // destination dimensions (60% of canvas)
     );
 
-    const sourceYOffset2 = height * 0.3; // Skip 30% from top
-    const sourceHeight2 = height * 0.4; // Use middle 40% of source image
-
     // For the second image: save context, flip horizontally, draw, then restore
     ctx.save();
     ctx.scale(-1, 1); // Flip horizontally
     ctx.drawImage(
       imageBitmap2,
       0,
-      sourceYOffset2,
+      sourceYOffset, // Use same offset as top view
       width,
-      sourceHeight2, // source dimensions (middle portion)
+      sourceHeight, // Use same height as top view
       -width, // Need to use negative width when flipped
       height * 0.6, // Start at 60% of height
       width,
       height * 0.4, // Use remaining 40% of height
     );
     ctx.restore();
+
+    // Log the dimensions for debugging
+    console.log('Merged Canvas Dimensions:', {
+      width: targetCanvas.width,
+      height: targetCanvas.height,
+      topViewHeight: height * 0.6,
+      sideViewHeight: height * 0.4,
+      sourceYOffset,
+      sourceHeight,
+    });
 
     return targetCanvas;
   }
