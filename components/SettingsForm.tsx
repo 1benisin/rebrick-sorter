@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
 import { useToast } from '@/components/hooks/use-toast';
+import { getSorterLetter } from '@/lib/utils';
 
 const SettingsForm = () => {
   const { settings, saveSettings } = useSettings();
@@ -237,7 +238,7 @@ const SettingsForm = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <ChevronDown className="h-4 w-4" />
-                    <h3 className="text-lg font-semibold">Sorter {index}</h3>
+                    <h3 className="text-lg font-semibold">Sorter {getSorterLetter(index)}</h3>
                   </div>
                   <Button
                     type="button"
