@@ -90,6 +90,12 @@ class VideoCaptureService implements Service {
       },
     });
 
+    const settings1 = mediaStream1.getVideoTracks()[0].getSettings();
+    console.log('mediaStream1', settings1.width, settings1.height);
+
+    const settings2 = mediaStream2.getVideoTracks()[0].getSettings();
+    console.log('mediaStream2', settings2.width, settings2.height);
+
     this.imageCapture1 = new ImageCapture(mediaStream1.getVideoTracks()[0]);
     this.imageCapture2 = new ImageCapture(mediaStream2.getVideoTracks()[0]);
   }
