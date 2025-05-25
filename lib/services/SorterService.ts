@@ -216,7 +216,8 @@ class SortProcessControllerService implements Service {
       const detector = serviceManager.getService(ServiceName.DETECTOR);
 
       const detectionPairs = await detector.detect();
-      console.log('centerX', detectionPairs[0][0].centroid.x);
+
+      console.log('centerX', detectionPairs[0]?.[0]?.centroid.x);
 
       // match detections to proper DetectionGroups
       this.matchDetectionsPairsToGroups(detectionPairs);
