@@ -216,6 +216,8 @@ class SortProcessControllerService implements Service {
       const detector = serviceManager.getService(ServiceName.DETECTOR);
 
       const detectionPairs = await detector.detect();
+      console.log('centerX', detectionPairs[0][0].centroid.x);
+
       // match detections to proper DetectionGroups
       this.matchDetectionsPairsToGroups(detectionPairs);
 
@@ -232,7 +234,7 @@ class SortProcessControllerService implements Service {
     }
 
     if (sortProcessStore.getState().isRunning) {
-      // schedult to run process again after MIN_PROCESS_LOOP_TIME
+      // schedule to run process again after MIN_PROCESS_LOOP_TIME
       const timeToNextRun = Math.max(0, MIN_PROCESS_LOOP_TIME - (Date.now() - startTime));
 
       // console.log('----------- Process End ', (Date.now() + timeToNextRun - startTime) / 1000);
