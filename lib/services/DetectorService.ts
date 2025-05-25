@@ -131,8 +131,6 @@ class DetectorService implements Service {
           return acc.centroid.x < detection.centroid.x ? acc : detection;
         }, detectionPairs[0][0]);
 
-        console.log(`Found detection at x: ${nextDetection.centroid.x}`);
-
         if (lastPosition && lastTimestamp && nextDetection.centroid.x < lastPosition.x) {
           const timeDiff = nextDetection.timestamp - lastTimestamp;
           // Only calculate speed if at least 100ms has passed
@@ -311,17 +309,6 @@ class DetectorService implements Service {
       };
     });
 
-    // Log initial predictions
-    console.log(
-      'Initial Predictions:',
-      taggedPredictions.map((p) => ({
-        isTopView: p.isTopView,
-        box: p.box,
-        centerX: p.box.left + p.box.width / 2,
-        centerY: p.box.top + p.box.height / 2,
-      })),
-    );
-
     // tag isTooCloseToScreenEdge
     taggedPredictions = taggedPredictions.map((prediction) => {
       const leftEdge = prediction.box.left;
@@ -341,13 +328,6 @@ class DetectorService implements Service {
       if (!prediction.isTopView) return prediction; // skip non top view predictions
       const centerX = prediction.box.left + prediction.box.width / 2;
 
-      // Log top view prediction being processed
-      console.log('Processing top view prediction:', {
-        index,
-        centerX,
-        box: prediction.box,
-      });
-
       let closestIndex = -1;
       let closestDistance = null;
       for (let i = 0; i < originalPs.length; i++) {
@@ -358,47 +338,17 @@ class DetectorService implements Service {
         const sideViewCenterX = canvasDim.width - (originalPs[i].box.left + originalPs[i].box.width / 2);
         const distance = Math.abs(centerX - sideViewCenterX);
 
-        // Log potential match
-        console.log('Potential match:', {
-          topViewIndex: index,
-          sideViewIndex: i,
-          topViewCenterX: centerX,
-          sideViewCenterX: sideViewCenterX,
-          originalSideViewCenterX: originalPs[i].box.left + originalPs[i].box.width / 2,
-          distance,
-          currentClosestDistance: closestDistance,
-        });
-
         if (closestDistance === null || distance < closestDistance) {
           closestDistance = distance;
           closestIndex = i;
         }
       }
 
-      // Log final match
-      console.log('Final match for top view prediction:', {
-        index,
-        matchedIndex: closestIndex,
-        distance: closestDistance,
-      });
-
       return {
         ...prediction,
         matchingVerticalPairIndex: closestIndex,
       };
     });
-
-    // Log final tagged predictions
-    console.log(
-      'Final Tagged Predictions:',
-      taggedPredictions.map((p) => ({
-        isTopView: p.isTopView,
-        box: p.box,
-        centerX: p.box.left + p.box.width / 2,
-        centerY: p.box.top + p.box.height / 2,
-        matchingVerticalPairIndex: p.matchingVerticalPairIndex,
-      })),
-    );
 
     return taggedPredictions;
   }
@@ -499,16 +449,6 @@ class DetectorService implements Service {
       height * 0.4, // Use remaining 40% of height
     );
     ctx.restore();
-
-    // Log the dimensions for debugging
-    console.log('Merged Canvas Dimensions:', {
-      width: targetCanvas.width,
-      height: targetCanvas.height,
-      topViewHeight: height * 0.6,
-      sideViewHeight: height * 0.4,
-      sourceYOffset,
-      sourceHeight,
-    });
 
     return targetCanvas;
   }
