@@ -61,6 +61,8 @@ const DualVideo = () => {
         .getUserMedia({ video: { deviceId: { exact: selectedDeviceId1 } } })
         .then((s) => {
           stream = s;
+          const settings = stream.getVideoTracks()[0].getSettings();
+          console.log('stream', settings.width, settings.height);
           if (videoRef1.current) {
             videoRef1.current.srcObject = stream;
           }
@@ -90,6 +92,8 @@ const DualVideo = () => {
         .getUserMedia({ video: { deviceId: { exact: selectedDeviceId2 } } })
         .then((s) => {
           stream = s;
+          const settings = stream.getVideoTracks()[0].getSettings();
+          console.log('stream', settings.width, settings.height);
           if (videoRef2.current) {
             videoRef2.current.srcObject = stream;
           }
