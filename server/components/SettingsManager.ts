@@ -83,8 +83,11 @@ export class SettingsManager extends BaseComponent {
             if (settingsData) {
               try {
                 const settings = settingsSchema.parse(settingsData);
-                this.settings = settings;
-                await this.notifySettingsUpdateCallbacks(settings);
+                // Only notify if settings actually changed
+                if (JSON.stringify(settings) !== JSON.stringify(this.settings)) {
+                  this.settings = settings;
+                  await this.notifySettingsUpdateCallbacks(settings);
+                }
               } catch (error) {
                 this.setError(error instanceof Error ? error.message : 'Error processing settings update');
               }
