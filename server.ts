@@ -22,6 +22,12 @@ app.prepare().then(async () => {
 
   // Create and initialize server
   const systemCoordinator = new SystemCoordinator(io);
+  try {
+    await systemCoordinator.initializeComponents();
+  } catch (error) {
+    console.error('Critical error during component initialization. Server shutting down.', error);
+    process.exit(1);
+  }
 
   httpServer
     .once('error', (err) => {
