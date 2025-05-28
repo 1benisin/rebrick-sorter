@@ -70,32 +70,40 @@ export class SystemCoordinator {
     this.socketManager.setSocket(socket);
 
     // Initialize components
-    await this.initializeComponents();
+    // await this.initializeComponents(); // Removed for eager initialization
   }
 
-  private async initializeComponents(): Promise<void> {
+  public async initializeComponents(): Promise<void> {
+    console.log('Starting component initialization...');
     try {
-      // Initialize socket manager first
+      console.log('Initializing SocketManager...');
       await this.socketManager.initialize();
+      console.log('SocketManager initialized successfully.');
 
-      // Initialize settings manager to get initial settings
+      console.log('Initializing SettingsManager...');
       await this.settingsManager.initialize();
+      console.log('SettingsManager initialized successfully.');
 
-      // Initialize device manager with settings
+      console.log('Initializing DeviceManager...');
       await this.deviceManager.initialize();
+      console.log('DeviceManager initialized successfully.');
 
-      // Initialize speed manager
+      console.log('Initializing SpeedManager...');
       await this.speedManager.initialize();
+      console.log('SpeedManager initialized successfully.');
 
-      // Initialize sorter manager
+      console.log('Initializing SorterManager...');
       await this.sorterManager.initialize();
+      console.log('SorterManager initialized successfully.');
 
-      // Initialize conveyor manager
+      console.log('Initializing ConveyorManager...');
       await this.conveyorManager.initialize();
+      console.log('ConveyorManager initialized successfully.');
 
-      console.log('Initialized all components =============================');
+      console.log('All components initialized successfully. =============================');
     } catch (error) {
-      console.error('\x1b[33mError initializing components:\x1b[0m', error);
+      console.error('\x1b[33mError during component initialization process:\x1b[0m', error);
+      throw error;
     }
   }
 
