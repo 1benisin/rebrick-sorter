@@ -1,0 +1,21 @@
+{
+  "configurations": [
+    {
+      "name": "Mac",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "/Applications/Arduino.app/Contents/Java/hardware/arduino/avr/cores/arduino",
+        "/Applications/Arduino.app/Contents/Java/hardware/arduino/avr/variants/standard",
+        "/Applications/Arduino.app/Contents/Java/hardware/tools/avr/avr/include",
+        "/Users/benjaminclark/Documents/Arduino/libraries/**"
+      ],
+      "defines": ["USBCON"],
+      "macFrameworkPath": ["/System/Library/Frameworks", "/Library/Frameworks"],
+      "compilerPath": "/usr/bin/clang",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "macos-clang-x64"
+    }
+  ],
+  "version": 4
+}
