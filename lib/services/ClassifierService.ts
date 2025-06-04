@@ -37,7 +37,7 @@ class ClassifierService implements Service {
       }
 
       // load catalog data
-      const storageRef = ref(storage, 'catalogData_v3.json.gz');
+      const storageRef = ref(storage, 'catalogData_v4.json.gz');
       const catalogUrl = await getDownloadURL(storageRef);
       const response = await axios.get(catalogUrl, {
         responseType: 'arraybuffer',
@@ -65,6 +65,10 @@ class ClassifierService implements Service {
       );
 
       this.binLookup = binLookupSchema.parse(formattedBinLookup);
+      console.log(
+        'Successfully loaded and parsed catalogData_v4.json.gz. Entries in binLookup:',
+        Object.keys(this.binLookup).length,
+      );
       this.state = ServiceState.INITIALIZED;
     } catch (error) {
       console.error('Error initializing classifier:', error);
