@@ -65,19 +65,16 @@ int ReadDistance(unsigned char device);
 bool getLatestDistanceReading(unsigned short &reading); // New function to get reading when available
 
 void setup() {
+  Serial.begin(9600,SERIAL_8N1); // Initialize serial once at the start
 
   // Check if the WDT caused the last reset
   if (MCUSR & (1 << WDRF)) {
-    Serial.begin(9600,SERIAL_8N1); // Initialize serial early for this message
     Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
     // Clear the WDT reset flag
     MCUSR &= ~(1 << WDRF);
   }
 
   Wire.begin(); 
-  if (!Serial) { // If serial wasn't initialized above for WDT message
-    Serial.begin(9600,SERIAL_8N1);
-  }
 
   // Enable Watchdog Timer with an 8-second timeout
   wdt_enable(WDTO_8S);
