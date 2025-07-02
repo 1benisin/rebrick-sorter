@@ -338,25 +338,29 @@ void processSettings(char *message) {
     token = strtok(NULL, ",");
   }
 
-  // Apply settings if all validations pass
-  HOPPER_CYCLE_INTERVAL = values[0];
-  FEEDER_VIBRATION_SPEED = values[1];
-  FEEDER_STOP_DELAY = values[2];
-  FEEDER_PAUSE_TIME = values[3];
-  FEEDER_SHORT_MOVE_TIME = values[4];
-  FEEDER_LONG_MOVE_TIME = values[5];
+  if (valueIndex >= 6) {
+    // Apply settings if all validations pass
+    HOPPER_CYCLE_INTERVAL = values[0];
+    FEEDER_VIBRATION_SPEED = values[1];
+    FEEDER_STOP_DELAY = values[2];
+    FEEDER_PAUSE_TIME = values[3];
+    FEEDER_SHORT_MOVE_TIME = values[4];
+    FEEDER_LONG_MOVE_TIME = values[5];
 
-  // Reset all state variables to their initial values
-  currFeederState = FeederState::start_moving;
-  currHopperState = HopperState::waiting_top;
-  totalFeederVibrationTime = 0;
-  lastFeederActionTime = 0;
-  feederVibrationStartTime = 0;
-  lastHopperActionTime = 0;
-  lastDebugTime = 0;
+    // Reset all state variables to their initial values
+    currFeederState = FeederState::start_moving;
+    currHopperState = HopperState::waiting_top;
+    totalFeederVibrationTime = 0;
+    lastFeederActionTime = 0;
+    feederVibrationStartTime = 0;
+    lastHopperActionTime = 0;
+    lastDebugTime = 0;
 
-  settingsInitialized = true;
-  Serial.println("Settings updated successfully");
+    settingsInitialized = true;
+    Serial.println("Settings updated");
+  } else {
+    Serial.println("Error: Not enough settings provided");
+  }
 }
 
 #define START_MARKER '<'
