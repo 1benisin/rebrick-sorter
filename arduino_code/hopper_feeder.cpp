@@ -1,7 +1,6 @@
 #include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
-#include <avr/wdt.h> // Watchdog Timer
 
 #define AUTO_DISABLE true
 
@@ -41,7 +40,9 @@ enum class SensorReadState : uint8_t {
 SensorReadState currentSensorState = SensorReadState::IDLE;
 unsigned long sensorRequestTime = 0;
 const unsigned long SENSOR_READ_DELAY_US = 30; // Minimum delay from datasheet
- 
+unsigned long sensorWaitStartTime = 0; // for timeout
+const unsigned long SENSOR_READ_TIMEOUT_MS = 10;
+
 // -- Feeder Variables
 #define FEEDER_RPWM_PIN 11    // Changed from FEEDER_ENABLE_PIN
 #define FEEDER_R_EN_PIN 8     // Changed from FEEDER_MOTOR_PIN1
@@ -67,17 +68,7 @@ bool getLatestDistanceReading(unsigned short &reading); // New function to get r
 void setup() {
   Serial.begin(9600,SERIAL_8N1); // Initialize serial once at the start
 
-  // Check if the WDT caused the last reset
-  if (MCUSR & (1 << WDRF)) {
-    Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
-    // Clear the WDT reset flag
-    MCUSR &= ~(1 << WDRF);
-  }
-
   Wire.begin(); 
-
-  // Enable Watchdog Timer with an 8-second timeout
-  wdt_enable(WDTO_8S);
 
   pinMode(FEEDER_RPWM_PIN, OUTPUT);
   pinMode(FEEDER_R_EN_PIN, OUTPUT);
@@ -380,40 +371,22 @@ void loop() {
       message_pos = 0;
     }
     else if (inByte == END_MARKER) {
-      if (capturingMessage) { // Only process if a valid message was being captured
-        message[message_pos] = '\0';  // Null terminate
-        processMessage(message);
-      }
-      capturingMessage = false; // Always stop capturing and reset for the next message
-      message_pos = 0;          // Reset position
+      capturingMessage = false;
+      message[message_pos] = '\0';  // Null terminate the string
+      processMessage(message);
     }
     else if (capturingMessage) {
-      // Check if there's space for the current character AND the null terminator
-      if (message_pos < MAX_MESSAGE_LENGTH - 1) { 
-        message[message_pos] = inByte;
-        message_pos++;
-      } else {
-        // Buffer is full, this character would overflow message data part (before null terminator)
-        Serial.println("Error: Message too long"); // Task 5.2
-        capturingMessage = false; // Task 5.1
-        
-        // Task 5.3: Discard remaining bytes currently in the Serial.available() buffer
-        while (Serial.available() > 0) {
-          Serial.read(); // Discard byte
-        }
-        message_pos = 0; // Reset message position after overflow and flush
+      message[message_pos] = inByte;
+      message_pos++;
+      if (message_pos >= MAX_MESSAGE_LENGTH) {
+        capturingMessage = false;
+        Serial.println("Error: Message too long");
       }
     }
-    // If not START_MARKER, not END_MARKER, and not capturingMessage (e.g. after an overflow error),
-    // inByte is implicitly discarded by this loop structure continuing. The explicit flush above
-    // handles the case where the serial buffer might have many more bytes from the oversized message.
   }
 
   checkFeeder();
   checkHopper();
-
-  // Reset the watchdog timer at the end of each loop iteration
-  wdt_reset();
 }
 
 // Non-blocking sensor read function
@@ -441,6 +414,7 @@ bool processSensorReading(unsigned char deviceAddr) {
     if (micros() - sensorRequestTime >= SENSOR_READ_DELAY_US) {
       currentSensorState = SensorReadState::WAITING_FOR_READING;
       Wire.requestFrom(deviceAddr, (unsigned char)2); // request 2 bytes
+      sensorWaitStartTime = millis(); // Start timeout timer
     }
     return false; // Reading not yet available
   }
@@ -455,6 +429,15 @@ bool processSensorReading(unsigned char deviceAddr) {
       currentSensorState = SensorReadState::IDLE; // Reset for next read
       return true; // New reading is available
     }
+    
+    // Timeout check
+    if (millis() - sensorWaitStartTime > SENSOR_READ_TIMEOUT_MS) {
+        Serial.println("Error: Sensor read timeout. Defaulting to part detected.");
+        distanceReading = 0; // Default to a value that indicates a part is detected
+        currentSensorState = SensorReadState::IDLE; // Reset for next attempt
+        return true; // Return true as we've "handled" it by providing a default.
+    }
+    
     // Optional: Add a timeout here if Wire.available() never gets to 2
     return false; // Reading not yet available
   }
