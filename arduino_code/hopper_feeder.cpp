@@ -485,38 +485,6 @@ bool getLatestDistanceReading(unsigned short &reading) {
     return false;
 }
 
-void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr) 
-{
-  unsigned short result=0;
-  // step 1: instruct sensor to read echoes
-
-  Wire.beginTransmission(deviceAddr); // transmit to device address, factory default #82 (0x52)
-  Wire.write(byte(addr));      // sets distance data address (addr)
-  Wire.endTransmission();      // stop transmitting
-  
-  // NON_BLOCKING_CHANGE: Replaced delay(1) with state machine logic handled by 
-  // initiateDistanceRead and processSensorReading
-  // step 2: wait for readings to happen
-  // delay(1);                   // datasheet suggests at least 30uS
-  
-  // step 3: request reading from sensor
-  Wire.requestFrom(deviceAddr, cnt);    // request cnt bytes from slave device #82 (0x52)
-  // step 5: receive reading from sensor
-  if (cnt <= Wire.available()) { // if two bytes were received
-    *datbuf++ = Wire.read();  // receive high byte (overwrites previous reading)
-    *datbuf++ = Wire.read(); // receive low byte as lower 8 bits
-  }
-}
- 
-int ReadDistance(unsigned char device){
-    // NON_BLOCKING_CHANGE: This function is now a simple wrapper.
-    // The actual work is done by initiateDistanceRead and processSensorReading.
-    // It initiates a read if idle and returns the last known value.
-    initiateDistanceRead(device);
-    return distanceReading; // Returns last known value, might be stale if read in progress
-}
-
-
 // HOW TO CHANGE DEPTH SENSOR DEVICE I2C ADDRESS_____________________________________________________________________________
 
 // the address specified in the datasheet is 164 (0xa4)
