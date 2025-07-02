@@ -488,13 +488,10 @@ export class DeviceManager extends BaseComponent {
           FEEDER_LONG_MOVE_TIME: settings.feederLongMoveTime,
         };
 
-        // Only send update if settings actually changed
-        if (JSON.stringify(config) !== JSON.stringify(hopperFeeder.config)) {
-          this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
-          const configMessage = this.buildHopperFeederInitMessage(config);
-          if (configMessage) {
-            this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
-          }
+        this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
+        const configMessage = this.buildHopperFeederInitMessage(config);
+        if (configMessage) {
+          this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
         }
       }
 
