@@ -7,6 +7,7 @@
 
 #define FEEDER_DEBUG false
 #define HOPPER_DEBUG false
+#define SYSTEM_DEBUG true
 
 #define ENABLE_PIN 6
 #define DIR_PIN 5
@@ -80,7 +81,9 @@ void setup() {
 
   // Now, check if the WDT caused the last reset and log it if so.
   if (MCUSR & (1 << WDRF)) {
-    Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
+    if (FEEDER_DEBUG || HOPPER_DEBUG) {
+      Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
+    }
     // Clear the WDT reset flag so it doesn't trigger again on subsequent boots
     MCUSR &= ~(1 << WDRF);
   }
@@ -114,7 +117,9 @@ void setup() {
 
     hopperStepper->move(100);
   }
-  Serial.println("Ready"); 
+  if (SYSTEM_DEBUG) {
+    Serial.println("Ready");
+  } 
 }
 
 void startMotor() {
@@ -151,7 +156,9 @@ void checkFeeder() {
     case FeederState::start_moving: {
       // This state now initiates the ramp-up for a long move.
       feederVibrationStartTime = currentMillis;
-      Serial.println("FeederSTATE: -> ramp_up_move");
+      if (FEEDER_DEBUG) {
+        Serial.println("FeederSTATE: -> ramp_up_move");
+      }
       currFeederState = FeederState::ramp_up_move;
       // Motor is started within ramp_up_move state
       break;
@@ -163,7 +170,9 @@ void checkFeeder() {
       if (partDetected) {
         stopMotor();
         totalFeederVibrationTime += elapsedTime;
-        Serial.println("FeederSTATE: -> paused (from ramp_up_move, part detected)");
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from ramp_up_move, part detected)");
+        }
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
         break; // Exit immediately
@@ -172,7 +181,9 @@ void checkFeeder() {
       if (elapsedTime >= FEEDER_LONG_MOVE_TIME) { // Also check for total timeout during ramp
         stopMotor();
         totalFeederVibrationTime += elapsedTime;
-        Serial.println("FeederSTATE: -> paused (from ramp_up_move, timeout)");
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from ramp_up_move, timeout)");
+        }
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
         break;
@@ -186,7 +197,9 @@ void checkFeeder() {
       } else {
         // Ramp-up finished, transition to full-speed moving
         startMotor(); // Set to full speed
-        Serial.println("FeederSTATE: -> moving (from ramp_up_move)");
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> moving (from ramp_up_move)");
+        }
         currFeederState = FeederState::moving;
       }
       break;
@@ -202,7 +215,9 @@ void checkFeeder() {
         //  update total vibration time
         totalFeederVibrationTime += elapsedTime;
         stopMotor();
-        Serial.println("FeederSTATE: -> paused (from moving)");
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from moving)");
+        }
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
@@ -215,11 +230,15 @@ void checkFeeder() {
         if (partDetected) { 
           startMotor(); 
           feederVibrationStartTime = currentMillis;
-          Serial.println("FeederSTATE: -> short_move (from paused)");
+          if (FEEDER_DEBUG) {
+            Serial.println("FeederSTATE: -> short_move (from paused)");
+          }
           currFeederState = FeederState::short_move;
           lastFeederActionTime = currentMillis;
         } else {
-          Serial.println("FeederSTATE: -> start_moving (from paused)");
+          if (FEEDER_DEBUG) {
+            Serial.println("FeederSTATE: -> start_moving (from paused)");
+          }
           currFeederState = FeederState::start_moving;
         }
       }
@@ -231,7 +250,9 @@ void checkFeeder() {
         stopMotor();
         // Correctly account for the vibration time of the short move
         totalFeederVibrationTime += (currentMillis - lastFeederActionTime);
-        Serial.println("FeederSTATE: -> paused (from short_move)");
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from short_move)");
+        }
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
@@ -276,7 +297,9 @@ void checkHopper()
       }
       totalFeederVibrationTime = 0;
       hopperStepper->move(-hopperFullStrokeSteps-20);
-      Serial.println("HopperSTATE: -> moving_down");
+      if (HOPPER_DEBUG) {
+        Serial.println("HopperSTATE: -> moving_down");
+      }
       currHopperState = HopperState::moving_down;
     } 
     break;
@@ -285,7 +308,9 @@ void checkHopper()
       if (digitalRead(STOP_PIN) == LOW || !hopperStepper->isRunning()) {
         hopperStepper->forceStopAndNewPosition(0);
         lastHopperActionTime = currentMillis;      
-        Serial.println("HopperSTATE: -> waiting_bottom");
+        if (HOPPER_DEBUG) {
+          Serial.println("HopperSTATE: -> waiting_bottom");
+        }
         currHopperState = HopperState::waiting_bottom;
       }
       break;
@@ -293,14 +318,18 @@ void checkHopper()
     case HopperState::waiting_bottom:
       if (currentMillis - lastHopperActionTime >= hopperBottomWaitTime) {
         hopperStepper->move(hopperFullStrokeSteps);
-        Serial.println("HopperSTATE: -> moving_up");
+        if (HOPPER_DEBUG) {
+          Serial.println("HopperSTATE: -> moving_up");
+        }
         currHopperState = HopperState::moving_up;
       } 
       break;
 
     case HopperState::moving_up:
       if (!hopperStepper->isRunning()) {
-        Serial.println("HopperSTATE: -> waiting_top");
+        if (HOPPER_DEBUG) {
+          Serial.println("HopperSTATE: -> waiting_top");
+        }
         currHopperState = HopperState::waiting_top;
       } 
       break;
@@ -310,7 +339,9 @@ void checkHopper()
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    Serial.println("Settings not initialized");
+    if (SYSTEM_DEBUG) {
+      Serial.println("Settings not initialized");
+    }
     return;
   }
 
@@ -323,13 +354,17 @@ void processMessage(char *message) {
     case 'p': { // pause time update
       // Format: 'p,<new_pause_time>'
       if (message[1] != ',') {
-        Serial.println("Error: Invalid pause time message format");
+        if (FEEDER_DEBUG) {
+          Serial.println("Error: Invalid pause time message format");
+        }
         return;
       }
       
       char *token = strtok(&message[2], ",");
       if (!token) {
-        Serial.println("Error: Missing pause time value");
+        if (FEEDER_DEBUG) {
+          Serial.println("Error: Missing pause time value");
+        }
         return;
       }
       
@@ -355,12 +390,16 @@ void processMessage(char *message) {
         hopperStepper->forceStop();
         currHopperState = HopperState::waiting_top;
       }
-      Serial.println(message[1] == '1' ? "hopper on" : "hopper off");
+      if (HOPPER_DEBUG) {
+        Serial.println(message[1] == '1' ? "hopper on" : "hopper off");
+      }
       break;
     }
 
     default: {
-      Serial.println("no matching serial communication");
+      if (SYSTEM_DEBUG) {
+        Serial.println("no matching serial communication");
+      }
       break;
     }
   }
@@ -373,7 +412,9 @@ void processSettings(char *message) {
   
   // Validate message format
   if (message[0] != 's' || message[1] != ',') {
-    Serial.println("Error: Invalid message format");
+    if (SYSTEM_DEBUG) {
+      Serial.println("Error: Invalid message format");
+    }
     return;
   }
 
@@ -409,9 +450,13 @@ void processSettings(char *message) {
     lastDebugTime = 0;
 
     settingsInitialized = true;
-    Serial.println("Settings updated");
+    if (SYSTEM_DEBUG) {
+      Serial.println("Settings updated");
+    }
   } else {
-    Serial.println("Error: Not enough settings provided");
+    if (SYSTEM_DEBUG) {
+      Serial.println("Error: Not enough settings provided");
+    }
   }
 }
 
@@ -430,14 +475,18 @@ void loop() {
   // where the initial "Ready" message from setup() might be missed by the server.
   if (!settingsInitialized) {
     if (currentLoopMillis - lastReadySendTime >= 2000) { // Send every 2 seconds
-      Serial.println("Ready");
+      if (SYSTEM_DEBUG) {
+        Serial.println("Ready");
+      }
       lastReadySendTime = currentLoopMillis;
     }
   }
 
   // Heartbeat for main loop
   if (currentLoopMillis - lastHeartbeatTime >= 5000) {
-    Serial.println("HEARTBEAT: Main loop is alive.");
+    if (SYSTEM_DEBUG) {
+      Serial.println("HEARTBEAT: Main loop is alive.");
+    }
     lastHeartbeatTime = currentLoopMillis;
   }
 
@@ -449,16 +498,20 @@ void loop() {
     char inByte = Serial.read();
 
     if(inByte == START_MARKER) {
-      Serial.println("SERIAL: Start marker '<' received.");
+      if (SYSTEM_DEBUG) {
+        Serial.println("SERIAL: Start marker '<' received.");
+      }
       capturingMessage = true;
       message_pos = 0;
     }
     else if (inByte == END_MARKER) {
       capturingMessage = false;
       message[message_pos] = '\0';  // Null terminate the string
-      Serial.print("SERIAL: End marker '>' received. Processing: <");
-      Serial.print(message);
-      Serial.println(">");
+      if (SYSTEM_DEBUG) {
+        Serial.print("SERIAL: End marker '>' received. Processing: <");
+        Serial.print(message);
+        Serial.println(">");
+      }
       processMessage(message);
     }
     else if (capturingMessage) {
@@ -466,7 +519,9 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        Serial.println("SERIAL ERROR: Message too long");
+        if (SYSTEM_DEBUG) {
+          Serial.println("SERIAL ERROR: Message too long");
+        }
       }
     }
   }
@@ -522,7 +577,9 @@ bool processSensorReading(unsigned char deviceAddr) {
     
     // Timeout check
     if (millis() - sensorWaitStartTime > SENSOR_READ_TIMEOUT_MS) {
-        Serial.println("ERROR: Sensor read timeout.");
+        if (FEEDER_DEBUG) {
+          Serial.println("ERROR: Sensor read timeout.");
+        }
         // Default to a value that indicates NO part is detected.
         // This prevents the state machine from getting stuck thinking a part is present.
         // The feeder will continue its cycle, making the failure mode active and observable.
