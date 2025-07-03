@@ -1,3 +1,4 @@
+
 #include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
@@ -16,8 +17,8 @@
 #define ACCELERATION 1000
 #define SPEED 1000 
 
-#define RAMP_UP_DURATION 1000 // ms
-#define RAMP_START_SPEED 45   // a lower speed to start with
+#define RAMP_UP_DURATION 1500 // ms
+#define RAMP_START_SPEED 60   // a lower speed to start with
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
