@@ -1,6 +1,7 @@
 #include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
+#include <avr/wdt.h> // Watchdog Timer for automatic reset on freeze
 
 #define AUTO_DISABLE true
 
@@ -70,9 +71,21 @@ int ReadDistance(unsigned char device);
 bool getLatestDistanceReading(unsigned short &reading); // New function to get reading when available
 
 void setup() {
-  Serial.begin(9600,SERIAL_8N1); // Initialize serial once at the start
+  // Check if the WDT caused the last reset. This is a critical diagnostic tool.
+  if (MCUSR & (1 << WDRF)) {
+    Serial.begin(9600,SERIAL_8N1); // Initialize serial early for this message
+    Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
+    // Clear the WDT reset flag so it doesn't trigger again on subsequent boots
+    MCUSR &= ~(1 << WDRF);
+  }
 
   Wire.begin(); 
+  if (!Serial) { // If serial wasn't initialized above for WDT message
+    Serial.begin(9600,SERIAL_8N1);
+  }
+
+  // Enable Watchdog Timer with an 8-second timeout. If loop() hangs for 8s, Arduino will auto-reboot.
+  wdt_enable(WDTO_8S);
 
   pinMode(FEEDER_RPWM_PIN, OUTPUT);
   pinMode(FEEDER_R_EN_PIN, OUTPUT);
@@ -180,9 +193,6 @@ void checkFeeder() {
       unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
     
       // Motor is already at full speed. We just check for stop conditions.
-      if (FEEDER_PAUSE_TIME == 0) {
-        return;
-      }
       
       // Check both conditions: part detection or long move time elapsed
       if (partDetected || (elapsedTime >= FEEDER_LONG_MOVE_TIME)) {
@@ -449,6 +459,10 @@ void loop() {
 
   checkFeeder();
   checkHopper();
+
+  // Reset the watchdog timer at the end of every successful loop.
+  // If this line isn't reached for 8 seconds (e.g., due to a freeze), the system will reset.
+  wdt_reset();
 }
 
 // Non-blocking sensor read function
@@ -494,8 +508,11 @@ bool processSensorReading(unsigned char deviceAddr) {
     
     // Timeout check
     if (millis() - sensorWaitStartTime > SENSOR_READ_TIMEOUT_MS) {
-        Serial.println("Error: Sensor read timeout. Defaulting to part detected.");
-        distanceReading = 0; // Default to a value that indicates a part is detected
+        Serial.println("ERROR: Sensor read timeout.");
+        // Default to a value that indicates NO part is detected.
+        // This prevents the state machine from getting stuck thinking a part is present.
+        // The feeder will continue its cycle, making the failure mode active and observable.
+        distanceReading = UINT_MAX; 
         currentSensorState = SensorReadState::IDLE; // Reset for next attempt
         return true; // Return true as we've "handled" it by providing a default.
     }

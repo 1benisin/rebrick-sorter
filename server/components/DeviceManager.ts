@@ -444,7 +444,16 @@ export class DeviceManager extends BaseComponent {
       return;
     }
 
-    const message = `p,${pauseTime}`;
+    // Safeguard against invalid pause time values that could cause unintended behavior on the Arduino.
+    // The Arduino's atoi() function can interpret NaN or Infinity as 0,
+    // which previously triggered a latent bug causing the feeder to run indefinitely.
+    // We enforce a small minimum pause time to ensure stability.
+    let safePauseTime = Math.round(pauseTime); // Ensure it's an integer
+    if (!isFinite(safePauseTime) || safePauseTime < 10) {
+      safePauseTime = 10; // Enforce a minimum of 10ms
+    }
+
+    const message = `p,${safePauseTime}`;
     const formattedMessage = `<${message}>`;
 
     console.log(`\x1b[36m[TX -> ${DeviceName.HOPPER_FEEDER}]\x1b[0m Sending command: ${formattedMessage}`);
