@@ -152,11 +152,13 @@ export class DeviceManager extends BaseComponent {
       // Add error listener for hopper_feeder
       if (deviceName === DeviceName.HOPPER_FEEDER) {
         deviceInfo.device.on('error', async (err: Error) => {
+          console.log(`\x1b[31m[DEBUG] HOPPER_FEEDER 'error' event triggered. Error: ${err.message}\x1b[0m`);
           console.error(`\x1b[33mError on hopper_feeder device ${deviceInfo.portName}:\x1b[0m`, err);
           await this.handleDisconnect(deviceName, 'error');
         });
 
         deviceInfo.device.on('close', async () => {
+          console.log(`\x1b[31m[DEBUG] HOPPER_FEEDER 'close' event triggered.\x1b[0m`);
           console.log(`\x1b[33mPort closed for hopper_feeder device ${deviceInfo.portName}\x1b[0m`);
           await this.handleDisconnect(deviceName, 'close');
         });
@@ -172,6 +174,7 @@ export class DeviceManager extends BaseComponent {
   }
 
   private async handleDisconnect(deviceName: DeviceName, reason: string): Promise<void> {
+    console.log(`\x1b[31m[DEBUG] Entering handleDisconnect for ${deviceName} due to: ${reason}\x1b[0m`);
     console.log(`\x1b[33mDevice ${deviceName} disconnected due to ${reason}. Initiating disconnect procedure.\x1b[0m`);
     const deviceInfo = this.devices.get(deviceName);
 
