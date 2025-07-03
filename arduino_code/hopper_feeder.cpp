@@ -72,18 +72,17 @@ int ReadDistance(unsigned char device);
 bool getLatestDistanceReading(unsigned short &reading); // New function to get reading when available
 
 void setup() {
-  // Check if the WDT caused the last reset. This is a critical diagnostic tool.
+  // The very first thing we do is initialize the serial port so we can always send debug messages.
+  Serial.begin(9600,SERIAL_8N1);
+
+  // Now, check if the WDT caused the last reset and log it if so.
   if (MCUSR & (1 << WDRF)) {
-    Serial.begin(9600,SERIAL_8N1); // Initialize serial early for this message
     Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
     // Clear the WDT reset flag so it doesn't trigger again on subsequent boots
     MCUSR &= ~(1 << WDRF);
   }
 
   Wire.begin(); 
-  if (!Serial) { // If serial wasn't initialized above for WDT message
-    Serial.begin(9600,SERIAL_8N1);
-  }
 
   // Enable Watchdog Timer with an 8-second timeout. If loop() hangs for 8s, Arduino will auto-reboot.
   wdt_enable(WDTO_8S);
