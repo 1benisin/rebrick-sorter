@@ -122,7 +122,7 @@ void checkFeeder() {
 
   // Add sensor reading debug
   int distance = ReadDistance(distanceSensorAddress);
-  bool partDetected = distance < 50;
+  bool partDetected = distance < 20;
   if (FEEDER_DEBUG && partDetected) {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
