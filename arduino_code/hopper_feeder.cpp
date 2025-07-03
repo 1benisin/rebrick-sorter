@@ -65,6 +65,7 @@ int FEEDER_LONG_MOVE_TIME = 3000;   // Maximum time to run feeder before stoppin
 // Debug variables
 unsigned long lastDebugTime = 0;     // For controlling debug print frequency
 unsigned long lastHeartbeatTime = 0; // For main loop heartbeat
+unsigned long lastReadySendTime = 0; // For periodic "Ready" signal
 
 // Function declarations
 int ReadDistance(unsigned char device);
@@ -420,8 +421,19 @@ void loop() {
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
 
-  // Heartbeat for main loop
   unsigned long currentLoopMillis = millis();
+
+  // If the device hasn't received its settings, it periodically sends a "Ready"
+  // signal to the server. This makes the startup handshake robust against race conditions
+  // where the initial "Ready" message from setup() might be missed by the server.
+  if (!settingsInitialized) {
+    if (currentLoopMillis - lastReadySendTime >= 2000) { // Send every 2 seconds
+      Serial.println("Ready");
+      lastReadySendTime = currentLoopMillis;
+    }
+  }
+
+  // Heartbeat for main loop
   if (currentLoopMillis - lastHeartbeatTime >= 5000) {
     Serial.println("HEARTBEAT: Main loop is alive.");
     lastHeartbeatTime = currentLoopMillis;
