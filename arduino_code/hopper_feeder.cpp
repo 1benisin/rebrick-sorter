@@ -74,6 +74,9 @@ bool getLatestDistanceReading(unsigned short &reading); // New function to get r
 void setup() {
   // The very first thing we do is initialize the serial port so we can always send debug messages.
   Serial.begin(9600,SERIAL_8N1);
+  // A small delay to allow the serial port to stabilize and for the server to
+  // connect before we start sending data. This helps prevent garbled initial messages.
+  delay(500);
 
   // Now, check if the WDT caused the last reset and log it if so.
   if (MCUSR & (1 << WDRF)) {
