@@ -5,7 +5,7 @@
 #define AUTO_DISABLE true
 
 #define FEEDER_DEBUG false
-#define HOPPER_DEBUG true
+#define HOPPER_DEBUG false
 
 #define ENABLE_PIN 6
 #define DIR_PIN 5
