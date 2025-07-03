@@ -1,4 +1,3 @@
-
 #include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
@@ -64,6 +63,7 @@ int FEEDER_LONG_MOVE_TIME = 3000;   // Maximum time to run feeder before stoppin
 
 // Debug variables
 unsigned long lastDebugTime = 0;     // For controlling debug print frequency
+unsigned long lastHeartbeatTime = 0; // For main loop heartbeat
 
 // Function declarations
 int ReadDistance(unsigned char device);
@@ -135,6 +135,7 @@ void checkFeeder() {
     case FeederState::start_moving: {
       // This state now initiates the ramp-up for a long move.
       feederVibrationStartTime = currentMillis;
+      Serial.println("FeederSTATE: -> ramp_up_move");
       currFeederState = FeederState::ramp_up_move;
       // Motor is started within ramp_up_move state
       break;
@@ -146,6 +147,7 @@ void checkFeeder() {
       if (partDetected) {
         stopMotor();
         totalFeederVibrationTime += elapsedTime;
+        Serial.println("FeederSTATE: -> paused (from ramp_up_move, part detected)");
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
         break; // Exit immediately
@@ -154,6 +156,7 @@ void checkFeeder() {
       if (elapsedTime >= FEEDER_LONG_MOVE_TIME) { // Also check for total timeout during ramp
         stopMotor();
         totalFeederVibrationTime += elapsedTime;
+        Serial.println("FeederSTATE: -> paused (from ramp_up_move, timeout)");
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
         break;
@@ -167,6 +170,7 @@ void checkFeeder() {
       } else {
         // Ramp-up finished, transition to full-speed moving
         startMotor(); // Set to full speed
+        Serial.println("FeederSTATE: -> moving (from ramp_up_move)");
         currFeederState = FeederState::moving;
       }
       break;
@@ -185,6 +189,7 @@ void checkFeeder() {
         //  update total vibration time
         totalFeederVibrationTime += elapsedTime;
         stopMotor();
+        Serial.println("FeederSTATE: -> paused (from moving)");
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
@@ -197,9 +202,11 @@ void checkFeeder() {
         if (partDetected) { 
           startMotor(); 
           feederVibrationStartTime = currentMillis;
+          Serial.println("FeederSTATE: -> short_move (from paused)");
           currFeederState = FeederState::short_move;
           lastFeederActionTime = currentMillis;
         } else {
+          Serial.println("FeederSTATE: -> start_moving (from paused)");
           currFeederState = FeederState::start_moving;
         }
       }
@@ -211,6 +218,7 @@ void checkFeeder() {
         stopMotor();
         // Correctly account for the vibration time of the short move
         totalFeederVibrationTime += (currentMillis - lastFeederActionTime);
+        Serial.println("FeederSTATE: -> paused (from short_move)");
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
@@ -255,6 +263,7 @@ void checkHopper()
       }
       totalFeederVibrationTime = 0;
       hopperStepper->move(-hopperFullStrokeSteps-20);
+      Serial.println("HopperSTATE: -> moving_down");
       currHopperState = HopperState::moving_down;
     } 
     break;
@@ -263,6 +272,7 @@ void checkHopper()
       if (digitalRead(STOP_PIN) == LOW || !hopperStepper->isRunning()) {
         hopperStepper->forceStopAndNewPosition(0);
         lastHopperActionTime = currentMillis;      
+        Serial.println("HopperSTATE: -> waiting_bottom");
         currHopperState = HopperState::waiting_bottom;
       }
       break;
@@ -270,12 +280,14 @@ void checkHopper()
     case HopperState::waiting_bottom:
       if (currentMillis - lastHopperActionTime >= hopperBottomWaitTime) {
         hopperStepper->move(hopperFullStrokeSteps);
+        Serial.println("HopperSTATE: -> moving_up");
         currHopperState = HopperState::moving_up;
       } 
       break;
 
     case HopperState::moving_up:
       if (!hopperStepper->isRunning()) {
+        Serial.println("HopperSTATE: -> waiting_top");
         currHopperState = HopperState::waiting_top;
       } 
       break;
@@ -398,6 +410,13 @@ void loop() {
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
 
+  // Heartbeat for main loop
+  unsigned long currentLoopMillis = millis();
+  if (currentLoopMillis - lastHeartbeatTime >= 5000) {
+    Serial.println("HEARTBEAT: Main loop is alive.");
+    lastHeartbeatTime = currentLoopMillis;
+  }
+
   // Process sensor reading periodically
   processSensorReading(distanceSensorAddress); 
 
@@ -406,12 +425,16 @@ void loop() {
     char inByte = Serial.read();
 
     if(inByte == START_MARKER) {
+      Serial.println("SERIAL: Start marker '<' received.");
       capturingMessage = true;
       message_pos = 0;
     }
     else if (inByte == END_MARKER) {
       capturingMessage = false;
       message[message_pos] = '\0';  // Null terminate the string
+      Serial.print("SERIAL: End marker '>' received. Processing: <");
+      Serial.print(message);
+      Serial.println(">");
       processMessage(message);
     }
     else if (capturingMessage) {
@@ -419,7 +442,7 @@ void loop() {
       message_pos++;
       if (message_pos >= MAX_MESSAGE_LENGTH) {
         capturingMessage = false;
-        Serial.println("Error: Message too long");
+        Serial.println("SERIAL ERROR: Message too long");
       }
     }
   }

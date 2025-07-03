@@ -395,7 +395,7 @@ export class DeviceManager extends BaseComponent {
       console.error(`\x1b[33mNo device info found for port ${deviceName}\x1b[0m`);
       return;
     }
-    console.log(`\x1b[1m${deviceName}\x1b[0m:`, data);
+    console.log(`\x1b[35m[RX <- ${deviceName}]\x1b[0m Received data: ${data}`);
 
     if (data.trim() === 'Ready') {
       let configMessage = '';
@@ -428,6 +428,7 @@ export class DeviceManager extends BaseComponent {
     const message = data !== undefined ? `${command}${data}` : command;
     const formattedMessage = `<${message}>`;
 
+    console.log(`\x1b[36m[TX -> ${deviceName}]\x1b[0m Sending command: ${formattedMessage}`);
     deviceInfo.device.write(formattedMessage, (err: Error | null | undefined) => {
       if (err) {
         console.error(`\x1b[33mError sending message to ${deviceName}:\x1b[0m`, err);
@@ -446,6 +447,7 @@ export class DeviceManager extends BaseComponent {
     const message = `p,${pauseTime}`;
     const formattedMessage = `<${message}>`;
 
+    console.log(`\x1b[36m[TX -> ${DeviceName.HOPPER_FEEDER}]\x1b[0m Sending command: ${formattedMessage}`);
     deviceInfo.device.write(formattedMessage, (err: Error | null | undefined) => {
       if (err) {
         console.error('\x1b[33mError sending pause time update to hopper feeder:\x1b[0m', err);
