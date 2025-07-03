@@ -16,6 +16,9 @@
 #define ACCELERATION 1000
 #define SPEED 1000 
 
+#define RAMP_UP_DURATION 1000 // ms
+#define RAMP_START_SPEED 45   // a lower speed to start with
+
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
 // Hopper Variables
@@ -109,6 +112,7 @@ void stopMotor() {
 
 enum class FeederState : uint8_t {
   start_moving,
+  ramp_up_move, // New state for soft start
   moving,
   paused,
   short_move
@@ -118,7 +122,6 @@ FeederState currFeederState = FeederState::start_moving;
 
 void checkFeeder() {
   unsigned long currentMillis = millis();
-  unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
 
   // Add sensor reading debug
   int distance = ReadDistance(distanceSensorAddress);
@@ -129,15 +132,49 @@ void checkFeeder() {
 
   switch (currFeederState) {
     case FeederState::start_moving: {
-      startMotor(); 
+      // This state now initiates the ramp-up for a long move.
       feederVibrationStartTime = currentMillis;
-      currFeederState = FeederState::moving;
+      currFeederState = FeederState::ramp_up_move;
+      // Motor is started within ramp_up_move state
+      break;
+    }
+
+    case FeederState::ramp_up_move: {
+      unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
+
+      if (partDetected) {
+        stopMotor();
+        totalFeederVibrationTime += elapsedTime;
+        currFeederState = FeederState::paused;
+        lastFeederActionTime = currentMillis;
+        break; // Exit immediately
+      }
+
+      if (elapsedTime >= FEEDER_LONG_MOVE_TIME) { // Also check for total timeout during ramp
+        stopMotor();
+        totalFeederVibrationTime += elapsedTime;
+        currFeederState = FeederState::paused;
+        lastFeederActionTime = currentMillis;
+        break;
+      }
+      
+      if (elapsedTime < RAMP_UP_DURATION) {
+        // Still ramping up
+        int currentSpeed = map(elapsedTime, 0, RAMP_UP_DURATION, RAMP_START_SPEED, FEEDER_VIBRATION_SPEED);
+        digitalWrite(FEEDER_R_EN_PIN, HIGH);
+        analogWrite(FEEDER_RPWM_PIN, currentSpeed);
+      } else {
+        // Ramp-up finished, transition to full-speed moving
+        startMotor(); // Set to full speed
+        currFeederState = FeederState::moving;
+      }
       break;
     }
 
     case FeederState::moving: {
+      unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
     
-      // If FEEDER_PAUSE_TIME is 0, run continuously at FEEDER_VIBRATION_SPEED
+      // Motor is already at full speed. We just check for stop conditions.
       if (FEEDER_PAUSE_TIME == 0) {
         return;
       }
@@ -171,7 +208,8 @@ void checkFeeder() {
     case FeederState::short_move: {
       if (currentMillis - lastFeederActionTime >= FEEDER_SHORT_MOVE_TIME || !partDetected) {
         stopMotor();
-        totalFeederVibrationTime += elapsedTime;
+        // Correctly account for the vibration time of the short move
+        totalFeederVibrationTime += (currentMillis - lastFeederActionTime);
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
