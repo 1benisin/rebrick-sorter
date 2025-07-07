@@ -57,7 +57,7 @@ unsigned long feederVibrationStartTime = 0;
 
 // This will store the speed from the first settings message received after boot.
 // It acts as a permanent ceiling for the feeder speed until the device is reset.
-int MAX_FEEDER_SPEED = -1; 
+int MAX_FEEDER_SPEED = 1; 
 
 // Settings from server
 int HOPPER_CYCLE_INTERVAL = 12000;  // Time between hopper cycles
@@ -443,7 +443,7 @@ void processSettings(char *message) {
     HOPPER_CYCLE_INTERVAL = values[0];
     
     // On the very first settings update, save the speed as the maximum allowed speed.
-    if (MAX_FEEDER_SPEED == -1) {
+    if (MAX_FEEDER_SPEED == 1) {
       MAX_FEEDER_SPEED = values[1];
     }
     // For all subsequent updates, clamp the new speed to the saved maximum.
