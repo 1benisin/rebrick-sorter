@@ -202,8 +202,9 @@ void checkFeeder() {
         digitalWrite(FEEDER_R_EN_PIN, HIGH);
         analogWrite(FEEDER_RPWM_PIN, currentSpeed);
       } else {
-        // Ramp-up finished, transition to full-speed moving
-        startMotor(); // Set to full speed
+        // Ramp-up finished, transition to full-speed moving.
+        // Set the motor to its final target speed to ensure a smooth transition.
+        analogWrite(FEEDER_RPWM_PIN, FEEDER_VIBRATION_SPEED);
         if (FEEDER_DEBUG) {
           Serial.println("FeederSTATE: -> moving (from ramp_up_move)");
         }
