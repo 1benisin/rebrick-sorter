@@ -55,7 +55,9 @@ unsigned long lastFeederActionTime = 0;
 unsigned long totalFeederVibrationTime = 0;
 unsigned long feederVibrationStartTime = 0;
 
-
+// This will store the speed from the first settings message received after boot.
+// It acts as a permanent ceiling for the feeder speed until the device is reset.
+int MAX_FEEDER_SPEED = 1; 
 
 // Settings from server
 int HOPPER_CYCLE_INTERVAL = 12000;  // Time between hopper cycles
@@ -194,7 +196,9 @@ void checkFeeder() {
       if (elapsedTime < RAMP_UP_DURATION) {
         // Still ramping up
         int currentSpeed = map(elapsedTime, 0, RAMP_UP_DURATION, RAMP_START_SPEED, FEEDER_VIBRATION_SPEED);
-      
+        // Explicitly clamp the speed to the absolute maximum allowed value.
+        // This provides an extra layer of safety.
+        currentSpeed = constrain(currentSpeed, 0, MAX_FEEDER_SPEED);
         digitalWrite(FEEDER_R_EN_PIN, HIGH);
         analogWrite(FEEDER_RPWM_PIN, currentSpeed);
       } else {
@@ -438,7 +442,14 @@ void processSettings(char *message) {
   if (valueIndex >= 6) {
     // Apply settings if all validations pass
     HOPPER_CYCLE_INTERVAL = values[0];
-    FEEDER_VIBRATION_SPEED = values[1];
+    
+    // On the very first settings update, save the speed as the maximum allowed speed.
+    if (MAX_FEEDER_SPEED == 1) {
+      MAX_FEEDER_SPEED = values[1];
+    }
+    // For all subsequent updates, clamp the new speed to the saved maximum.
+    FEEDER_VIBRATION_SPEED = min(values[1], MAX_FEEDER_SPEED);
+
     FEEDER_STOP_DELAY = values[2];
     FEEDER_PAUSE_TIME = values[3];
     FEEDER_SHORT_MOVE_TIME = values[4];
