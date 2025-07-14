@@ -21,6 +21,10 @@ export class DeviceManager extends BaseComponent {
   private readonly MAX_RECONNECT_ATTEMPTS = 14;
   private portScanTimer: NodeJS.Timeout | null = null;
   private readonly PORT_SCAN_INTERVAL_MS = 60000;
+  // Handshake state tracking
+  private awaitingSettingsAck: Map<DeviceName, boolean> = new Map();
+  private settingsAckTimeouts: Map<DeviceName, NodeJS.Timeout> = new Map();
+  private readonly SETTINGS_ACK_TIMEOUT_MS = 5000;
 
   constructor(config: DeviceManagerConfig) {
     super('DeviceManager');
@@ -397,25 +401,77 @@ export class DeviceManager extends BaseComponent {
     }
     console.log(`\x1b[35m[RX <- ${deviceName}]\x1b[0m Received data: ${data}`);
 
+    // Handle handshake/acknowledgment protocol
     if (data.trim() === 'Ready') {
-      let configMessage = '';
-      switch (deviceInfo.config.deviceType) {
-        case DeviceType.SORTER:
-          configMessage = this.buildSorterInitMessage(deviceInfo.config);
-          break;
-        case DeviceType.CONVEYOR_JETS:
-          configMessage = this.buildConveyorJetsInitMessage(deviceInfo.config);
-          break;
-        case DeviceType.HOPPER_FEEDER:
-          configMessage = this.buildHopperFeederInitMessage(deviceInfo.config);
-          break;
+      if (!this.awaitingSettingsAck.get(deviceName)) {
+        let configMessage = '';
+        switch (deviceInfo.config.deviceType) {
+          case DeviceType.SORTER:
+            configMessage = this.buildSorterInitMessage(deviceInfo.config);
+            break;
+          case DeviceType.CONVEYOR_JETS:
+            configMessage = this.buildConveyorJetsInitMessage(deviceInfo.config);
+            break;
+          case DeviceType.HOPPER_FEEDER:
+            configMessage = this.buildHopperFeederInitMessage(deviceInfo.config);
+            break;
+        }
+        if (configMessage) {
+          this.sendCommand(deviceInfo.deviceName, configMessage);
+          this.awaitingSettingsAck.set(deviceName, true);
+          // Set up timeout for ack
+          const timeout = setTimeout(() => {
+            if (this.awaitingSettingsAck.get(deviceName)) {
+              console.warn(
+                `\x1b[33m[${deviceName}] Settings ack timeout. No acknowledgment received after sending settings.\x1b[0m`,
+              );
+              this.socketManager.emitComponentStatusUpdate(
+                deviceName,
+                ComponentStatus.ERROR,
+                'Settings ack timeout. No acknowledgment received.',
+              );
+              // Optionally: retry sending settings or alert user here
+              // For now, just log and mark as error
+              this.awaitingSettingsAck.delete(deviceName);
+            }
+          }, this.SETTINGS_ACK_TIMEOUT_MS);
+          this.settingsAckTimeouts.set(deviceName, timeout);
+        }
+      } else {
+        console.log(`\x1b[33m[${deviceName}] Already awaiting settings ack, ignoring repeated 'Ready'.\x1b[0m`);
       }
+      return;
+    }
 
-      if (configMessage) {
-        this.sendCommand(deviceInfo.deviceName, configMessage);
+    // Handle settings acknowledgment
+    if (data.trim() === 'Settings updated successfully') {
+      if (this.awaitingSettingsAck.get(deviceName)) {
+        this.awaitingSettingsAck.delete(deviceName);
+        const timeout = this.settingsAckTimeouts.get(deviceName);
+        if (timeout) {
+          clearTimeout(timeout);
+          this.settingsAckTimeouts.delete(deviceName);
+        }
+        this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.READY, null);
+        console.log(`\x1b[32m[${deviceName}] Settings acknowledged. Device is READY.\x1b[0m`);
+      } else {
+        console.log(`\x1b[33m[${deviceName}] Received settings ack, but was not awaiting it.\x1b[0m`);
       }
+      return;
+    }
 
-      this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.READY, null);
+    // Handle error messages from device
+    if (data.trim().startsWith('Error:')) {
+      console.error(`\x1b[31m[${deviceName}] Device reported error: ${data.trim()}\x1b[0m`);
+      this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, data.trim());
+      // Optionally: retry sending settings or alert user here
+      this.awaitingSettingsAck.delete(deviceName);
+      const timeout = this.settingsAckTimeouts.get(deviceName);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.settingsAckTimeouts.delete(deviceName);
+      }
+      return;
     }
   }
 

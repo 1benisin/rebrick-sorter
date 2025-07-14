@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
-#include <avr/wdt.h> // Watchdog Timer for automatic reset on freeze
+// Watchdog Timer removed: We now handle errors in software and do not reset the Arduino automatically.
 
 #define AUTO_DISABLE true
 
@@ -83,19 +83,11 @@ void setup() {
   // connect before we start sending data. This helps prevent garbled initial messages.
   delay(500);
 
-  // Now, check if the WDT caused the last reset and log it if so.
-  if (MCUSR & (1 << WDRF)) {
-    if (FEEDER_DEBUG || HOPPER_DEBUG) {
-      Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
-    }
-    // Clear the WDT reset flag so it doesn't trigger again on subsequent boots
-    MCUSR &= ~(1 << WDRF);
-  }
+  // Watchdog logic removed. If a subsystem fails, we will log and attempt recovery in software.
 
   Wire.begin(); 
 
-  // Enable Watchdog Timer with an 8-second timeout. If loop() hangs for 8s, Arduino will auto-reboot.
-  wdt_enable(WDTO_8S);
+  // Watchdog timer removed. We rely on robust non-blocking code and error recovery.
 
   pinMode(FEEDER_RPWM_PIN, OUTPUT);
   pinMode(FEEDER_R_EN_PIN, OUTPUT);
@@ -466,7 +458,7 @@ void processSettings(char *message) {
 
     settingsInitialized = true;
     if (SYSTEM_DEBUG) {
-      Serial.println("Settings updated");
+      Serial.println("Settings updated successfully");
     }
   } else {
     if (SYSTEM_DEBUG) {
@@ -485,18 +477,6 @@ void loop() {
 
   unsigned long currentLoopMillis = millis();
 
-  // If the device hasn't received its settings, it periodically sends a "Ready"
-  // signal to the server. This makes the startup handshake robust against race conditions
-  // where the initial "Ready" message from setup() might be missed by the server.
-  if (!settingsInitialized) {
-    if (currentLoopMillis - lastReadySendTime >= 2000) { // Send every 2 seconds
-      if (SYSTEM_DEBUG) {
-        Serial.println("Ready");
-      }
-      lastReadySendTime = currentLoopMillis;
-    }
-  }
-
   // Heartbeat for main loop
   if (currentLoopMillis - lastHeartbeatTime >= 5000) {
     if (SYSTEM_DEBUG) {
@@ -506,7 +486,10 @@ void loop() {
   }
 
   // Process sensor reading periodically
-  processSensorReading(distanceSensorAddress); 
+  if (!processSensorReading(distanceSensorAddress)) {
+    // If sensor reading is not available, log and continue. No blocking or reset.
+    Serial.println("WARN: Sensor reading not available this cycle. Continuing main loop.");
+  }
 
   // Check for serial messages
   while (Serial.available() > 0) {
@@ -544,11 +527,10 @@ void loop() {
   checkFeeder();
   checkHopper();
 
-  // Reset the watchdog timer at the end of every successful loop.
-  // If this line isn't reached for 8 seconds (e.g., due to a freeze), the system will reset.
-  wdt_reset();
+  // Watchdog timer removed. Main loop is robust and non-blocking; errors are logged and recovered in software.
 }
 
+// --- Sensor Read/Recovery Logic ---
 // Non-blocking sensor read function
 // Returns true if a new reading was initiated or is in progress, false if I2C is busy from a previous call
 // The actual reading is obtained via getLatestDistanceReading
@@ -557,11 +539,22 @@ bool initiateDistanceRead(unsigned char deviceAddr) {
     // Already processing a read
     return true; 
   }
-
-  Wire.beginTransmission(deviceAddr); 
+  int beginResult = Wire.beginTransmission(deviceAddr); 
   Wire.write(byte(0x00));      // sets distance data address (addr)
-  Wire.endTransmission();      // stop transmitting
-  
+  int endResult = Wire.endTransmission();      // stop transmitting
+  if (beginResult != 0 || endResult != 0) {
+    Serial.print("ERROR: I2C begin/end transmission failed (beginResult: ");
+    Serial.print(beginResult);
+    Serial.print(", endResult: ");
+    Serial.print(endResult);
+    Serial.println(")");
+    // Attempt to recover I2C bus
+    Wire.end();
+    delay(10);
+    Wire.begin();
+    Serial.println("INFO: I2C bus reinitialized after error.");
+    return false;
+  }
   sensorRequestTime = micros(); // Use micros for finer delay control
   currentSensorState = SensorReadState::REQUEST_SENT;
   return true;
@@ -587,20 +580,23 @@ bool processSensorReading(unsigned char deviceAddr) {
       distanceReading = distanceReading << 8;
       distanceReading |= i2cReceiveBuffer[1];
       currentSensorState = SensorReadState::IDLE; // Reset for next read
+      Serial.print("INFO: Sensor reading successful: ");
+      Serial.println(distanceReading);
       return true; // New reading is available
     }
     
     // Timeout check
     if (millis() - sensorWaitStartTime > SENSOR_READ_TIMEOUT_MS) {
-        if (FEEDER_DEBUG) {
-          Serial.println("ERROR: Sensor read timeout.");
-        }
-        // Default to a value that indicates NO part is detected.
-        // This prevents the state machine from getting stuck thinking a part is present.
-        // The feeder will continue its cycle, making the failure mode active and observable.
-        distanceReading = UINT_MAX; 
-        currentSensorState = SensorReadState::IDLE; // Reset for next attempt
-        return true; // Return true as we've "handled" it by providing a default.
+      Serial.println("ERROR: Sensor read timeout. Attempting I2C recovery.");
+      // Default to a value that indicates NO part is detected.
+      distanceReading = UINT_MAX; 
+      // Attempt to recover I2C bus
+      Wire.end();
+      delay(10);
+      Wire.begin();
+      Serial.println("INFO: I2C bus reinitialized after sensor timeout.");
+      currentSensorState = SensorReadState::IDLE; // Reset for next attempt
+      return true; // Return true as we've "handled" it by providing a default.
     }
     
     // Optional: Add a timeout here if Wire.available() never gets to 2
