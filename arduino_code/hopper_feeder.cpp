@@ -539,13 +539,11 @@ bool initiateDistanceRead(unsigned char deviceAddr) {
     // Already processing a read
     return true; 
   }
-  int beginResult = Wire.beginTransmission(deviceAddr); 
+  Wire.beginTransmission(deviceAddr); 
   Wire.write(byte(0x00));      // sets distance data address (addr)
   int endResult = Wire.endTransmission();      // stop transmitting
-  if (beginResult != 0 || endResult != 0) {
-    Serial.print("ERROR: I2C begin/end transmission failed (beginResult: ");
-    Serial.print(beginResult);
-    Serial.print(", endResult: ");
+  if (endResult != 0) {
+    Serial.print("ERROR: I2C end transmission failed (endResult: ");
     Serial.print(endResult);
     Serial.println(")");
     // Attempt to recover I2C bus
