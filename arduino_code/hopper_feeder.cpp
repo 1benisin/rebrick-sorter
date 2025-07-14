@@ -575,8 +575,6 @@ bool processSensorReading(unsigned char deviceAddr) {
       distanceReading = distanceReading << 8;
       distanceReading |= i2cReceiveBuffer[1];
       currentSensorState = SensorReadState::IDLE; // Reset for next read
-      Serial.print("INFO: Sensor reading successful: ");
-      Serial.println(distanceReading);
       return true; // New reading is available
     }
     
