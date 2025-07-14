@@ -44,7 +44,7 @@ enum class SensorReadState : uint8_t {
 };
 SensorReadState currentSensorState = SensorReadState::IDLE;
 unsigned long sensorRequestTime = 0;
-const unsigned long SENSOR_READ_DELAY_US = 30; // Minimum delay from datasheet
+const unsigned long SENSOR_READ_DELAY_US = 30000; // Increased from 30us. 30us is too short for most ToF sensors, which need ~20-50ms for a reading. This prevents spamming the bus.
 unsigned long sensorWaitStartTime = 0; // for timeout
 const unsigned long SENSOR_READ_TIMEOUT_MS = 10;
 
@@ -486,10 +486,7 @@ void loop() {
   }
 
   // Process sensor reading periodically
-  if (!processSensorReading(distanceSensorAddress)) {
-    // If sensor reading is not available, log and continue. No blocking or reset.
-    Serial.println("WARN: Sensor reading not available this cycle. Continuing main loop.");
-  }
+  processSensorReading(distanceSensorAddress);
 
   // Check for serial messages
   while (Serial.available() > 0) {
