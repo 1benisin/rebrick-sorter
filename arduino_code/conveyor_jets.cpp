@@ -5,8 +5,6 @@
 
 #define CONV_RPWM_PIN   5
 #define CONV_R_EN_PIN   6
-#define CONV_ENCODER_A  2
-#define CONV_ENCODER_B  3
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
@@ -17,38 +15,11 @@ unsigned long jetEndTime[4];  // Store end times for each jet
 bool settingsInitialized = false;
 
 volatile bool conveyorOn = false;
-volatile long encoderCount = 0;  // New encoder count variable
-
-// Update this value to match the motor's encoder resolution after gearing
-#define CONV_ENCODER_PPR 8400  // 64 CPR * 131.25 gear ratio
 
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
 int minRPM = 30;             // Minimum allowed RPM
 int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
-int currentRPM = 0;          // Measured RPM from the encoder
 int pwmValue = 0;            // Current PWM value (0-255)
-float kp = 2.0;              // Proportional gain (tuned for better response)
-float ki = 0.1;              // Integral gain for steady-state error
-float integralError = 0;     // Integral of the error
-unsigned long lastControlMillis = 0;
-const unsigned long controlInterval = 50;  // Reduced interval for more frequent updates (ms)
-
-// New ISR functions
-void readEncoderA() {
-  if (digitalRead(CONV_ENCODER_A) == digitalRead(CONV_ENCODER_B)) {
-    encoderCount++;
-  } else {
-    encoderCount--;
-  }
-}
-
-void readEncoderB() {
-  if (digitalRead(CONV_ENCODER_A) == digitalRead(CONV_ENCODER_B)) {
-    encoderCount--;
-  } else {
-    encoderCount++;
-  }
-}
 
 void setup()
 {
@@ -61,10 +32,6 @@ void setup()
   
   pinMode(CONV_RPWM_PIN, OUTPUT);
   pinMode(CONV_R_EN_PIN, OUTPUT);
-  pinMode(CONV_ENCODER_A, INPUT_PULLUP);
-  pinMode(CONV_ENCODER_B, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_A), readEncoderA, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(CONV_ENCODER_B), readEncoderB, CHANGE);
   digitalWrite(CONV_R_EN_PIN, LOW);
   analogWrite(CONV_RPWM_PIN, 0);
 
@@ -100,11 +67,7 @@ void processSettings(char *message) {
       jetEndTime[i] = 0;
     }
     conveyorOn = false;
-    encoderCount = 0;
-    currentRPM = 0;
     pwmValue = 0;
-    integralError = 0;
-    lastControlMillis = 0;
 
     // Stop the conveyor motor
     digitalWrite(CONV_R_EN_PIN, LOW);
@@ -138,12 +101,8 @@ void processMessage(char *message) {
         digitalWrite(CONV_R_EN_PIN, LOW);
         analogWrite(CONV_RPWM_PIN, 0);
         pwmValue = 0;
-        integralError = 0;  // Reset integral error when stopping
       } else {
         digitalWrite(CONV_R_EN_PIN, HIGH);
-        lastControlMillis = millis();
-        encoderCount = 0;  // Reset encoder count when starting
-        integralError = 0;  // Reset integral error when starting
         targetRPM = maxConveyorRPM;
       }
       Serial.println(conveyorOn ? "conveyor on" : "conveyor off");
@@ -228,40 +187,19 @@ void loop() {
     }
   }
 
-  // Closed-Loop Motor Control
+  // Quadratic PWM control for AC induction motor
   if (conveyorOn) {
-    unsigned long currentTime = millis();
-    if (currentTime - lastControlMillis >= controlInterval) {
-      // Safely read and reset the encoder count
-      noInterrupts();
-      long count = encoderCount;
-      encoderCount = 0;
-      interrupts();
-      
-      // Calculate RPM with improved accuracy
-      currentRPM = (abs(count) * 60000L) / (CONV_ENCODER_PPR * controlInterval);
-      
-      // PI control: adjust PWM based on RPM error
-      int error = targetRPM - currentRPM;
-      integralError += error;
-      integralError = constrain(integralError, -100, 100);  // Anti-windup
-      
-      // Calculate new PWM value using PI control
-      pwmValue += (int)(kp * error + ki * integralError);
-      pwmValue = constrain(pwmValue, 0, 255);
-      
-      // Update motor speed
-      analogWrite(CONV_RPWM_PIN, pwmValue);
-      lastControlMillis = currentTime;
-      
-      // Debug info
-      // Serial.print("RPM: ");
-      // Serial.print(currentRPM);
-      // Serial.print(" | Target RPM: ");
-      // Serial.print(targetRPM);
-      // Serial.print(" | PWM: ");
-      // Serial.println(pwmValue);
-    }
+    float normalizedSpeed = float(targetRPM - minRPM) / (maxConveyorRPM - minRPM); // 0.0–1.0
+    float curve = 2.0; // >1 = more aggressive start, <1 = softer start
+    float curved = pow(normalizedSpeed, curve); // Quadratic response
+
+    int minPWM = 61;
+    int maxPWM = 143;
+
+    pwmValue = minPWM + (int)((maxPWM - minPWM) * curved);
+    pwmValue = constrain(pwmValue, minPWM, maxPWM);
+
+    analogWrite(CONV_RPWM_PIN, pwmValue);
   }
 
   // Check if any jets need to be turned off
