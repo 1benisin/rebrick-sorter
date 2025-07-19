@@ -1,12 +1,13 @@
 #include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
-#include <avr/wdt.h> // Watchdog Timer
+// Watchdog Timer removed: We now handle errors in software and do not reset the Arduino automatically.
 
 #define AUTO_DISABLE true
 
 #define FEEDER_DEBUG false
-#define HOPPER_DEBUG true
+#define HOPPER_DEBUG false
+#define SYSTEM_DEBUG true
 
 #define ENABLE_PIN 6
 #define DIR_PIN 5
@@ -16,6 +17,9 @@
 
 #define ACCELERATION 1000
 #define SPEED 1000 
+
+#define RAMP_UP_DURATION 1000 // ms
+#define RAMP_START_SPEED 60   // a lower speed to start with
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
@@ -40,14 +44,20 @@ enum class SensorReadState : uint8_t {
 };
 SensorReadState currentSensorState = SensorReadState::IDLE;
 unsigned long sensorRequestTime = 0;
-const unsigned long SENSOR_READ_DELAY_US = 30; // Minimum delay from datasheet
- 
+const unsigned long SENSOR_READ_DELAY_US = 30000; // Increased from 30us. 30us is too short for most ToF sensors, which need ~20-50ms for a reading. This prevents spamming the bus.
+unsigned long sensorWaitStartTime = 0; // for timeout
+const unsigned long SENSOR_READ_TIMEOUT_MS = 10;
+
 // -- Feeder Variables
 #define FEEDER_RPWM_PIN 11    // Changed from FEEDER_ENABLE_PIN
 #define FEEDER_R_EN_PIN 8     // Changed from FEEDER_MOTOR_PIN1
 unsigned long lastFeederActionTime = 0;
 unsigned long totalFeederVibrationTime = 0;
 unsigned long feederVibrationStartTime = 0;
+
+// This will store the speed from the first settings message received after boot.
+// It acts as a permanent ceiling for the feeder speed until the device is reset.
+int MAX_FEEDER_SPEED = 1; 
 
 // Settings from server
 int HOPPER_CYCLE_INTERVAL = 12000;  // Time between hopper cycles
@@ -59,28 +69,25 @@ int FEEDER_LONG_MOVE_TIME = 3000;   // Maximum time to run feeder before stoppin
 
 // Debug variables
 unsigned long lastDebugTime = 0;     // For controlling debug print frequency
+unsigned long lastHeartbeatTime = 0; // For main loop heartbeat
+unsigned long lastReadySendTime = 0; // For periodic "Ready" signal
 
 // Function declarations
 int ReadDistance(unsigned char device);
 bool getLatestDistanceReading(unsigned short &reading); // New function to get reading when available
 
 void setup() {
+  // The very first thing we do is initialize the serial port so we can always send debug messages.
+  Serial.begin(9600,SERIAL_8N1);
+  // A small delay to allow the serial port to stabilize and for the server to
+  // connect before we start sending data. This helps prevent garbled initial messages.
+  delay(500);
 
-  // Check if the WDT caused the last reset
-  if (MCUSR & (1 << WDRF)) {
-    Serial.begin(9600,SERIAL_8N1); // Initialize serial early for this message
-    Serial.println("SYSTEM RESET: Watchdog timer initiated system reset.");
-    // Clear the WDT reset flag
-    MCUSR &= ~(1 << WDRF);
-  }
+  // Watchdog logic removed. If a subsystem fails, we will log and attempt recovery in software.
 
   Wire.begin(); 
-  if (!Serial) { // If serial wasn't initialized above for WDT message
-    Serial.begin(9600,SERIAL_8N1);
-  }
 
-  // Enable Watchdog Timer with an 8-second timeout
-  wdt_enable(WDTO_8S);
+  // Watchdog timer removed. We rely on robust non-blocking code and error recovery.
 
   pinMode(FEEDER_RPWM_PIN, OUTPUT);
   pinMode(FEEDER_R_EN_PIN, OUTPUT);
@@ -106,7 +113,9 @@ void setup() {
 
     hopperStepper->move(100);
   }
-  Serial.println("Ready"); 
+  if (SYSTEM_DEBUG) {
+    Serial.println("Ready");
+  } 
 }
 
 void startMotor() {
@@ -121,6 +130,7 @@ void stopMotor() {
 
 enum class FeederState : uint8_t {
   start_moving,
+  ramp_up_move, // New state for soft start
   moving,
   paused,
   short_move
@@ -130,35 +140,84 @@ FeederState currFeederState = FeederState::start_moving;
 
 void checkFeeder() {
   unsigned long currentMillis = millis();
-  unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
 
   // Add sensor reading debug
   int distance = ReadDistance(distanceSensorAddress);
-  bool partDetected = distance < 50;
+  bool partDetected = distance < 20;
   if (FEEDER_DEBUG && partDetected) {
     Serial.println("SENSOR: Part detected in front of sensor");
   }
 
   switch (currFeederState) {
     case FeederState::start_moving: {
-      startMotor(); 
+      // This state now initiates the ramp-up for a long move.
       feederVibrationStartTime = currentMillis;
-      currFeederState = FeederState::moving;
+      if (FEEDER_DEBUG) {
+        Serial.println("FeederSTATE: -> ramp_up_move");
+      }
+      currFeederState = FeederState::ramp_up_move;
+      // Motor is started within ramp_up_move state
+      break;
+    }
+
+    case FeederState::ramp_up_move: {
+      unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
+
+      if (partDetected) {
+        stopMotor();
+        totalFeederVibrationTime += elapsedTime;
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from ramp_up_move, part detected)");
+        }
+        currFeederState = FeederState::paused;
+        lastFeederActionTime = currentMillis;
+        break; // Exit immediately
+      }
+
+      if (elapsedTime >= FEEDER_LONG_MOVE_TIME) { // Also check for total timeout during ramp
+        stopMotor();
+        totalFeederVibrationTime += elapsedTime;
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from ramp_up_move, timeout)");
+        }
+        currFeederState = FeederState::paused;
+        lastFeederActionTime = currentMillis;
+        break;
+      }
+      
+      if (elapsedTime < RAMP_UP_DURATION) {
+        // Still ramping up
+        int currentSpeed = map(elapsedTime, 0, RAMP_UP_DURATION, RAMP_START_SPEED, FEEDER_VIBRATION_SPEED);
+        // Explicitly clamp the speed to the absolute maximum allowed value.
+        // This provides an extra layer of safety.
+        currentSpeed = constrain(currentSpeed, 0, MAX_FEEDER_SPEED);
+        digitalWrite(FEEDER_R_EN_PIN, HIGH);
+        analogWrite(FEEDER_RPWM_PIN, currentSpeed);
+      } else {
+        // Ramp-up finished, transition to full-speed moving.
+        // Set the motor to its final target speed to ensure a smooth transition.
+        analogWrite(FEEDER_RPWM_PIN, FEEDER_VIBRATION_SPEED);
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> moving (from ramp_up_move)");
+        }
+        currFeederState = FeederState::moving;
+      }
       break;
     }
 
     case FeederState::moving: {
+      unsigned long elapsedTime = currentMillis - feederVibrationStartTime;
     
-      // If FEEDER_PAUSE_TIME is 0, run continuously at FEEDER_VIBRATION_SPEED
-      if (FEEDER_PAUSE_TIME == 0) {
-        return;
-      }
+      // Motor is already at full speed. We just check for stop conditions.
       
       // Check both conditions: part detection or long move time elapsed
       if (partDetected || (elapsedTime >= FEEDER_LONG_MOVE_TIME)) {
         //  update total vibration time
         totalFeederVibrationTime += elapsedTime;
         stopMotor();
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from moving)");
+        }
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
@@ -171,9 +230,15 @@ void checkFeeder() {
         if (partDetected) { 
           startMotor(); 
           feederVibrationStartTime = currentMillis;
+          if (FEEDER_DEBUG) {
+            Serial.println("FeederSTATE: -> short_move (from paused)");
+          }
           currFeederState = FeederState::short_move;
           lastFeederActionTime = currentMillis;
         } else {
+          if (FEEDER_DEBUG) {
+            Serial.println("FeederSTATE: -> start_moving (from paused)");
+          }
           currFeederState = FeederState::start_moving;
         }
       }
@@ -183,7 +248,11 @@ void checkFeeder() {
     case FeederState::short_move: {
       if (currentMillis - lastFeederActionTime >= FEEDER_SHORT_MOVE_TIME || !partDetected) {
         stopMotor();
-        totalFeederVibrationTime += elapsedTime;
+        // Correctly account for the vibration time of the short move
+        totalFeederVibrationTime += (currentMillis - lastFeederActionTime);
+        if (FEEDER_DEBUG) {
+          Serial.println("FeederSTATE: -> paused (from short_move)");
+        }
         currFeederState = FeederState::paused;
         lastFeederActionTime = currentMillis;
       }
@@ -228,6 +297,9 @@ void checkHopper()
       }
       totalFeederVibrationTime = 0;
       hopperStepper->move(-hopperFullStrokeSteps-20);
+      if (HOPPER_DEBUG) {
+        Serial.println("HopperSTATE: -> moving_down");
+      }
       currHopperState = HopperState::moving_down;
     } 
     break;
@@ -236,6 +308,9 @@ void checkHopper()
       if (digitalRead(STOP_PIN) == LOW || !hopperStepper->isRunning()) {
         hopperStepper->forceStopAndNewPosition(0);
         lastHopperActionTime = currentMillis;      
+        if (HOPPER_DEBUG) {
+          Serial.println("HopperSTATE: -> waiting_bottom");
+        }
         currHopperState = HopperState::waiting_bottom;
       }
       break;
@@ -243,12 +318,18 @@ void checkHopper()
     case HopperState::waiting_bottom:
       if (currentMillis - lastHopperActionTime >= hopperBottomWaitTime) {
         hopperStepper->move(hopperFullStrokeSteps);
+        if (HOPPER_DEBUG) {
+          Serial.println("HopperSTATE: -> moving_up");
+        }
         currHopperState = HopperState::moving_up;
       } 
       break;
 
     case HopperState::moving_up:
       if (!hopperStepper->isRunning()) {
+        if (HOPPER_DEBUG) {
+          Serial.println("HopperSTATE: -> waiting_top");
+        }
         currHopperState = HopperState::waiting_top;
       } 
       break;
@@ -258,7 +339,9 @@ void checkHopper()
 void processMessage(char *message) {
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
-    Serial.println("Settings not initialized");
+    if (SYSTEM_DEBUG) {
+      Serial.println("Settings not initialized");
+    }
     return;
   }
 
@@ -271,13 +354,17 @@ void processMessage(char *message) {
     case 'p': { // pause time update
       // Format: 'p,<new_pause_time>'
       if (message[1] != ',') {
-        Serial.println("Error: Invalid pause time message format");
+        if (FEEDER_DEBUG) {
+          Serial.println("Error: Invalid pause time message format");
+        }
         return;
       }
       
       char *token = strtok(&message[2], ",");
       if (!token) {
-        Serial.println("Error: Missing pause time value");
+        if (FEEDER_DEBUG) {
+          Serial.println("Error: Missing pause time value");
+        }
         return;
       }
       
@@ -303,12 +390,16 @@ void processMessage(char *message) {
         hopperStepper->forceStop();
         currHopperState = HopperState::waiting_top;
       }
-      Serial.println(message[1] == '1' ? "hopper on" : "hopper off");
+      if (HOPPER_DEBUG) {
+        Serial.println(message[1] == '1' ? "hopper on" : "hopper off");
+      }
       break;
     }
 
     default: {
-      Serial.println("no matching serial communication");
+      if (SYSTEM_DEBUG) {
+        Serial.println("no matching serial communication");
+      }
       break;
     }
   }
@@ -321,7 +412,9 @@ void processSettings(char *message) {
   
   // Validate message format
   if (message[0] != 's' || message[1] != ',') {
-    Serial.println("Error: Invalid message format");
+    if (SYSTEM_DEBUG) {
+      Serial.println("Error: Invalid message format");
+    }
     return;
   }
 
@@ -338,25 +431,40 @@ void processSettings(char *message) {
     token = strtok(NULL, ",");
   }
 
-  // Apply settings if all validations pass
-  HOPPER_CYCLE_INTERVAL = values[0];
-  FEEDER_VIBRATION_SPEED = values[1];
-  FEEDER_STOP_DELAY = values[2];
-  FEEDER_PAUSE_TIME = values[3];
-  FEEDER_SHORT_MOVE_TIME = values[4];
-  FEEDER_LONG_MOVE_TIME = values[5];
+  if (valueIndex >= 6) {
+    // Apply settings if all validations pass
+    HOPPER_CYCLE_INTERVAL = values[0];
+    
+    // On the very first settings update, save the speed as the maximum allowed speed.
+    if (MAX_FEEDER_SPEED == 1) {
+      MAX_FEEDER_SPEED = values[1];
+    }
+    // For all subsequent updates, clamp the new speed to the saved maximum.
+    FEEDER_VIBRATION_SPEED = min(values[1], MAX_FEEDER_SPEED);
 
-  // Reset all state variables to their initial values
-  currFeederState = FeederState::start_moving;
-  currHopperState = HopperState::waiting_top;
-  totalFeederVibrationTime = 0;
-  lastFeederActionTime = 0;
-  feederVibrationStartTime = 0;
-  lastHopperActionTime = 0;
-  lastDebugTime = 0;
+    FEEDER_STOP_DELAY = values[2];
+    FEEDER_PAUSE_TIME = values[3];
+    FEEDER_SHORT_MOVE_TIME = values[4];
+    FEEDER_LONG_MOVE_TIME = values[5];
 
-  settingsInitialized = true;
-  Serial.println("Settings updated successfully");
+    // Reset all state variables to their initial values
+    currFeederState = FeederState::start_moving;
+    currHopperState = HopperState::waiting_top;
+    totalFeederVibrationTime = 0;
+    lastFeederActionTime = 0;
+    feederVibrationStartTime = 0;
+    lastHopperActionTime = 0;
+    lastDebugTime = 0;
+
+    settingsInitialized = true;
+    if (SYSTEM_DEBUG) {
+      Serial.println("Settings updated successfully");
+    }
+  } else {
+    if (SYSTEM_DEBUG) {
+      Serial.println("Error: Not enough settings provided");
+    }
+  }
 }
 
 #define START_MARKER '<'
@@ -367,54 +475,59 @@ void loop() {
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
 
+  unsigned long currentLoopMillis = millis();
+
+  // Heartbeat for main loop
+  if (currentLoopMillis - lastHeartbeatTime >= 5000) {
+    if (SYSTEM_DEBUG) {
+      Serial.println("HEARTBEAT: Main loop is alive.");
+    }
+    lastHeartbeatTime = currentLoopMillis;
+  }
+
   // Process sensor reading periodically
-  processSensorReading(distanceSensorAddress); 
+  processSensorReading(distanceSensorAddress);
 
   // Check for serial messages
   while (Serial.available() > 0) {
     char inByte = Serial.read();
 
     if(inByte == START_MARKER) {
+      if (SYSTEM_DEBUG) {
+        Serial.println("SERIAL: Start marker '<' received.");
+      }
       capturingMessage = true;
       message_pos = 0;
     }
     else if (inByte == END_MARKER) {
-      if (capturingMessage) { // Only process if a valid message was being captured
-        message[message_pos] = '\0';  // Null terminate
-        processMessage(message);
+      capturingMessage = false;
+      message[message_pos] = '\0';  // Null terminate the string
+      if (SYSTEM_DEBUG) {
+        Serial.print("SERIAL: End marker '>' received. Processing: <");
+        Serial.print(message);
+        Serial.println(">");
       }
-      capturingMessage = false; // Always stop capturing and reset for the next message
-      message_pos = 0;          // Reset position
+      processMessage(message);
     }
     else if (capturingMessage) {
-      // Check if there's space for the current character AND the null terminator
-      if (message_pos < MAX_MESSAGE_LENGTH - 1) { 
-        message[message_pos] = inByte;
-        message_pos++;
-      } else {
-        // Buffer is full, this character would overflow message data part (before null terminator)
-        Serial.println("Error: Message too long"); // Task 5.2
-        capturingMessage = false; // Task 5.1
-        
-        // Task 5.3: Discard remaining bytes currently in the Serial.available() buffer
-        while (Serial.available() > 0) {
-          Serial.read(); // Discard byte
+      message[message_pos] = inByte;
+      message_pos++;
+      if (message_pos >= MAX_MESSAGE_LENGTH) {
+        capturingMessage = false;
+        if (SYSTEM_DEBUG) {
+          Serial.println("SERIAL ERROR: Message too long");
         }
-        message_pos = 0; // Reset message position after overflow and flush
       }
     }
-    // If not START_MARKER, not END_MARKER, and not capturingMessage (e.g. after an overflow error),
-    // inByte is implicitly discarded by this loop structure continuing. The explicit flush above
-    // handles the case where the serial buffer might have many more bytes from the oversized message.
   }
 
   checkFeeder();
   checkHopper();
 
-  // Reset the watchdog timer at the end of each loop iteration
-  wdt_reset();
+  // Watchdog timer removed. Main loop is robust and non-blocking; errors are logged and recovered in software.
 }
 
+// --- Sensor Read/Recovery Logic ---
 // Non-blocking sensor read function
 // Returns true if a new reading was initiated or is in progress, false if I2C is busy from a previous call
 // The actual reading is obtained via getLatestDistanceReading
@@ -423,11 +536,20 @@ bool initiateDistanceRead(unsigned char deviceAddr) {
     // Already processing a read
     return true; 
   }
-
   Wire.beginTransmission(deviceAddr); 
   Wire.write(byte(0x00));      // sets distance data address (addr)
-  Wire.endTransmission();      // stop transmitting
-  
+  int endResult = Wire.endTransmission();      // stop transmitting
+  if (endResult != 0) {
+    Serial.print("ERROR: I2C end transmission failed (endResult: ");
+    Serial.print(endResult);
+    Serial.println(")");
+    // Attempt to recover I2C bus
+    Wire.end();
+    delay(10);
+    Wire.begin();
+    Serial.println("INFO: I2C bus reinitialized after error.");
+    return false;
+  }
   sensorRequestTime = micros(); // Use micros for finer delay control
   currentSensorState = SensorReadState::REQUEST_SENT;
   return true;
@@ -440,6 +562,7 @@ bool processSensorReading(unsigned char deviceAddr) {
     if (micros() - sensorRequestTime >= SENSOR_READ_DELAY_US) {
       currentSensorState = SensorReadState::WAITING_FOR_READING;
       Wire.requestFrom(deviceAddr, (unsigned char)2); // request 2 bytes
+      sensorWaitStartTime = millis(); // Start timeout timer
     }
     return false; // Reading not yet available
   }
@@ -454,6 +577,21 @@ bool processSensorReading(unsigned char deviceAddr) {
       currentSensorState = SensorReadState::IDLE; // Reset for next read
       return true; // New reading is available
     }
+    
+    // Timeout check
+    if (millis() - sensorWaitStartTime > SENSOR_READ_TIMEOUT_MS) {
+      Serial.println("ERROR: Sensor read timeout. Attempting I2C recovery.");
+      // Default to a value that indicates NO part is detected.
+      distanceReading = UINT_MAX; 
+      // Attempt to recover I2C bus
+      Wire.end();
+      delay(10);
+      Wire.begin();
+      Serial.println("INFO: I2C bus reinitialized after sensor timeout.");
+      currentSensorState = SensorReadState::IDLE; // Reset for next attempt
+      return true; // Return true as we've "handled" it by providing a default.
+    }
+    
     // Optional: Add a timeout here if Wire.available() never gets to 2
     return false; // Reading not yet available
   }
@@ -480,38 +618,6 @@ bool getLatestDistanceReading(unsigned short &reading) {
     }
     return false;
 }
-
-void SensorRead(unsigned char addr, unsigned char* datbuf, unsigned int cnt, unsigned char deviceAddr) 
-{
-  unsigned short result=0;
-  // step 1: instruct sensor to read echoes
-
-  Wire.beginTransmission(deviceAddr); // transmit to device address, factory default #82 (0x52)
-  Wire.write(byte(addr));      // sets distance data address (addr)
-  Wire.endTransmission();      // stop transmitting
-  
-  // NON_BLOCKING_CHANGE: Replaced delay(1) with state machine logic handled by 
-  // initiateDistanceRead and processSensorReading
-  // step 2: wait for readings to happen
-  // delay(1);                   // datasheet suggests at least 30uS
-  
-  // step 3: request reading from sensor
-  Wire.requestFrom(deviceAddr, cnt);    // request cnt bytes from slave device #82 (0x52)
-  // step 5: receive reading from sensor
-  if (cnt <= Wire.available()) { // if two bytes were received
-    *datbuf++ = Wire.read();  // receive high byte (overwrites previous reading)
-    *datbuf++ = Wire.read(); // receive low byte as lower 8 bits
-  }
-}
- 
-int ReadDistance(unsigned char device){
-    // NON_BLOCKING_CHANGE: This function is now a simple wrapper.
-    // The actual work is done by initiateDistanceRead and processSensorReading.
-    // It initiates a read if idle and returns the last known value.
-    initiateDistanceRead(device);
-    return distanceReading; // Returns last known value, might be stale if read in progress
-}
-
 
 // HOW TO CHANGE DEPTH SENSOR DEVICE I2C ADDRESS_____________________________________________________________________________
 

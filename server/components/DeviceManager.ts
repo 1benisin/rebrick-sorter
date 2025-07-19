@@ -21,6 +21,10 @@ export class DeviceManager extends BaseComponent {
   private readonly MAX_RECONNECT_ATTEMPTS = 14;
   private portScanTimer: NodeJS.Timeout | null = null;
   private readonly PORT_SCAN_INTERVAL_MS = 60000;
+  // Handshake state tracking
+  private awaitingSettingsAck: Map<DeviceName, boolean> = new Map();
+  private settingsAckTimeouts: Map<DeviceName, NodeJS.Timeout> = new Map();
+  private readonly SETTINGS_ACK_TIMEOUT_MS = 5000;
 
   constructor(config: DeviceManagerConfig) {
     super('DeviceManager');
@@ -152,11 +156,13 @@ export class DeviceManager extends BaseComponent {
       // Add error listener for hopper_feeder
       if (deviceName === DeviceName.HOPPER_FEEDER) {
         deviceInfo.device.on('error', async (err: Error) => {
+          console.log(`\x1b[31m[DEBUG] HOPPER_FEEDER 'error' event triggered. Error: ${err.message}\x1b[0m`);
           console.error(`\x1b[33mError on hopper_feeder device ${deviceInfo.portName}:\x1b[0m`, err);
           await this.handleDisconnect(deviceName, 'error');
         });
 
         deviceInfo.device.on('close', async () => {
+          console.log(`\x1b[31m[DEBUG] HOPPER_FEEDER 'close' event triggered.\x1b[0m`);
           console.log(`\x1b[33mPort closed for hopper_feeder device ${deviceInfo.portName}\x1b[0m`);
           await this.handleDisconnect(deviceName, 'close');
         });
@@ -172,6 +178,7 @@ export class DeviceManager extends BaseComponent {
   }
 
   private async handleDisconnect(deviceName: DeviceName, reason: string): Promise<void> {
+    console.log(`\x1b[31m[DEBUG] Entering handleDisconnect for ${deviceName} due to: ${reason}\x1b[0m`);
     console.log(`\x1b[33mDevice ${deviceName} disconnected due to ${reason}. Initiating disconnect procedure.\x1b[0m`);
     const deviceInfo = this.devices.get(deviceName);
 
@@ -392,27 +399,79 @@ export class DeviceManager extends BaseComponent {
       console.error(`\x1b[33mNo device info found for port ${deviceName}\x1b[0m`);
       return;
     }
-    console.log(`\x1b[1m${deviceName}\x1b[0m:`, data);
+    console.log(`\x1b[35m[RX <- ${deviceName}]\x1b[0m Received data: ${data}`);
 
+    // Handle handshake/acknowledgment protocol
     if (data.trim() === 'Ready') {
-      let configMessage = '';
-      switch (deviceInfo.config.deviceType) {
-        case DeviceType.SORTER:
-          configMessage = this.buildSorterInitMessage(deviceInfo.config);
-          break;
-        case DeviceType.CONVEYOR_JETS:
-          configMessage = this.buildConveyorJetsInitMessage(deviceInfo.config);
-          break;
-        case DeviceType.HOPPER_FEEDER:
-          configMessage = this.buildHopperFeederInitMessage(deviceInfo.config);
-          break;
+      if (!this.awaitingSettingsAck.get(deviceName)) {
+        let configMessage = '';
+        switch (deviceInfo.config.deviceType) {
+          case DeviceType.SORTER:
+            configMessage = this.buildSorterInitMessage(deviceInfo.config);
+            break;
+          case DeviceType.CONVEYOR_JETS:
+            configMessage = this.buildConveyorJetsInitMessage(deviceInfo.config);
+            break;
+          case DeviceType.HOPPER_FEEDER:
+            configMessage = this.buildHopperFeederInitMessage(deviceInfo.config);
+            break;
+        }
+        if (configMessage) {
+          this.sendCommand(deviceInfo.deviceName, configMessage);
+          this.awaitingSettingsAck.set(deviceName, true);
+          // Set up timeout for ack
+          const timeout = setTimeout(() => {
+            if (this.awaitingSettingsAck.get(deviceName)) {
+              console.warn(
+                `\x1b[33m[${deviceName}] Settings ack timeout. No acknowledgment received after sending settings.\x1b[0m`,
+              );
+              this.socketManager.emitComponentStatusUpdate(
+                deviceName,
+                ComponentStatus.ERROR,
+                'Settings ack timeout. No acknowledgment received.',
+              );
+              // Optionally: retry sending settings or alert user here
+              // For now, just log and mark as error
+              this.awaitingSettingsAck.delete(deviceName);
+            }
+          }, this.SETTINGS_ACK_TIMEOUT_MS);
+          this.settingsAckTimeouts.set(deviceName, timeout);
+        }
+      } else {
+        console.log(`\x1b[33m[${deviceName}] Already awaiting settings ack, ignoring repeated 'Ready'.\x1b[0m`);
       }
+      return;
+    }
 
-      if (configMessage) {
-        this.sendCommand(deviceInfo.deviceName, configMessage);
+    // Handle settings acknowledgment
+    if (data.trim() === 'Settings updated successfully') {
+      if (this.awaitingSettingsAck.get(deviceName)) {
+        this.awaitingSettingsAck.delete(deviceName);
+        const timeout = this.settingsAckTimeouts.get(deviceName);
+        if (timeout) {
+          clearTimeout(timeout);
+          this.settingsAckTimeouts.delete(deviceName);
+        }
+        this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.READY, null);
+        console.log(`\x1b[32m[${deviceName}] Settings acknowledged. Device is READY.\x1b[0m`);
+      } else {
+        console.log(`\x1b[33m[${deviceName}] Received settings ack, but was not awaiting it.\x1b[0m`);
       }
+      return;
+    }
 
-      this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.READY, null);
+    // Handle error messages from device
+    if (data.trim().startsWith('Error:')) {
+      console.error(`\x1b[31m[${deviceName}] Device reported error: ${data.trim()}\x1b[0m`);
+      this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, data.trim());
+      // Optionally: retry sending settings or alert user here
+      this.awaitingSettingsAck.delete(deviceName);
+      const timeout = this.settingsAckTimeouts.get(deviceName);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.settingsAckTimeouts.delete(deviceName);
+      }
+      return;
     }
   }
 
@@ -425,6 +484,7 @@ export class DeviceManager extends BaseComponent {
     const message = data !== undefined ? `${command}${data}` : command;
     const formattedMessage = `<${message}>`;
 
+    console.log(`\x1b[36m[TX -> ${deviceName}]\x1b[0m Sending command: ${formattedMessage}`);
     deviceInfo.device.write(formattedMessage, (err: Error | null | undefined) => {
       if (err) {
         console.error(`\x1b[33mError sending message to ${deviceName}:\x1b[0m`, err);
@@ -440,9 +500,19 @@ export class DeviceManager extends BaseComponent {
       return;
     }
 
-    const message = `p,${pauseTime}`;
+    // Safeguard against invalid pause time values that could cause unintended behavior on the Arduino.
+    // The Arduino's atoi() function can interpret NaN or Infinity as 0,
+    // which previously triggered a latent bug causing the feeder to run indefinitely.
+    // We enforce a small minimum pause time to ensure stability.
+    let safePauseTime = Math.round(pauseTime); // Ensure it's an integer
+    if (!isFinite(safePauseTime) || safePauseTime < 10) {
+      safePauseTime = 10; // Enforce a minimum of 10ms
+    }
+
+    const message = `p,${safePauseTime}`;
     const formattedMessage = `<${message}>`;
 
+    console.log(`\x1b[36m[TX -> ${DeviceName.HOPPER_FEEDER}]\x1b[0m Sending command: ${formattedMessage}`);
     deviceInfo.device.write(formattedMessage, (err: Error | null | undefined) => {
       if (err) {
         console.error('\x1b[33mError sending pause time update to hopper feeder:\x1b[0m', err);
@@ -488,13 +558,10 @@ export class DeviceManager extends BaseComponent {
           FEEDER_LONG_MOVE_TIME: settings.feederLongMoveTime,
         };
 
-        // Only send update if settings actually changed
-        if (JSON.stringify(config) !== JSON.stringify(hopperFeeder.config)) {
-          this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
-          const configMessage = this.buildHopperFeederInitMessage(config);
-          if (configMessage) {
-            this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
-          }
+        this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
+        const configMessage = this.buildHopperFeederInitMessage(config);
+        if (configMessage) {
+          this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
         }
       }
 
