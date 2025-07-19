@@ -20,6 +20,10 @@ int minRPM = 30;             // Minimum allowed RPM
 int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
 int pwmValue = 0;            // Current PWM value (0-255)
 
+// Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
+const int CONV_MIN_PWM = 61;    // ~1.2 V
+const int CONV_MAX_PWM = 140;   // ~2.75 V
+
 void setup()
 {
   Serial.begin(9600);
@@ -181,18 +185,10 @@ void loop() {
     }
   }
 
-  // Quadratic PWM control for AC induction motor
+  // Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
   if (conveyorOn) {
-    float normalizedSpeed = float(targetRPM - minRPM) / (maxConveyorRPM - minRPM); // 0.0–1.0
-    float curve = 2.0; // >1 = more aggressive start, <1 = softer start
-    float curved = pow(normalizedSpeed, curve); // Quadratic response
-
-    int minPWM = 0;
-    int maxPWM = 140; // 140 is ~2.75V (140/255 * 5V)
-
-    pwmValue = minPWM + (int)((maxPWM - minPWM) * curved);
-    pwmValue = constrain(pwmValue, minPWM, maxPWM);
-
+    pwmValue = map(targetRPM, minRPM, maxConveyorRPM, CONV_MIN_PWM, CONV_MAX_PWM);
+    pwmValue = constrain(pwmValue, CONV_MIN_PWM, CONV_MAX_PWM);
     analogWrite(CONV_RPWM_PIN, pwmValue);
   }
 
