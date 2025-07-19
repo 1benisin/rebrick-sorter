@@ -3,8 +3,7 @@
 #define JET_2_PIN 10
 #define JET_3_PIN 9
 
-#define CONV_RPWM_PIN   5
-#define CONV_R_EN_PIN   6
+#define CONV_RPWM_PIN   6
 
 #define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
 
@@ -31,8 +30,6 @@ void setup()
   pinMode(JET_3_PIN, OUTPUT);
   
   pinMode(CONV_RPWM_PIN, OUTPUT);
-  pinMode(CONV_R_EN_PIN, OUTPUT);
-  digitalWrite(CONV_R_EN_PIN, LOW);
   analogWrite(CONV_RPWM_PIN, 0);
 
   Serial.println("Ready");
@@ -70,7 +67,6 @@ void processSettings(char *message) {
     pwmValue = 0;
 
     // Stop the conveyor motor
-    digitalWrite(CONV_R_EN_PIN, LOW);
     analogWrite(CONV_RPWM_PIN, 0);
 
     settingsInitialized = true;
@@ -98,11 +94,9 @@ void processMessage(char *message) {
     case 'o': { // conveyor on off
       conveyorOn = !conveyorOn;
       if (!conveyorOn) {
-        digitalWrite(CONV_R_EN_PIN, LOW);
         analogWrite(CONV_RPWM_PIN, 0);
         pwmValue = 0;
       } else {
-        digitalWrite(CONV_R_EN_PIN, HIGH);
         targetRPM = maxConveyorRPM;
       }
       Serial.println(conveyorOn ? "conveyor on" : "conveyor off");
@@ -193,8 +187,8 @@ void loop() {
     float curve = 2.0; // >1 = more aggressive start, <1 = softer start
     float curved = pow(normalizedSpeed, curve); // Quadratic response
 
-    int minPWM = 61;
-    int maxPWM = 143;
+    int minPWM = 0;
+    int maxPWM = 140; // 140 is ~2.75V (140/255 * 5V)
 
     pwmValue = minPWM + (int)((maxPWM - minPWM) * curved);
     pwmValue = constrain(pwmValue, minPWM, maxPWM);
