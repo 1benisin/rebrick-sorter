@@ -13,16 +13,17 @@ bool jetActive[4] = {false, false, false, false};  // Track if each jet is curre
 unsigned long jetEndTime[4];  // Store end times for each jet
 bool settingsInitialized = false;
 
-volatile bool conveyorOn = false;
-
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
 int minRPM = 30;             // Minimum allowed RPM
-int targetRPM = 60;          // Desired RPM (can be updated with an 'r' command)
+int targetRPM = 0;           // Desired RPM, initialized to 0 for safety
 int pwmValue = 0;            // Current PWM value (0-255)
+
+#define REFERENCE_MAX_RPM 60  // The absolute max RPM the system is designed for. The settings max is a fraction of this.
 
 // Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
 const int CONV_MIN_PWM = 61;    // ~1.2 V
 const int CONV_MAX_PWM = 140;   // ~2.75 V
+unsigned long lastDebugTime = 0;
 
 void setup()
 {
@@ -37,6 +38,7 @@ void setup()
   analogWrite(CONV_RPWM_PIN, 0);
 
   Serial.println("Ready");
+  Serial.println("Arduino setup complete. Motor speed should be 0.");
 }
 
 void processSettings(char *message) {
@@ -62,19 +64,27 @@ void processSettings(char *message) {
     maxConveyorRPM = values[4];
     minRPM = values[5];
 
+    Serial.println("--- SETTINGS RECEIVED ---");
+    Serial.print("Jet Fire Times: ");
+    for(int i=0; i<4; i++) { Serial.print(JET_FIRE_TIMES[i]); Serial.print(","); }
+    Serial.println("");
+    Serial.print("Max RPM: "); Serial.println(maxConveyorRPM);
+    Serial.print("Min RPM: "); Serial.println(minRPM);
+    Serial.println("-------------------------");
+
     // Reset all state variables to their initial values
     for(int i = 0; i < 4; i++) {
       jetActive[i] = false;
       jetEndTime[i] = 0;
     }
-    conveyorOn = false;
+    targetRPM = 0; // Reset speed to 0 for safety
     pwmValue = 0;
 
     // Stop the conveyor motor
     analogWrite(CONV_RPWM_PIN, 0);
 
     settingsInitialized = true;
-    Serial.println("Settings updated");
+    Serial.println("Settings updated successfully");
   } else {
     Serial.println("Error: Not enough settings provided");
   }
@@ -95,31 +105,20 @@ void processMessage(char *message) {
       break;
     }
 
-    case 'o': { // conveyor on off
-      conveyorOn = !conveyorOn;
-      if (!conveyorOn) {
-        analogWrite(CONV_RPWM_PIN, 0);
-        pwmValue = 0;
+    case 'o': { // conveyor on off - toggles speed between 0 and max
+      if (targetRPM > 0) {
+        targetRPM = 0;
       } else {
         targetRPM = maxConveyorRPM;
       }
-      Serial.println(conveyorOn ? "conveyor on" : "conveyor off");
+      Serial.print("'o' command received. New targetRPM: ");
+      Serial.println(targetRPM);
       break;
     }
 
     case 'c': { // Set target RPM 
-      targetRPM = constrain(actionValue, minRPM, maxConveyorRPM); // Constrain to safe range between minRPM and maxConveyorRPM
-
-      if (actionValue < minRPM || actionValue > maxConveyorRPM){
-        Serial.print("RPM constrained to hardware bounds [");
-        Serial.print(minRPM);
-        Serial.print(" - ");
-        Serial.print(maxConveyorRPM);
-        Serial.print("]: ");
-      } else {
-        Serial.print("RPM updated: ");
-      }
-      
+      targetRPM = constrain(actionValue, 0, maxConveyorRPM); // Constrain to safe range between 0 and maxConveyorRPM
+      Serial.print("'c' command received. New targetRPM: ");
       Serial.println(targetRPM);
       break;
     }
@@ -185,12 +184,19 @@ void loop() {
     }
   }
 
-  // Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
-  if (conveyorOn) {
-    pwmValue = map(targetRPM, 0, maxConveyorRPM, 0, CONV_MAX_PWM);
-    pwmValue = constrain(pwmValue, 0, CONV_MAX_PWM);
-    analogWrite(CONV_RPWM_PIN, pwmValue);
+  // Periodically print debug info to avoid spamming serial
+  if (millis() - lastDebugTime > 1000) {
+    lastDebugTime = millis();
+    Serial.print("[DEBUG] targetRPM: ");
+    Serial.print(targetRPM);
+    Serial.print(", pwmValue: ");
+    Serial.println(pwmValue);
   }
+
+  // Map targetRPM into the PWM range
+  pwmValue = map(targetRPM, 0, REFERENCE_MAX_RPM, 0, CONV_MAX_PWM);
+  pwmValue = constrain(pwmValue, 0, CONV_MAX_PWM);
+  analogWrite(CONV_RPWM_PIN, pwmValue);
 
   // Check if any jets need to be turned off
   for(int i = 0; i < 4; i++) {
