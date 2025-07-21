@@ -187,8 +187,8 @@ void loop() {
 
   // Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
   if (conveyorOn) {
-    pwmValue = map(targetRPM, minRPM, maxConveyorRPM, CONV_MIN_PWM, CONV_MAX_PWM);
-    pwmValue = constrain(pwmValue, CONV_MIN_PWM, CONV_MAX_PWM);
+    pwmValue = map(targetRPM, 0, maxConveyorRPM, 0, CONV_MAX_PWM);
+    pwmValue = constrain(pwmValue, 0, CONV_MAX_PWM);
     analogWrite(CONV_RPWM_PIN, pwmValue);
   }
 
