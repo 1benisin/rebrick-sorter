@@ -25,6 +25,12 @@ float integralError = 0;      // Accumulated error for the integral term
 unsigned long lastPwmAdjustmentTime = 0;
 #define PWM_ADJUSTMENT_INTERVAL 100 // Recalculate PWM every 100ms
 
+// --- Moving Average Filter for RPM ---
+#define RPM_FILTER_SAMPLES 5
+int rpmReadings[RPM_FILTER_SAMPLES];
+int rpmFilterIndex = 0;
+long totalRpm = 0;
+
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
 int minRPM = 30;             // Minimum allowed RPM
@@ -51,6 +57,11 @@ void setup()
   
   pinMode(CONV_RPWM_PIN, OUTPUT);
   analogWrite(CONV_RPWM_PIN, 0);
+
+  // Initialize RPM filter
+  for (int i = 0; i < RPM_FILTER_SAMPLES; i++) {
+    rpmReadings[i] = 0;
+  }
 
   // Setup for encoder interrupt on pin 2
   pinMode(ENCODER_PIN, INPUT_PULLUP);
@@ -219,7 +230,7 @@ void loop() {
   if (now - lastPwmAdjustmentTime >= PWM_ADJUSTMENT_INTERVAL) {
     lastPwmAdjustmentTime = now;
 
-    // 1. Calculate current RPM from encoder pulses
+    // 1. Calculate instantaneous RPM from encoder pulses
     // Temporarily disable interrupts to safely read and reset pulseCount
     noInterrupts();
     long pulses = pulseCount;
@@ -227,14 +238,24 @@ void loop() {
     interrupts();
     
     double intervalSeconds = (double)PWM_ADJUSTMENT_INTERVAL / 1000.0;
-    currentRPM = (int)((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
+    int instantaneousRpm = (int)((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
+    
+    // 2. Apply moving average filter
+    totalRpm = totalRpm - rpmReadings[rpmFilterIndex];
+    rpmReadings[rpmFilterIndex] = instantaneousRpm;
+    totalRpm = totalRpm + instantaneousRpm;
+    rpmFilterIndex++;
+    if (rpmFilterIndex >= RPM_FILTER_SAMPLES) {
+      rpmFilterIndex = 0;
+    }
+    currentRPM = totalRpm / RPM_FILTER_SAMPLES;
     
     if (targetRPM > 0) {
-      // 2. Calculate PI error terms
+      // 3. Calculate PI error terms
       int error = targetRPM - currentRPM;
       integralError += error * intervalSeconds;
 
-      // 3. Anti-windup for integral term to prevent it from growing too large
+      // 4. Anti-windup for integral term to prevent it from growing too large
       if (integralError * Ki > CONV_MAX_PWM) {
         integralError = CONV_MAX_PWM / Ki;
       } else if (integralError * Ki < 0) {
@@ -242,10 +263,10 @@ void loop() {
         integralError = 0;
       }
 
-      // 4. Calculate PWM value from PI controller
+      // 5. Calculate PWM value from PI controller
       pwmValue = (Kp * error) + (Ki * integralError);
 
-      // 5. Constrain PWM value to valid range
+      // 6. Constrain PWM value to valid range
       pwmValue = constrain(pwmValue, 0, CONV_MAX_PWM);
 
     } else {
