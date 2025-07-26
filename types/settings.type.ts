@@ -61,12 +61,15 @@ export const settingsSchema = z.object({
   camera2VerticalPositionPercentage: z.coerce.number().default(-35),
   videoStreamId1: z.string().default(''), // deviceId
   videoStreamId2: z.string().default(''), // deviceId
-  sorters: z.array(sorterSettingsSchema).default([]),
   feederVibrationSpeed: z.coerce.number().min(0).max(255).default(200),
   feederStopDelay: z.coerce.number().min(0).default(5),
   feederPauseTime: z.coerce.number().min(0).default(1000),
   feederShortMoveTime: z.coerce.number().min(0).default(250),
   feederLongMoveTime: z.coerce.number().min(0).default(2000),
+  conveyorPulsesPerRevolution: z.coerce.number().min(0).default(20),
+  conveyorKp: z.coerce.number().min(0).default(1.5),
+  conveyorKi: z.coerce.number().min(0).default(0.05),
+  sorters: z.array(sorterSettingsSchema).default([]),
   hopperCycleInterval: z.coerce.number().min(0).default(20000),
 });
 
