@@ -313,7 +313,7 @@ export class DeviceManager extends BaseComponent {
   }
 
   private async createDevice(portName: string, deviceName: DeviceName): Promise<SerialPort | SerialPortMock> {
-    const isDevMode = process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development';
+    const isDevMode = process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development' || process.env.NODE_ENV === 'development';
     try {
       // Create the device without error callback in constructor
       const device = isDevMode
