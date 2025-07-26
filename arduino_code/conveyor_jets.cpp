@@ -16,20 +16,23 @@ bool settingsInitialized = false;
 
 // --- PI Speed Controller & Encoder Variables ---
 int pulsesPerRevolution = 20; // Default pulses per revolution for the encoder wheel
-float Kp = 1.5;               // Proportional gain for PI controller
-float Ki = 0.05;              // Integral gain for PI controller
+float Kp = 2.0;               // Proportional gain for PI controller
+float Ki = 0.10;              // Integral gain for PI controller
 
 volatile long pulseCount = 0; // Incremented by encoder interrupt
 int currentRPM = 0;           // Calculated current RPM
 float integralError = 0;      // Accumulated error for the integral term
 unsigned long lastPwmAdjustmentTime = 0;
-#define PWM_ADJUSTMENT_INTERVAL 100 // Recalculate PWM every 100ms
+#define PWM_ADJUSTMENT_INTERVAL 250 // Recalculate PWM every 250ms
 
 // --- Moving Average Filter for RPM ---
-#define RPM_FILTER_SAMPLES 5
-int rpmReadings[RPM_FILTER_SAMPLES];
-int rpmFilterIndex = 0;
-long totalRpm = 0;
+// Replace moving average filter definitions with exponential filter
+// #define RPM_FILTER_SAMPLES 5
+// int rpmReadings[RPM_FILTER_SAMPLES];
+// int rpmFilterIndex = 0;
+// long totalRpm = 0;
+#define FILTER_ALPHA 0.3  // smoothing factor for exponential filter
+static double filteredRPM = 0.0;
 
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
@@ -39,6 +42,7 @@ int pwmValue = 0;            // Current PWM value (0-255)
 
 // Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
 const int CONV_MAX_PWM = 140;   // ~2.75 V
+const int CONV_MIN_PWM = 61;    // ~1.2 V minimum to start motor
 unsigned long lastDebugTime = 0;
 
 // --- Function Prototypes ---
@@ -58,14 +62,14 @@ void setup()
   pinMode(CONV_RPWM_PIN, OUTPUT);
   analogWrite(CONV_RPWM_PIN, 0);
 
-  // Initialize RPM filter
-  for (int i = 0; i < RPM_FILTER_SAMPLES; i++) {
-    rpmReadings[i] = 0;
-  }
+  // Initialize exponential filter
+  filteredRPM = 0.0;
 
   // Setup for encoder interrupt on pin 2
   pinMode(ENCODER_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(ENCODER_PIN), countPulse, RISING);
+  // Auto-enable settings to allow on/off and speed commands without explicit settings
+  settingsInitialized = true;
 
   Serial.println("Ready");
   Serial.println("Arduino setup complete. Motor speed should be 0.");
@@ -240,15 +244,9 @@ void loop() {
     double intervalSeconds = (double)PWM_ADJUSTMENT_INTERVAL / 1000.0;
     int instantaneousRpm = (int)((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
     
-    // 2. Apply moving average filter
-    totalRpm = totalRpm - rpmReadings[rpmFilterIndex];
-    rpmReadings[rpmFilterIndex] = instantaneousRpm;
-    totalRpm = totalRpm + instantaneousRpm;
-    rpmFilterIndex++;
-    if (rpmFilterIndex >= RPM_FILTER_SAMPLES) {
-      rpmFilterIndex = 0;
-    }
-    currentRPM = totalRpm / RPM_FILTER_SAMPLES;
+    // 2. Apply exponential filter to smooth RPM readings with low lag
+    filteredRPM = FILTER_ALPHA * instantaneousRpm + (1.0 - FILTER_ALPHA) * filteredRPM;
+    currentRPM = (int)(filteredRPM + 0.5);
     
     if (targetRPM > 0) {
       // 3. Calculate PI error terms
@@ -263,16 +261,19 @@ void loop() {
         integralError = 0;
       }
 
-      // 5. Calculate PWM value from PI controller
-      pwmValue = (Kp * error) + (Ki * integralError);
+      // Feed-forward base PWM from targetRPM (open-loop mapping)
+      int basePWM = map(targetRPM, 0, maxConveyorRPM, CONV_MIN_PWM, CONV_MAX_PWM);
 
-      // 6. Constrain PWM value to valid range
-      pwmValue = constrain(pwmValue, 0, CONV_MAX_PWM);
+      // 5. Calculate combined PWM: feed-forward + PI correction
+      int piOutput = (int)(Kp * error) + (int)(Ki * integralError);
+      pwmValue = basePWM + piOutput;
 
+      // 6. Constrain PWM to valid range (including minimum drive)
+      pwmValue = constrain(pwmValue, CONV_MIN_PWM, CONV_MAX_PWM);
     } else {
       // If target is 0, force stop and reset controller state
       pwmValue = 0;
-      integralError = 0;
+      integralError = 0; // Reset PI controller state
       currentRPM = 0;
     }
   }
