@@ -40,11 +40,12 @@ export const settingsSchema = z.object({
   maxConveyorRPM: z.coerce
     .number()
     .min(0, { message: 'Maximum conveyor RPM must be a non-negative number' })
-    .default(60),
+    .default(100),
   minConveyorRPM: z.coerce
     .number()
     .min(0, { message: 'Minimum conveyor RPM must be a non-negative number' })
-    .default(30),
+    .default(50),
+  constantConveyorSpeed: z.boolean().default(false),
   detectDistanceThreshold: z.coerce
     .number()
     .min(1, { message: 'Detection threshold must be at least 1 unit' })

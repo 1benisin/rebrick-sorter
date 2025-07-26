@@ -110,37 +110,47 @@ export class SystemCoordinator {
   // Event handlers
   private async handleSortPart(data: SortPartDto): Promise<void> {
     try {
+      const settings = this.settingsManager.getSettings();
+      if (!settings) {
+        console.error('Settings not available, skipping part.');
+        return;
+      }
+
       // Calculate all timings for the part
       const part = this.buildPart(data);
 
-      // if there is an arrival time delay, we need to slow down the part
-      if (part.arrivalTimeDelay > 0) {
-        // Calculate required slowdown percentage before applying it
-        const targetJetTime = part.jetTime + part.arrivalTimeDelay;
-        const currentTimeGap = part.jetTime - part.conveyorSpeedTime;
-        const requiredTimeGap = targetJetTime - part.conveyorSpeedTime;
-        const slowdownPercent = currentTimeGap / requiredTimeGap;
-        const newSpeed = part.conveyorSpeed * slowdownPercent;
-        const settings = this.settingsManager.getSettings();
-        if (!settings) {
-          part.status = 'skipped';
+      // if constant speed is enabled and there is an arrival time delay, we must skip the part
+      if (settings.constantConveyorSpeed) {
+        if (part.arrivalTimeDelay > 0) {
+          console.log(`Skipping part ${part.partId}: Timing conflict with constant speed mode enabled.`);
           this.socketManager.emitPartSkipped(part);
           return;
         }
-        const minAllowedSpeed =
-          this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.maxConveyorRPM);
+      } else {
+        // if there is an arrival time delay, we need to slow down the part
+        if (part.arrivalTimeDelay > 0) {
+          // Calculate required slowdown percentage before applying it
+          const targetJetTime = part.jetTime + part.arrivalTimeDelay;
+          const currentTimeGap = part.jetTime - part.conveyorSpeedTime;
+          const requiredTimeGap = targetJetTime - part.conveyorSpeedTime;
+          const slowdownPercent = currentTimeGap / requiredTimeGap;
+          const newSpeed = part.conveyorSpeed * slowdownPercent;
 
-        if (newSpeed < minAllowedSpeed) {
-          part.status = 'skipped';
-          this.socketManager.emitPartSkipped(part);
-          return;
+          const minAllowedSpeed =
+            this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.maxConveyorRPM);
+
+          if (newSpeed < minAllowedSpeed) {
+            part.status = 'skipped';
+            this.socketManager.emitPartSkipped(part);
+            return;
+          }
+
+          // Update part with arrival time delay
+          part.moveTime += part.arrivalTimeDelay;
+          part.moveFinishedTime += part.arrivalTimeDelay;
+          part.jetTime += part.arrivalTimeDelay;
+          part.conveyorSpeed = newSpeed;
         }
-
-        // Update part with arrival time delay
-        part.moveTime += part.arrivalTimeDelay;
-        part.moveFinishedTime += part.arrivalTimeDelay;
-        part.jetTime += part.arrivalTimeDelay;
-        part.conveyorSpeed = newSpeed;
       }
 
       // Insert speed change
@@ -155,6 +165,11 @@ export class SystemCoordinator {
 
   private buildPart(data: SortPartDto): Part {
     const { partId, initialTime, initialPosition, bin, sorter } = data;
+    const settings = this.settingsManager.getSettings();
+    if (!settings) {
+      throw new Error('Settings not available in buildPart');
+    }
+
     // -- calculate part properties --
     // default arrival time
     const jetPosition = this.conveyorManager.getJetPosition(sorter);
@@ -177,7 +192,11 @@ export class SystemCoordinator {
     const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
     // conveyor speed
     const nextConveyorPart = this.conveyorManager.findNextConveyorPart(defaultArrivalTime);
-    const conveyorSpeed = nextConveyorPart?.conveyorSpeed || defaultSpeed;
+    let conveyorSpeed = defaultSpeed;
+    if (!settings.constantConveyorSpeed && nextConveyorPart) {
+      conveyorSpeed = nextConveyorPart.conveyorSpeed;
+    }
+
     // conveyor speed time
     const previousConveyorPart = this.conveyorManager.findPreviousConveyorPart(defaultArrivalTime);
     const conveyorSpeedTime = previousConveyorPart?.jetTime || Date.now();
