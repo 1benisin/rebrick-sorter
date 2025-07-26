@@ -6,7 +6,7 @@
 #define CONV_RPWM_PIN   6
 #define ENCODER_PIN     2     // Encoder uses hardware interrupt 0 on pin 2
 
-#define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
+#define MAX_MESSAGE_LENGTH 100 // buffer length for incoming serial communication
 
 
 int JET_FIRE_TIMES[4];  // Array to store fire times for each jet
