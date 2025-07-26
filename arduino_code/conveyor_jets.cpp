@@ -23,7 +23,7 @@ volatile long pulseCount = 0; // Incremented by encoder interrupt
 int currentRPM = 0;           // Calculated current RPM
 float integralError = 0;      // Accumulated error for the integral term
 unsigned long lastPwmAdjustmentTime = 0;
-#define PWM_ADJUSTMENT_INTERVAL 50 // Recalculate PWM every 50ms
+#define PWM_ADJUSTMENT_INTERVAL 100 // Recalculate PWM every 100ms
 
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
