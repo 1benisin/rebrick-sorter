@@ -55,13 +55,9 @@ unsigned long lastFeederActionTime = 0;
 unsigned long totalFeederVibrationTime = 0;
 unsigned long feederVibrationStartTime = 0;
 
-// This will store the speed from the first settings message received after boot.
-// It acts as a permanent ceiling for the feeder speed until the device is reset.
-int MAX_FEEDER_SPEED = 1; 
-
 // Settings from server
 int HOPPER_CYCLE_INTERVAL = 1000;  // Time between hopper cycles
-int FEEDER_VIBRATION_SPEED = 92;   // Speed of feeder vibration
+int FEEDER_VIBRATION_SPEED = 60;   // Speed of feeder vibration
 int FEEDER_STOP_DELAY = 1;          // Delay before stopping feeder after part detection
 int FEEDER_PAUSE_TIME = 100;       // Time to pause between feeder movements
 int FEEDER_SHORT_MOVE_TIME = 1000;   // Duration of short feeder movement
@@ -188,9 +184,8 @@ void checkFeeder() {
       if (elapsedTime < RAMP_UP_DURATION) {
         // Still ramping up
         int currentSpeed = map(elapsedTime, 0, RAMP_UP_DURATION, RAMP_START_SPEED, FEEDER_VIBRATION_SPEED);
-        // Explicitly clamp the speed to the absolute maximum allowed value.
-        // This provides an extra layer of safety.
-        currentSpeed = constrain(currentSpeed, 0, MAX_FEEDER_SPEED);
+        // Clamp the speed to the target vibration speed.
+        currentSpeed = constrain(currentSpeed, 0, FEEDER_VIBRATION_SPEED);
         digitalWrite(FEEDER_R_EN_PIN, HIGH);
         analogWrite(FEEDER_RPWM_PIN, currentSpeed);
       } else {
@@ -434,13 +429,7 @@ void processSettings(char *message) {
   if (valueIndex >= 6) {
     // Apply settings if all validations pass
     HOPPER_CYCLE_INTERVAL = values[0];
-    
-    // On the very first settings update, save the speed as the maximum allowed speed.
-    if (MAX_FEEDER_SPEED == 1) {
-      MAX_FEEDER_SPEED = values[1];
-    }
-    // For all subsequent updates, clamp the new speed to the saved maximum.
-    FEEDER_VIBRATION_SPEED = min(values[1], MAX_FEEDER_SPEED);
+    FEEDER_VIBRATION_SPEED = values[1];
 
     FEEDER_STOP_DELAY = values[2];
     FEEDER_PAUSE_TIME = values[3];
@@ -519,8 +508,10 @@ void loop() {
     }
   }
 
-  checkFeeder();
-  checkHopper();
+  if (settingsInitialized) {
+    checkFeeder();
+    checkHopper();
+  }
 
   // Watchdog timer removed. Main loop is robust and non-blocking; errors are logged and recovered in software.
 }
