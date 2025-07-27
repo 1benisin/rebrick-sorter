@@ -44,6 +44,9 @@ unsigned long lastDebugTime = 0;
 // --- Function Prototypes ---
 void countPulse();
 int getJetPin(int jetNumber);
+void handleSerialCommunication();
+void updateConveyorSpeed(unsigned long now);
+void updateJets(unsigned long now);
 
 
 void setup()
@@ -205,11 +208,10 @@ void processMessage(char *message) {
 #define START_MARKER '<'
 #define END_MARKER '>'
 
-void loop() {
+void handleSerialCommunication() {
   static char message[MAX_MESSAGE_LENGTH];
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
-  unsigned long now = millis();
 
   while (Serial.available() > 0) {
     char inByte = Serial.read();
@@ -232,7 +234,9 @@ void loop() {
       }
     }
   }
+}
 
+void updateConveyorSpeed(unsigned long now) {
   // --- Closed-Loop PI Speed Control ---
   if (now - lastPwmAdjustmentTime >= PWM_ADJUSTMENT_INTERVAL) {
     lastPwmAdjustmentTime = now;
@@ -297,13 +301,26 @@ void loop() {
     Serial.print(", pwmValue: ");
     Serial.println(pwmValue);
   }
+}
 
+void updateJets(unsigned long now) {
   // Check if any jets need to be turned off
   for(int i = 0; i < 4; i++) {
     if(jetActive[i] && now >= jetEndTime[i]) {
       digitalWrite(getJetPin(i), LOW);
       jetActive[i] = false;
     }
+  }
+}
+
+void loop() {
+  handleSerialCommunication();
+
+  // Only run the control loop if settings have been initialized
+  if (settingsInitialized) {
+    unsigned long now = millis();
+    updateConveyorSpeed(now);
+    updateJets(now);
   }
 }
 
