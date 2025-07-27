@@ -21,7 +21,7 @@
 #define RAMP_UP_DURATION 1000 // ms
 #define RAMP_START_SPEED 60   // a lower speed to start with
 
-#define MAX_MESSAGE_LENGTH 40 // longest serial comunication can be
+#define MAX_MESSAGE_LENGTH 60 // longest serial comunication can be
 
 // Hopper Variables
 int hopperFullStrokeSteps = 2020; // motor steps it takes to move from top to bottom
@@ -60,12 +60,12 @@ unsigned long feederVibrationStartTime = 0;
 int MAX_FEEDER_SPEED = 1; 
 
 // Settings from server
-int HOPPER_CYCLE_INTERVAL = 12000;  // Time between hopper cycles
+int HOPPER_CYCLE_INTERVAL = 1000;  // Time between hopper cycles
 int FEEDER_VIBRATION_SPEED = 92;   // Speed of feeder vibration
 int FEEDER_STOP_DELAY = 1;          // Delay before stopping feeder after part detection
-int FEEDER_PAUSE_TIME = 1000;       // Time to pause between feeder movements
-int FEEDER_SHORT_MOVE_TIME = 60;   // Duration of short feeder movement
-int FEEDER_LONG_MOVE_TIME = 3000;   // Maximum time to run feeder before stopping
+int FEEDER_PAUSE_TIME = 100;       // Time to pause between feeder movements
+int FEEDER_SHORT_MOVE_TIME = 1000;   // Duration of short feeder movement
+int FEEDER_LONG_MOVE_TIME = 1000;   // Maximum time to run feeder before stopping
 
 // Debug variables
 unsigned long lastDebugTime = 0;     // For controlling debug print frequency
