@@ -457,9 +457,7 @@ void processSettings(char *message) {
     lastDebugTime = 0;
 
     settingsInitialized = true;
-    if (SYSTEM_DEBUG) {
-      Serial.println("Settings updated successfully");
-    }
+    Serial.println("Settings updated");
   } else {
     if (SYSTEM_DEBUG) {
       Serial.println("Error: Not enough settings provided");

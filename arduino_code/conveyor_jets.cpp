@@ -132,7 +132,7 @@ void processSettings(char *message) {
     analogWrite(CONV_RPWM_PIN, 0);
 
     settingsInitialized = true;
-    Serial.println("Settings updated successfully");
+    Serial.println("Settings updated");
   } else {
     Serial.println("Error: Not enough settings provided");
   }

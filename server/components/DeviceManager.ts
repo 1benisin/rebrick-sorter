@@ -457,7 +457,7 @@ export class DeviceManager extends BaseComponent {
     }
 
     // Handle settings acknowledgment
-    if (data.trim() === 'Settings updated successfully') {
+    if (data.trim() === 'Settings updated') {
       if (this.awaitingSettingsAck.get(deviceName)) {
         this.awaitingSettingsAck.delete(deviceName);
         const timeout = this.settingsAckTimeouts.get(deviceName);
