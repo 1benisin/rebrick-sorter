@@ -77,7 +77,7 @@ export class SettingsManager extends BaseComponent {
 
       // Set up real-time listener
       this.settingsRef.onSnapshot(
-        async (snapshot) => {
+        async (snapshot: FirebaseFirestore.DocumentSnapshot) => {
           if (snapshot.exists) {
             const settingsData = snapshot.data();
             if (settingsData) {

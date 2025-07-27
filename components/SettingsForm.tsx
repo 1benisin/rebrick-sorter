@@ -174,6 +174,45 @@ const SettingsForm = () => {
                 unchecked, the conveyor will slow down to accommodate parts.
               </HoverCardContent>
             </HoverCard>
+            <FormField
+              control={form.control}
+              name="conveyorPulsesPerRevolution"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Conveyor Pulses Per Revolution</FormLabel>
+                  <FormControl>
+                    <Input type="number" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="conveyorKp"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Conveyor Kp</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="conveyorKi"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Conveyor Ki</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 

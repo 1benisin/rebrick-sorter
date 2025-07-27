@@ -7,7 +7,7 @@
 
 #define FEEDER_DEBUG false
 #define HOPPER_DEBUG false
-#define SYSTEM_DEBUG true
+#define SYSTEM_DEBUG false
 
 #define ENABLE_PIN 6
 #define DIR_PIN 5
