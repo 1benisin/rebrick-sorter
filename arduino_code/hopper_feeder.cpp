@@ -118,11 +118,18 @@ void setup() {
 void startMotor() {
   digitalWrite(FEEDER_R_EN_PIN, HIGH);
   analogWrite(FEEDER_RPWM_PIN, FEEDER_VIBRATION_SPEED);
+  if (FEEDER_DEBUG) {
+    Serial.print("MOTOR: startMotor() called - speed set to ");
+    Serial.println(FEEDER_VIBRATION_SPEED);
+  }
 }
 
 void stopMotor() {
   digitalWrite(FEEDER_R_EN_PIN, LOW);
   analogWrite(FEEDER_RPWM_PIN, 0);
+  if (FEEDER_DEBUG) {
+    Serial.println("MOTOR: stopMotor() called - motor stopped");
+  }
 }
 
 enum class FeederState : uint8_t {
@@ -173,7 +180,15 @@ void checkFeeder() {
         Serial.println(")");
       }
       currFeederState = FeederState::ramp_up_move;
-      // Motor is started within ramp_up_move state
+      
+      // Start motor immediately at ramp start speed
+      digitalWrite(FEEDER_R_EN_PIN, HIGH);
+      analogWrite(FEEDER_RPWM_PIN, RAMP_START_SPEED);
+      
+      if (FEEDER_DEBUG) {
+        Serial.print("MOTOR_START: Starting motor at ramp speed ");
+        Serial.println(RAMP_START_SPEED);
+      }
       break;
     }
 
