@@ -1,7 +1,7 @@
 #include <PID_v1.h>
 
-#define CONVEYOR_DEBUG false
-#define SYSTEM_DEBUG false
+#define CONVEYOR_DEBUG true
+#define SYSTEM_DEBUG true
 
 #define JET_0_PIN 11
 #define JET_1_PIN 12
@@ -145,6 +145,15 @@ void processSettings(char *message) {
 }
 
 void processMessage(char *message) {
+  // Debug: Print the received message
+  if (SYSTEM_DEBUG) {
+    Serial.print("SYSTEM: Processing message: '");
+    Serial.print(message);
+    Serial.print("', first char: '");
+    Serial.print(message[0]);
+    Serial.println("'");
+  }
+  
   // Add settings check at the start
   if (!settingsInitialized && message[0] != 's') {
     Serial.println("Settings not initialized");
