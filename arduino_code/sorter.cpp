@@ -212,8 +212,13 @@ void processSettings(char *message) {
     xStepper->forceStop();
     yStepper->forceStop();
 
+    // Activate stepper drivers with small initial movement (similar to hopper_feeder)
+    // This enables the drivers so they're ready for actual commands
+    xStepper->move(1);
+    yStepper->move(1);
+
     settingsInitialized = true; // Settings have been received and processed
-    Serial.println("Settings updated");
+    Serial.println("Settings updated successfully");
   } else {
     Serial.println("Error: Not enough settings provided");
   }

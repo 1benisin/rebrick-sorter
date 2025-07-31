@@ -213,6 +213,19 @@ const SettingsForm = () => {
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="conveyorKd"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Conveyor Kd</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 
