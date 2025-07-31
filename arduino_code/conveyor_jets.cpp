@@ -1,5 +1,8 @@
 #include <PID_v1.h>
 
+#define CONVEYOR_DEBUG false
+#define SYSTEM_DEBUG false
+
 #define JET_0_PIN 11
 #define JET_1_PIN 12
 #define JET_2_PIN 10
