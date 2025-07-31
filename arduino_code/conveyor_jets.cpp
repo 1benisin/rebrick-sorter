@@ -73,6 +73,13 @@ void setup()
 }
 
 void processSettings(char *message) {
+  // Validate message format
+  if (message[0] != 's' || message[1] != ',') {
+    if (CONVEYOR_DEBUG) {
+      Serial.println("Error: Invalid settings message format");
+    }
+    return;
+  }
   // Parse settings from message
   // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<MAX_RPM>,<MIN_RPM>,<PPR>,<KP_INT>,<KI_INT>,<KD_INT>'
   // Note: PPR = Pulses Per Revolution, Kp/Ki/Kd are sent as integers (e.g., float * 100)
@@ -128,7 +135,7 @@ void processSettings(char *message) {
     analogWrite(CONV_RPWM_PIN, 0);
 
     settingsInitialized = true;
-    Serial.println("Settings updated successfully");
+    Serial.println("Settings updated");
   } else {
     Serial.println("Error: Not enough settings provided");
   }
