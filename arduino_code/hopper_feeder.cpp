@@ -114,9 +114,8 @@ void setup() {
 
     hopperStepper->move(100);
   }
-  if (SYSTEM_DEBUG) {
-    Serial.println("Ready");
-  } 
+  // Always send Ready signal so server can send settings
+  Serial.println("Ready"); 
 }
 
 void startMotor() {
