@@ -1,5 +1,5 @@
 // NOTE: Use USB port /dev/cu.usbserial-1110 for this Arduino
-// #include <Wire.h>
+#include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
 // Watchdog Timer removed: We now handle errors in software and do not reset the Arduino automatically.

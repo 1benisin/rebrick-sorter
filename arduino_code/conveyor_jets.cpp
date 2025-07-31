@@ -1,5 +1,8 @@
 #include <PID_v1.h>
 
+// Debug flag - set to 1 to enable debug output, 0 to disable
+#define CONVEYOR_DEBUG 0
+
 #define JET_0_PIN 11
 #define JET_1_PIN 12
 #define JET_2_PIN 10
