@@ -218,7 +218,7 @@ void processSettings(char *message) {
     yStepper->move(1);
 
     settingsInitialized = true; // Settings have been received and processed
-    Serial.println("Settings updated successfully");
+    Serial.println("Settings updated");
   } else {
     Serial.println("Error: Not enough settings provided");
   }
