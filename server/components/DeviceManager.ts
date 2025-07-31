@@ -388,7 +388,9 @@ export class DeviceManager extends BaseComponent {
       ',' +
       Math.round(settings.conveyorKp * 100) +
       ',' +
-      Math.round(settings.conveyorKi * 100)
+      Math.round(settings.conveyorKi * 100) +
+      ',' +
+      Math.round(settings.conveyorKd * 100)
     );
   }
 

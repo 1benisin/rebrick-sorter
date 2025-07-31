@@ -1,3 +1,5 @@
+#include <PID_v1.h>
+
 #define JET_0_PIN 11
 #define JET_1_PIN 12
 #define JET_2_PIN 10
@@ -14,36 +16,29 @@ bool jetActive[4] = {false, false, false, false};  // Track if each jet is curre
 unsigned long jetEndTime[4];  // Store end times for each jet
 bool settingsInitialized = false;
 
-// --- PI Speed Controller & Encoder Variables ---
+// --- PID Speed Controller & Encoder Variables ---
 int pulsesPerRevolution = 20; // Default pulses per revolution for the encoder wheel
-float Kp = 2.0;               // Proportional gain for PI controller
-float Ki = 0.10;              // Integral gain for PI controller
+double Kp = 2.0, Ki = 5.0, Kd = 1.0;  // PID tuning parameters
+double Setpoint, Input, Output;        // PID variables
 
 volatile long pulseCount = 0; // Incremented by encoder interrupt
 int currentRPM = 0;           // Calculated current RPM
-float integralError = 0;      // Accumulated error for the integral term
+static float filteredRPM = 0.0; // Smoothed RPM value
 unsigned long lastPwmAdjustmentTime = 0;
-#define PWM_ADJUSTMENT_INTERVAL 250 // Recalculate PWM every 250ms
-
-// --- Moving Average Filter for RPM ---
-// Replace moving average filter definitions with exponential filter
-// #define RPM_FILTER_SAMPLES 5
-// int rpmReadings[RPM_FILTER_SAMPLES];
-// int rpmFilterIndex = 0;
-// long totalRpm = 0;
-#define FILTER_ALPHA 0.3  // smoothing factor for exponential filter
-static double filteredRPM = 0.0;
+#define PWM_ADJUSTMENT_INTERVAL 100 // Recalculate PWM every 100ms
 
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
 int minRPM = 30;             // Minimum allowed RPM
 int targetRPM = 0;           // Desired RPM, initialized to 0 for safety
-int pwmValue = 0;            // Current PWM value (0-255)
 
 // Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
 const int CONV_MAX_PWM = 140;   // ~2.75 V
 const int CONV_MIN_PWM = 61;    // ~1.2 V minimum to start motor
 unsigned long lastDebugTime = 0;
+
+// Initialize PID controller
+PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 // --- Function Prototypes ---
 void countPulse();
@@ -62,8 +57,10 @@ void setup()
   pinMode(CONV_RPWM_PIN, OUTPUT);
   analogWrite(CONV_RPWM_PIN, 0);
 
-  // Initialize exponential filter
-  filteredRPM = 0.0;
+  // Initialize PID controller
+  myPID.SetMode(AUTOMATIC);
+  myPID.SetOutputLimits(CONV_MIN_PWM, CONV_MAX_PWM);
+  myPID.SetSampleTime(PWM_ADJUSTMENT_INTERVAL);
 
   // Setup for encoder interrupt on pin 2
   pinMode(ENCODER_PIN, INPUT_PULLUP);
@@ -77,15 +74,15 @@ void setup()
 
 void processSettings(char *message) {
   // Parse settings from message
-  // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<MAX_RPM>,<MIN_RPM>,<PPR>,<KP_INT>,<KI_INT>'
-  // Note: PPR = Pulses Per Revolution, Kp/Ki are sent as integers (e.g., float * 100)
+  // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<MAX_RPM>,<MIN_RPM>,<PPR>,<KP_INT>,<KI_INT>,<KD_INT>'
+  // Note: PPR = Pulses Per Revolution, Kp/Ki/Kd are sent as integers (e.g., float * 100)
   char *token;
-  int values[9]; // Array to hold 4 fire time, max/min RPM, PPR, Kp, Ki
+  int values[10]; // Array to hold 4 fire time, max/min RPM, PPR, Kp, Ki, Kd
   int valueIndex = 0;
 
   // Skip 's,' and start tokenizing
   token = strtok(&message[2], ",");
-  while (token != NULL && valueIndex < 9) {
+  while (token != NULL && valueIndex < 10) {
     values[valueIndex++] = atoi(token);
     token = strtok(NULL, ",");
   }
@@ -99,10 +96,11 @@ void processSettings(char *message) {
     maxConveyorRPM = values[4];
     minRPM = values[5];
     
-    // Check for optional new PI controller settings
+    // Check for optional new PID controller settings
     if (valueIndex >= 7) pulsesPerRevolution = values[6];
     if (valueIndex >= 8) Kp = values[7] / 100.0; // Convert from int back to float
     if (valueIndex >= 9) Ki = values[8] / 100.0; // Convert from int back to float
+    if (valueIndex >= 10) Kd = values[9] / 100.0; // Convert from int back to float
 
 
     Serial.println("--- SETTINGS RECEIVED ---");
@@ -114,6 +112,7 @@ void processSettings(char *message) {
     Serial.print("PPR: "); Serial.println(pulsesPerRevolution);
     Serial.print("Kp: "); Serial.println(Kp);
     Serial.print("Ki: "); Serial.println(Ki);
+    Serial.print("Kd: "); Serial.println(Kd);
     Serial.println("-------------------------");
 
     // Reset all state variables to their initial values
@@ -122,8 +121,8 @@ void processSettings(char *message) {
       jetEndTime[i] = 0;
     }
     targetRPM = 0; // Reset speed to 0 for safety
-    pwmValue = 0;
-    integralError = 0; // Reset PI controller state
+    Setpoint = 0; // Reset PID setpoint
+    myPID.SetTunings(Kp, Ki, Kd); // Update PID tunings
 
     // Stop the conveyor motor
     analogWrite(CONV_RPWM_PIN, 0);
@@ -158,6 +157,7 @@ void processMessage(char *message) {
       }
       Serial.print("'o' command received. New targetRPM: ");
       Serial.println(targetRPM);
+      Setpoint = targetRPM; // Update PID setpoint
       break;
     }
 
@@ -165,6 +165,7 @@ void processMessage(char *message) {
       targetRPM = constrain(actionValue, 0, maxConveyorRPM); // Constrain to safe range between 0 and maxConveyorRPM
       Serial.print("'c' command received. New targetRPM: ");
       Serial.println(targetRPM);
+      Setpoint = targetRPM; // Update PID setpoint
       break;
     }
     
@@ -230,7 +231,7 @@ void loop() {
     }
   }
 
-  // --- Closed-Loop PI Speed Control ---
+  // --- Closed-Loop PID Speed Control ---
   if (now - lastPwmAdjustmentTime >= PWM_ADJUSTMENT_INTERVAL) {
     lastPwmAdjustmentTime = now;
 
@@ -242,44 +243,31 @@ void loop() {
     interrupts();
     
     double intervalSeconds = (double)PWM_ADJUSTMENT_INTERVAL / 1000.0;
-    int instantaneousRpm = (int)((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
+    int rawRPM = (int)((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
     
-    // 2. Apply exponential filter to smooth RPM readings with low lag
-    filteredRPM = FILTER_ALPHA * instantaneousRpm + (1.0 - FILTER_ALPHA) * filteredRPM;
-    currentRPM = (int)(filteredRPM + 0.5);
-    
-    if (targetRPM > 0) {
-      // 3. Calculate PI error terms
-      int error = targetRPM - currentRPM;
-      integralError += error * intervalSeconds;
-
-      // 4. Anti-windup for integral term to prevent it from growing too large
-      if (integralError * Ki > CONV_MAX_PWM) {
-        integralError = CONV_MAX_PWM / Ki;
-      } else if (integralError * Ki < 0) {
-        // Since motor only goes one way, don't let integral error go negative
-        integralError = 0;
-      }
-
-      // Feed-forward base PWM from targetRPM (open-loop mapping)
-      int basePWM = map(targetRPM, 0, maxConveyorRPM, CONV_MIN_PWM, CONV_MAX_PWM);
-
-      // 5. Calculate combined PWM: feed-forward + PI correction
-      int piOutput = (int)(Kp * error) + (int)(Ki * integralError);
-      pwmValue = basePWM + piOutput;
-
-      // 6. Constrain PWM to valid range (including minimum drive)
-      pwmValue = constrain(pwmValue, CONV_MIN_PWM, CONV_MAX_PWM);
+    // Apply exponential filter to smooth noisy readings
+    const float filterAlpha = 0.15; // Lower = more smoothing
+    if (filteredRPM == 0.0) {
+      filteredRPM = rawRPM; // Initialize on first reading
     } else {
-      // If target is 0, force stop and reset controller state
-      pwmValue = 0;
-      integralError = 0; // Reset PI controller state
-      currentRPM = 0;
+      filteredRPM = filterAlpha * rawRPM + (1.0 - filterAlpha) * filteredRPM;
+    }
+    currentRPM = (int)filteredRPM;
+    
+    // 2. Update PID input with filtered RPM
+    Input = currentRPM;
+    
+    // 3. Let the PID controller compute the output
+    myPID.Compute();
+    
+    // 4. Apply the PID output to the motor
+    // The PID library already constrains Output to our set limits
+    if (targetRPM == 0) {
+      analogWrite(CONV_RPWM_PIN, 0); // Force stop when target is 0
+    } else {
+      analogWrite(CONV_RPWM_PIN, (int)Output);
     }
   }
-
-  // Apply calculated PWM to motor
-  analogWrite(CONV_RPWM_PIN, pwmValue);
 
   // Periodically print debug info to avoid spamming serial
   if (now - lastDebugTime > 1000) {
@@ -289,7 +277,7 @@ void loop() {
     Serial.print(", currentRPM: ");
     Serial.print(currentRPM);
     Serial.print(", pwmValue: ");
-    Serial.println(pwmValue);
+    Serial.println(Output); // Output is the constrained PWM value
   }
 
   // Check if any jets need to be turned off
