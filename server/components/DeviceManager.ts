@@ -48,7 +48,7 @@ export class DeviceManager extends BaseComponent {
         await this.connectDevice(DeviceName.CONVEYOR_JETS, settings.conveyorJetsSerialPort, {
           deviceType: DeviceType.CONVEYOR_JETS,
           JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
-          JET_END_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionEnd),
+          JET_DURATIONS: settings.sorters.map((sorter) => sorter.jetDuration),
         });
       }
 
@@ -373,12 +373,11 @@ export class DeviceManager extends BaseComponent {
 
   private buildConveyorJetsInitMessage(config: ArduinoConfig): string {
     if (config.deviceType !== 'conveyor_jets') return '';
-    const jetFireTimes = config.JET_END_POSITIONS.map((end, index) => end - config.JET_START_POSITIONS[index]);
     const settings = this.settingsManager.getSettings();
     if (!settings) return '';
     return (
       's,' +
-      jetFireTimes.join(',') +
+      config.JET_DURATIONS.join(',') +
       ',' +
       settings.maxConveyorRPM +
       ',' +
@@ -613,7 +612,7 @@ export class DeviceManager extends BaseComponent {
         const config = {
           ...conveyorJets.config,
           JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
-          JET_END_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionEnd),
+          JET_DURATIONS: settings.sorters.map((sorter) => sorter.jetDuration),
         };
         this.devices.set(DeviceName.CONVEYOR_JETS, { ...conveyorJets, config });
         const configMessage = this.buildConveyorJetsInitMessage(config);
@@ -687,7 +686,7 @@ export class DeviceManager extends BaseComponent {
           config: {
             deviceType: DeviceType.CONVEYOR_JETS,
             JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
-            JET_END_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionEnd),
+            JET_DURATIONS: settings.sorters.map((sorter) => sorter.jetDuration),
           },
         });
       }

@@ -11,11 +11,11 @@ export const sorterSettingsSchema = z.object({
     .min(0, { message: 'Start jet position must be a non-negative number' })
     .max(99999, { message: 'Start jet position exceeds maximum allowed value' })
     .default(0),
-  jetPositionEnd: z.coerce
+  jetDuration: z.coerce
     .number()
-    .min(0, { message: 'End jet position must be a non-negative number' })
-    .max(99999, { message: 'End jet position exceeds maximum allowed value' })
-    .default(0),
+    .min(1, { message: 'Jet duration must be at least 1 millisecond' })
+    .max(1000, { message: 'Jet duration exceeds maximum allowed value' })
+    .default(100),
   maxPartDimensions: z
     .object({
       width: z.coerce.number().min(1, { message: 'Part width must be at least 1 unit' }).default(1),

@@ -32,7 +32,7 @@ export class ConveyorManager extends BaseComponent {
   private sorterManager: SorterManager;
   private buildPart: (part: SortPartDto) => Part;
   private jetPositionsStart: number[] = [];
-  private jetPositionsEnd: number[] = [];
+  private jetDurations: number[] = [];
   private partQueue: Part[] = [];
   private speedLog: { time: number; speed: number }[] = [];
   private isRecalculating: boolean = false;
@@ -60,7 +60,7 @@ export class ConveyorManager extends BaseComponent {
 
       // Initialize from settings
       this.jetPositionsStart = settings.sorters.map((sorter) => sorter.jetPositionStart);
-      this.jetPositionsEnd = settings.sorters.map((sorter) => sorter.jetPositionEnd);
+      this.jetDurations = settings.sorters.map((sorter) => sorter.jetDuration);
       this.partQueue = [];
       this.speedLog = [];
 
@@ -106,7 +106,7 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public getJetPosition(sorter: number): number {
-    return (this.jetPositionsStart[sorter] + this.jetPositionsEnd[sorter]) / 2;
+    return this.jetPositionsStart[sorter] + this.jetDurations[sorter] / 2;
   }
 
   public findPreviousSorterPart(sorter: number): Part | null {
