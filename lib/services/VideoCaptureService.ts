@@ -120,9 +120,9 @@ class VideoCaptureService implements Service {
     }
 
     try {
-      const captureTime = Date.now();
       const imageBitmap1 = await this.imageCapture1.grabFrame();
       const imageBitmap2 = await this.imageCapture2.grabFrame();
+      const captureTime = Date.now();
 
       const flippedImageBitmap2 = await this.flipImageBitmap(imageBitmap2);
 

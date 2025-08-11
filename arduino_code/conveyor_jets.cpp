@@ -1,4 +1,5 @@
 #include <PID_v1.h>
+#include <math.h>
 
 #define CONVEYOR_DEBUG true
 #define SYSTEM_DEBUG true
@@ -21,14 +22,21 @@ bool settingsInitialized = false;
 
 // --- PID Speed Controller & Encoder Variables ---
 int pulsesPerRevolution = 20; // Default pulses per revolution for the encoder wheel
-double Kp = 2.0, Ki = 5.0, Kd = 1.0;  // PID tuning parameters
+// Safer, tuned defaults. These are overridden by settings when provided.
+double Kp = 1.0, Ki = 0.05, Kd = 0.08;  // PID tuning parameters - balanced speed and stability
 double Setpoint, Input, Output;        // PID variables
 
 volatile long pulseCount = 0; // Incremented by encoder interrupt
 int currentRPM = 0;           // Calculated current RPM
 static float filteredRPM = 0.0; // Smoothed RPM value
 unsigned long lastPwmAdjustmentTime = 0;
-#define PWM_ADJUSTMENT_INTERVAL 100 // Recalculate PWM every 100ms
+#define PWM_ADJUSTMENT_INTERVAL 200 // Recalculate PWM every 200ms for faster response
+// Tracks last PWM value actually sent to the motor for accurate logging
+static int lastSentPWM = 0;
+// Higher-resolution pulse timing (reduces quantization vs. fixed-interval counting)
+volatile unsigned long lastPulseMicros = 0;
+volatile unsigned long latestPulsePeriodMicros = 0; // Updated in ISR
+unsigned long lastPulseSeenMillis = 0; // For detecting stoppage
 
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
@@ -36,16 +44,25 @@ int minRPM = 30;             // Minimum allowed RPM
 int targetRPM = 0;           // Desired RPM, initialized to 0 for safety
 
 // Map targetRPM into the 1.2–2.75 V PWM range (61–140) for your TRIAC board
-const int CONV_MAX_PWM = 140;   // ~2.75 V
-const int CONV_MIN_PWM = 61;    // ~1.2 V minimum to start motor
+const int CONV_MAX_PWM = 140;    // ~2.75 V
+const int CONV_MIN_PWM = 61;     // ~1.2 V minimum to start motor
+const int CONV_FF_MAX_PWM = 135; // Feedforward PWM at max RPM (calibratable)
+const float CONV_FF_GAIN = 0.95; // Optional global gain on feedforward baseline (slightly increased)
+const int FF_MID_RPM = 72;       // Calibrated mid-point RPM
+const int FF_MID_PWM = 112;      // Measured steady PWM at FF_MID_RPM
+const int PWM_TRIM_LIMIT = 20;   // Max +/- trim from PID on top of feedforward baseline
+const int PWM_SLEW_PER_STEP = 8; // Max PWM change per control step to reduce dithering
+const double RPM_DEADBAND = 0.3; // Within +/-0.3 RPM, ignore PID trim
 unsigned long lastDebugTime = 0;
 
-// Initialize PID controller
-PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
+// Initialize PID controller (Proportional on Measurement to reduce overshoot/oscillation)
+PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, P_ON_M, DIRECT);
 
 // --- Function Prototypes ---
 void countPulse();
 int getJetPin(int jetNumber);
+int computeFeedforwardPWM(int rpm);
+int applySlewLimit(int desiredPWM, int previousPWM, int maxStep);
 
 
 void setup()
@@ -62,7 +79,9 @@ void setup()
 
   // Initialize PID controller
   myPID.SetMode(AUTOMATIC);
-  myPID.SetOutputLimits(CONV_MIN_PWM, CONV_MAX_PWM);
+  // PID will output a trim around a feedforward baseline
+  // Increased limits: give PID more authority to reach target
+  myPID.SetOutputLimits(-40, 50);
   myPID.SetSampleTime(PWM_ADJUSTMENT_INTERVAL);
 
   // Setup for encoder interrupt on pin 2
@@ -254,37 +273,80 @@ void loop() {
   if (now - lastPwmAdjustmentTime >= PWM_ADJUSTMENT_INTERVAL) {
     lastPwmAdjustmentTime = now;
 
-    // 1. Calculate instantaneous RPM from encoder pulses
-    // Temporarily disable interrupts to safely read and reset pulseCount
+    // 1. Calculate RPM using pulse period if available (higher resolution),
+    //    otherwise fall back to fixed-interval pulse counting
+    double rawRPM = 0.0;
+    static double smoothedPulsePeriodMicros = 0.0;
+    const double pulsePeriodAlpha = 0.25; // smoothing for pulse period EMA
+
     noInterrupts();
-    long pulses = pulseCount;
-    pulseCount = 0;
+    unsigned long periodMicrosSnapshot = latestPulsePeriodMicros;
     interrupts();
-    
-    double intervalSeconds = (double)PWM_ADJUSTMENT_INTERVAL / 1000.0;
-    int rawRPM = (int)((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
+
+    if (periodMicrosSnapshot > 0) {
+      // Update EMA of pulse period
+      if (smoothedPulsePeriodMicros == 0.0) {
+        smoothedPulsePeriodMicros = (double)periodMicrosSnapshot;
+      } else {
+        smoothedPulsePeriodMicros = pulsePeriodAlpha * (double)periodMicrosSnapshot +
+                                    (1.0 - pulsePeriodAlpha) * smoothedPulsePeriodMicros;
+      }
+      // Compute RPM from period
+      if (smoothedPulsePeriodMicros > 0.0) {
+        rawRPM = (60.0 * 1000000.0) / (smoothedPulsePeriodMicros * (double)pulsesPerRevolution);
+      }
+    } else {
+      // Fallback: fixed-interval counting
+      noInterrupts();
+      long pulses = pulseCount;
+      pulseCount = 0;
+      interrupts();
+      double intervalSeconds = (double)PWM_ADJUSTMENT_INTERVAL / 1000.0;
+      rawRPM = ((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
+    }
     
     // Apply exponential filter to smooth noisy readings
-    const float filterAlpha = 0.15; // Lower = more smoothing
+    const float filterAlpha = 0.25; // Lower = more smoothing; 0.25 for a touch quicker correction
     if (filteredRPM == 0.0) {
       filteredRPM = rawRPM; // Initialize on first reading
     } else {
       filteredRPM = filterAlpha * rawRPM + (1.0 - filterAlpha) * filteredRPM;
     }
-    currentRPM = (int)filteredRPM;
+    currentRPM = (int)(filteredRPM + 0.5);
     
     // 2. Update PID input with filtered RPM
-    Input = currentRPM;
+    Input = filteredRPM;
     
     // 3. Let the PID controller compute the output
+    //    Freeze integral action inside deadband by temporarily zeroing error
+    double originalSetpoint = Setpoint;
+    double errorForDeadband = originalSetpoint - Input;
+    if (fabs(errorForDeadband) < RPM_DEADBAND) {
+      Setpoint = Input;
+    }
     myPID.Compute();
+    Setpoint = originalSetpoint;
     
-    // 4. Apply the PID output to the motor
-    // The PID library already constrains Output to our set limits
+    // 4. Apply the feedforward + PID trim to the motor with deadband and slew limiting
     if (targetRPM == 0) {
       analogWrite(CONV_RPWM_PIN, 0); // Force stop when target is 0
     } else {
-      analogWrite(CONV_RPWM_PIN, (int)Output);
+      int baselinePWM = computeFeedforwardPWM(targetRPM);
+      // Small deadband around setpoint to prevent trim dithering
+      double error = Setpoint - Input;
+      int trim = (fabs(error) < RPM_DEADBAND) ? 0 : (int)Output;
+      int commandedPWM = baselinePWM + trim;
+      if (commandedPWM < CONV_MIN_PWM) commandedPWM = CONV_MIN_PWM;
+      if (commandedPWM > CONV_MAX_PWM) commandedPWM = CONV_MAX_PWM;
+      static int lastCommandedPWM = 0;
+      // On first run after start/stop, jump to commanded
+      if (lastCommandedPWM == 0) {
+        lastCommandedPWM = commandedPWM;
+      }
+      int slewedPWM = applySlewLimit(commandedPWM, lastCommandedPWM, PWM_SLEW_PER_STEP);
+      analogWrite(CONV_RPWM_PIN, slewedPWM);
+      lastSentPWM = slewedPWM;
+      lastCommandedPWM = slewedPWM;
     }
   }
 
@@ -296,7 +358,7 @@ void loop() {
     Serial.print(", currentRPM: ");
     Serial.print(currentRPM);
     Serial.print(", pwmValue: ");
-    Serial.println(Output); // Output is the constrained PWM value
+    Serial.println(lastSentPWM);
   }
 
   // Check if any jets need to be turned off
@@ -311,6 +373,11 @@ void loop() {
 // --- Interrupt Service Routine for Encoder ---
 void countPulse() {
   pulseCount++;
+  unsigned long now = micros();
+  if (lastPulseMicros != 0) {
+    latestPulsePeriodMicros = now - lastPulseMicros;
+  }
+  lastPulseMicros = now;
 }
 
 int getJetPin(int jetNumber) {
@@ -321,4 +388,37 @@ int getJetPin(int jetNumber) {
     case 3: return JET_3_PIN;
     default: return -1;
   }
+}
+
+// --- Map desired RPM to an estimated PWM baseline for fast response ---
+int computeFeedforwardPWM(int rpm) {
+  if (rpm <= 0) return 0;
+  if (rpm <= minRPM) return CONV_MIN_PWM;
+  if (rpm >= maxConveyorRPM) return CONV_FF_MAX_PWM;
+  // Piecewise-linear feedforward using a calibrated midpoint for better accuracy
+  if (rpm <= FF_MID_RPM) {
+    long num = (long)(rpm - minRPM) * (FF_MID_PWM - CONV_MIN_PWM);
+    long den = (long)(FF_MID_RPM - minRPM);
+    int pwm = CONV_MIN_PWM + (int)(num / den);
+    pwm = (int)(pwm * CONV_FF_GAIN);
+    if (pwm < CONV_MIN_PWM) pwm = CONV_MIN_PWM;
+    if (pwm > CONV_MAX_PWM) pwm = CONV_MAX_PWM;
+    return pwm;
+  } else {
+    long num = (long)(rpm - FF_MID_RPM) * (CONV_FF_MAX_PWM - FF_MID_PWM);
+    long den = (long)(maxConveyorRPM - FF_MID_RPM);
+    int pwm = FF_MID_PWM + (int)(num / den);
+    pwm = (int)(pwm * CONV_FF_GAIN);
+    if (pwm < CONV_MIN_PWM) pwm = CONV_MIN_PWM;
+    if (pwm > CONV_MAX_PWM) pwm = CONV_MAX_PWM;
+    return pwm;
+  }
+}
+
+// --- Limit rate-of-change of PWM to reduce chatter ---
+int applySlewLimit(int desiredPWM, int previousPWM, int maxStep) {
+  int delta = desiredPWM - previousPWM;
+  if (delta > maxStep) return previousPWM + maxStep;
+  if (delta < -maxStep) return previousPWM - maxStep;
+  return desiredPWM;
 }

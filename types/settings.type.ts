@@ -67,9 +67,9 @@ export const settingsSchema = z.object({
   feederShortMoveTime: z.coerce.number().min(0).default(250),
   feederLongMoveTime: z.coerce.number().min(0).default(2000),
   conveyorPulsesPerRevolution: z.coerce.number().min(0).default(20),
-  conveyorKp: z.coerce.number().min(0).default(2.5),
-  conveyorKi: z.coerce.number().min(0).default(1.2),
-  conveyorKd: z.coerce.number().min(0).default(0.8),
+  conveyorKp: z.coerce.number().min(0).default(1.0),
+  conveyorKi: z.coerce.number().min(0).default(0.15),
+  conveyorKd: z.coerce.number().min(0).default(0.0),
   sorters: z.array(sorterSettingsSchema).default([]),
   hopperCycleInterval: z.coerce.number().min(0).default(20000),
 });
