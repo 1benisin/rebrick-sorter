@@ -408,8 +408,8 @@ class DetectorService implements Service {
         if (originalPs[i].isTopView) continue; // skip top view predictions
         if (index === i) continue; // skip itself
 
-        // For side view, we need to flip the x-coordinate since the image is flipped
-        const sideViewCenterX = canvasDim.width - (originalPs[i].box.left + originalPs[i].box.width / 2);
+        // Side view is already flipped during merge; compare directly
+        const sideViewCenterX = originalPs[i].box.left + originalPs[i].box.width / 2;
         const distance = Math.abs(centerX - sideViewCenterX);
 
         if (closestDistance === null || distance < closestDistance) {

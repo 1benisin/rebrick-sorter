@@ -124,9 +124,8 @@ class VideoCaptureService implements Service {
       const imageBitmap2 = await this.imageCapture2.grabFrame();
       const captureTime = Date.now();
 
-      const flippedImageBitmap2 = await this.flipImageBitmap(imageBitmap2);
-
-      return { imageBitmaps: [imageBitmap1, flippedImageBitmap2], timestamp: captureTime };
+      // Do not flip here; mergeBitmaps in DetectorService handles the flip once
+      return { imageBitmaps: [imageBitmap1, imageBitmap2], timestamp: captureTime };
     } catch (error) {
       const message = 'Error taking photos: ' + error;
       console.error(message);

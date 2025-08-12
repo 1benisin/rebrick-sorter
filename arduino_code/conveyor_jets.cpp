@@ -1,4 +1,5 @@
 #include <math.h>
+#include <PID_v1.h>
 
 #define CONVEYOR_DEBUG true
 #define SYSTEM_DEBUG true
@@ -18,6 +19,15 @@ bool jetActive[4] = {false, false, false, false};  // Track if each jet is curre
 unsigned long jetEndTime[4];  // Store end times for each jet
 bool settingsInitialized = false;
 
+// --- PID Controller State (Arduino PID class) ---
+double pidInput = 0.0;
+double pidOutput = 0.0;
+double pidSetpoint = 0.0;
+double pidKp = 0.5;
+double pidKi = 0.2;
+double pidKd = 0.05;
+PID conveyorPid(&pidInput, &pidOutput, &pidSetpoint, pidKp, pidKi, pidKd, DIRECT);
+
 // --- Simple Speed Controller & Encoder Variables ---
 int pulsesPerRevolution = 20; // Default pulses per revolution for the encoder wheel
 
@@ -25,7 +35,7 @@ volatile long pulseCount = 0; // Incremented by encoder interrupt
 int currentRPM = 0;           // Calculated current RPM
 static float filteredRPM = 0.0; // Smoothed RPM value
 unsigned long lastSpeedUpdateTime = 0;
-#define SPEED_UPDATE_INTERVAL 500 // Update speed every 500ms for better resolution
+#define SPEED_UPDATE_INTERVAL 500 // PID and speed update interval in ms
 
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
@@ -36,17 +46,18 @@ int targetRPM = 0;           // Desired RPM, initialized to 0 for safety
 const int CONV_MAX_PWM = 140;    // ~2.75 V
 const int CONV_MIN_PWM = 61;     // ~1.2 V minimum to start motor
 
-// SIMPLE CALIBRATION: More accurate linear model and tighter control.
-const float Kp = 1.0f;                // More effective proportional gain for small errors
-const float RPM_DEADBAND = 0.5f;      // Tighter deadband for better accuracy, matching user requirement
-const int MAX_PWM_CHANGE = 6;        // Max PWM change per update (higher due to longer interval)
-
 unsigned long lastDebugTime = 0;
+
+// Control refinements
+const int DEAD_BAND_RPM = 2;      // Skip adjustments within +/-2 RPM of setpoint
+const int PWM_SLEW_STEP = 2;      // Limit PWM change per update to reduce jitter
+
+// --- Controller State ---
+static int lastCommandedPWM = 0;       // Last PWM actually written
 
 // --- Function Prototypes ---
 void countPulse();
 int getJetPin(int jetNumber);
-int calculateTargetPWM(int desiredRPM, int actualRPM);
 
 void setup()
 {
@@ -62,8 +73,14 @@ void setup()
 
   // Setup for encoder interrupt on pin 2
   pinMode(ENCODER_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN), countPulse, RISING);
+  // Count both edges to double measurement resolution (ensure PPR in settings reflects this)
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN), countPulse, CHANGE);
   
+  // Initialize PID
+  conveyorPid.SetOutputLimits(CONV_MIN_PWM, CONV_MAX_PWM);
+  conveyorPid.SetSampleTime(SPEED_UPDATE_INTERVAL);
+  conveyorPid.SetMode(AUTOMATIC);
+
   // Auto-enable settings to allow on/off and speed commands without explicit settings
   settingsInitialized = true;
 
@@ -82,7 +99,7 @@ void processSettings(char *message) {
   // Parse settings from message
   // Expected format: 's,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<MAX_RPM>,<MIN_RPM>,<PPR>,<KP_INT>,<KI_INT>,<KD_INT>'
   char *token;
-  int values[10]; // Array to hold fire times, max/min RPM, PPR, etc.
+  int values[10]; // Array to hold fire times, max/min RPM, PPR, PID ints*100
   int valueIndex = 0;
 
   // Skip 's,' and start tokenizing
@@ -103,6 +120,12 @@ void processSettings(char *message) {
     
     // Check for optional settings
     if (valueIndex >= 7) pulsesPerRevolution = values[6];
+    if (valueIndex >= 10) {
+      pidKp = ((double)values[7]) / 100.0;
+      pidKi = ((double)values[8]) / 100.0;
+      pidKd = ((double)values[9]) / 100.0;
+      conveyorPid.SetTunings(pidKp, pidKi, pidKd);
+    }
 
     Serial.println("--- SETTINGS RECEIVED ---");
     Serial.print("Jet Fire Times: ");
@@ -111,6 +134,11 @@ void processSettings(char *message) {
     Serial.print("Max RPM: "); Serial.println(maxConveyorRPM);
     Serial.print("Min RPM: "); Serial.println(minRPM);
     Serial.print("PPR: "); Serial.println(pulsesPerRevolution);
+    if (valueIndex >= 10) {
+      Serial.print("PID Kp: "); Serial.println(pidKp, 3);
+      Serial.print("PID Ki: "); Serial.println(pidKi, 3);
+      Serial.print("PID Kd: "); Serial.println(pidKd, 3);
+    }
     Serial.println("-------------------------");
 
     // Reset all state variables to their initial values
@@ -122,6 +150,12 @@ void processSettings(char *message) {
 
     // Stop the conveyor motor
     analogWrite(CONV_RPWM_PIN, 0);
+    // Reset controller state
+    lastCommandedPWM = 0;
+    pidOutput = 0;
+    pidInput = 0;
+    pidSetpoint = 0;
+    conveyorPid.SetMode(AUTOMATIC);
 
     settingsInitialized = true;
     Serial.println("Settings updated");
@@ -162,6 +196,12 @@ void processMessage(char *message) {
       }
       Serial.print("'o' command received. New targetRPM: ");
       Serial.println(targetRPM);
+      // Reset controller if stopping
+      if (targetRPM == 0) {
+        lastCommandedPWM = 0;
+        pidOutput = 0;
+        conveyorPid.SetMode(AUTOMATIC);
+      }
       break;
     }
 
@@ -169,6 +209,11 @@ void processMessage(char *message) {
       targetRPM = constrain(actionValue, 0, maxConveyorRPM); // Constrain to safe range between 0 and maxConveyorRPM
       Serial.print("'c' command received. New targetRPM: ");
       Serial.println(targetRPM);
+      if (targetRPM == 0) {
+        lastCommandedPWM = 0;
+        pidOutput = 0;
+        conveyorPid.SetMode(AUTOMATIC);
+      }
       break;
     }
     
@@ -234,7 +279,7 @@ void loop() {
     }
   }
 
-  // --- Simple Speed Control ---
+  // --- PID Speed Control ---
   if (now - lastSpeedUpdateTime >= SPEED_UPDATE_INTERVAL) {
     // Calculate actual time interval for precision
     unsigned long actualInterval = now - lastSpeedUpdateTime;
@@ -250,21 +295,36 @@ void loop() {
     double rawRPM = ((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
     
     // Apply simple exponential filter to smooth noisy readings
-    const float filterAlpha = 0.2; // Stronger smoothing to reduce measurement noise
+    const float filterAlpha = 0.25; // Slightly stronger smoothing
     if (filteredRPM == 0.0) {
       filteredRPM = rawRPM; // Initialize on first reading
     } else {
       filteredRPM = filterAlpha * rawRPM + (1.0 - filterAlpha) * filteredRPM;
     }
     currentRPM = (int)(filteredRPM + 0.5);
-    
-    // Calculate and apply PWM
+
+    // Update PID state
+    pidInput = (double)currentRPM;
+    pidSetpoint = (double)targetRPM;
+
     if (targetRPM == 0) {
-      analogWrite(CONV_RPWM_PIN, 0); // Force stop when target is 0
+      analogWrite(CONV_RPWM_PIN, 0);
+      pidOutput = 0;
     } else {
-      int pwmValue = calculateTargetPWM(targetRPM, currentRPM);
-      pwmValue = constrain(pwmValue, CONV_MIN_PWM, CONV_MAX_PWM);
-      analogWrite(CONV_RPWM_PIN, pwmValue);
+      // Deadband: hold PWM when close enough to setpoint
+      int rpmErrorAbs = abs(targetRPM - currentRPM);
+      if (rpmErrorAbs <= DEAD_BAND_RPM) {
+        analogWrite(CONV_RPWM_PIN, lastCommandedPWM);
+      } else {
+        conveyorPid.Compute();
+        int outputPWM = (int)constrain((int)pidOutput, CONV_MIN_PWM, CONV_MAX_PWM);
+        // Slew limit: constrain change per cycle
+        int delta = outputPWM - lastCommandedPWM;
+        if (delta > PWM_SLEW_STEP) outputPWM = lastCommandedPWM + PWM_SLEW_STEP;
+        else if (delta < -PWM_SLEW_STEP) outputPWM = lastCommandedPWM - PWM_SLEW_STEP;
+        lastCommandedPWM = outputPWM;
+        analogWrite(CONV_RPWM_PIN, outputPWM);
+      }
     }
   }
 
@@ -276,13 +336,7 @@ void loop() {
     Serial.print(", currentRPM: ");
     Serial.print(currentRPM);
     Serial.print(", pwmValue: ");
-    if (targetRPM == 0) {
-      Serial.println(0);
-    } else {
-      int debugPWM = calculateTargetPWM(targetRPM, currentRPM);
-      debugPWM = constrain(debugPWM, CONV_MIN_PWM, CONV_MAX_PWM);
-      Serial.println(debugPWM);
-    }
+    Serial.println(lastCommandedPWM);
   }
 
   // Check if any jets need to be turned off
@@ -309,33 +363,4 @@ int getJetPin(int jetNumber) {
   }
 }
 
-// DEAD SIMPLE PWM CALCULATION WITH STABILITY
-int calculateTargetPWM(int desiredRPM, int actualRPM) {
-  // More accurate linear model: PWM = 1.75 * RPM - 19.5
-  int basePWM = (int)(desiredRPM * 1.75f - 19.5f);
-
-  // Apply deadband - don't correct small errors
-  int error = desiredRPM - actualRPM;
-  int correctionPWM = 0;
-  if (fabs(error) > RPM_DEADBAND) {
-    correctionPWM = (int)(error * Kp);
-  }
-  
-  int targetPWM = basePWM + correctionPWM;
-  
-  // Apply PWM rate limiting to prevent wild swings
-  static int lastPWM = 0;
-  if (lastPWM == 0) {
-    lastPWM = targetPWM; // Initialize
-  } else {
-    int change = targetPWM - lastPWM;
-    if (change > MAX_PWM_CHANGE) {
-      targetPWM = lastPWM + MAX_PWM_CHANGE;
-    } else if (change < -MAX_PWM_CHANGE) {
-      targetPWM = lastPWM - MAX_PWM_CHANGE;
-    }
-  }
-  
-  lastPWM = targetPWM;
-  return targetPWM;
-}
+// No longer using custom step controller

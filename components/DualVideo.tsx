@@ -58,7 +58,13 @@ const DualVideo = () => {
       console.log('--Selected device 1:', selectedDeviceId1);
 
       navigator.mediaDevices
-        .getUserMedia({ video: { deviceId: { exact: selectedDeviceId1 } } })
+        .getUserMedia({
+          video: {
+            deviceId: { exact: selectedDeviceId1 },
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
+          },
+        })
         .then((s) => {
           stream = s;
           const settings = stream.getVideoTracks()[0].getSettings();
@@ -89,7 +95,13 @@ const DualVideo = () => {
 
     if (selectedDeviceId2 && deviceExists) {
       navigator.mediaDevices
-        .getUserMedia({ video: { deviceId: { exact: selectedDeviceId2 } } })
+        .getUserMedia({
+          video: {
+            deviceId: { exact: selectedDeviceId2 },
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
+          },
+        })
         .then((s) => {
           stream = s;
           const settings = stream.getVideoTracks()[0].getSettings();
