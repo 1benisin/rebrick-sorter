@@ -316,11 +316,13 @@ export class DeviceManager extends BaseComponent {
     const isDevMode = process.env.NEXT_PUBLIC_ENVIRONMENT === 'Development' || process.env.NODE_ENV === 'development';
     try {
       // Create the device without error callback in constructor
+      // Use higher baud only for CONVEYOR_JETS; others stay at 9600
+      const baudRate = deviceName === DeviceName.CONVEYOR_JETS ? 115200 : 9600;
       const device = isDevMode
-        ? new SerialPortMock({ path: portName, baudRate: 9600 })
+        ? new SerialPortMock({ path: portName, baudRate })
         : new SerialPort({
             path: portName,
-            baudRate: 9600,
+            baudRate,
           });
 
       // Wait for the port to be fully opened

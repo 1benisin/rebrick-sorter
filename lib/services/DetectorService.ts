@@ -362,6 +362,7 @@ class DetectorService implements Service {
   private tagPredictions(
     predictions: automl.PredictedObject[],
     canvasDim: { width: number; height: number },
+    maxPairDeltaX: number = Number.POSITIVE_INFINITY,
   ): TaggedPredictionType[] {
     let taggedPredictions: TaggedPredictionType[] = predictions.map((prediction) => {
       return {
@@ -397,32 +398,51 @@ class DetectorService implements Service {
       };
     });
 
-    // tag matchingVerticalPairIndex
-    taggedPredictions = taggedPredictions.map((prediction, index, originalPs) => {
-      if (!prediction.isTopView) return prediction; // skip non top view predictions
-      const centerX = prediction.box.left + prediction.box.width / 2;
+    // tag matchingVerticalPairIndex using one-to-one greedy matching with gating threshold
+    {
+      const topIndices: number[] = [];
+      const sideIndices: number[] = [];
 
-      let closestIndex = -1;
-      let closestDistance = null;
-      for (let i = 0; i < originalPs.length; i++) {
-        if (originalPs[i].isTopView) continue; // skip top view predictions
-        if (index === i) continue; // skip itself
-
-        // Side view is already flipped during merge; compare directly
-        const sideViewCenterX = originalPs[i].box.left + originalPs[i].box.width / 2;
-        const distance = Math.abs(centerX - sideViewCenterX);
-
-        if (closestDistance === null || distance < closestDistance) {
-          closestDistance = distance;
-          closestIndex = i;
-        }
+      for (let i = 0; i < taggedPredictions.length; i++) {
+        if (taggedPredictions[i].isTopView) topIndices.push(i);
+        else sideIndices.push(i);
       }
 
-      return {
-        ...prediction,
-        matchingVerticalPairIndex: closestIndex,
-      };
-    });
+      // Sort by centerX to maintain spatial order
+      const centerXOf = (p: TaggedPredictionType) => p.box.left + p.box.width / 2;
+      topIndices.sort((a, b) => centerXOf(taggedPredictions[a]) - centerXOf(taggedPredictions[b]));
+      sideIndices.sort((a, b) => centerXOf(taggedPredictions[a]) - centerXOf(taggedPredictions[b]));
+
+      const usedSide = new Set<number>();
+
+      for (const ti of topIndices) {
+        const topX = centerXOf(taggedPredictions[ti]);
+        let bestSideIdx: number | null = null;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (const si of sideIndices) {
+          if (usedSide.has(si)) continue;
+          const sideX = centerXOf(taggedPredictions[si]);
+          const dist = Math.abs(topX - sideX);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestSideIdx = si;
+          }
+        }
+        // Apply gating threshold in scaled pixels
+        if (bestSideIdx !== null && bestDist <= maxPairDeltaX) {
+          taggedPredictions[ti] = {
+            ...taggedPredictions[ti],
+            matchingVerticalPairIndex: bestSideIdx,
+          };
+          usedSide.add(bestSideIdx);
+        } else {
+          taggedPredictions[ti] = {
+            ...taggedPredictions[ti],
+            matchingVerticalPairIndex: -1,
+          };
+        }
+      }
+    }
 
     return taggedPredictions;
   }

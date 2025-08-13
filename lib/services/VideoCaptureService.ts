@@ -120,9 +120,14 @@ class VideoCaptureService implements Service {
     }
 
     try {
-      const imageBitmap1 = await this.imageCapture1.grabFrame();
-      const imageBitmap2 = await this.imageCapture2.grabFrame();
+      // Grab both frames with per-camera timing to reduce timestamp skew.
+      // We take the timestamp at the moment the first (top-view) frame resolves, as that's
+      // the image used to anchor initial position and jet timing downstream.
       const captureTime = Date.now();
+      const [imageBitmap1, imageBitmap2] = await Promise.all([
+        this.imageCapture1.grabFrame(),
+        this.imageCapture2.grabFrame(),
+      ]);
 
       // Do not flip here; mergeBitmaps in DetectorService handles the flip once
       return { imageBitmaps: [imageBitmap1, imageBitmap2], timestamp: captureTime };

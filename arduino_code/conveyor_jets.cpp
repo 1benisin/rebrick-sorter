@@ -2,7 +2,7 @@
 #include <PID_v1.h>
 
 #define CONVEYOR_DEBUG true
-#define SYSTEM_DEBUG true
+#define SYSTEM_DEBUG false
 
 #define JET_0_PIN 11
 #define JET_1_PIN 12
@@ -23,9 +23,9 @@ bool settingsInitialized = false;
 double pidInput = 0.0;
 double pidOutput = 0.0;
 double pidSetpoint = 0.0;
-double pidKp = 0.5;
-double pidKi = 0.2;
-double pidKd = 0.05;
+double pidKp = 0.3;   // Much more conservative for stability
+double pidKi = 0.05;  // Reduced to prevent integral windup
+double pidKd = 0.02;  // Reduced to prevent derivative kick
 PID conveyorPid(&pidInput, &pidOutput, &pidSetpoint, pidKp, pidKi, pidKd, DIRECT);
 
 // --- Simple Speed Controller & Encoder Variables ---
@@ -35,7 +35,7 @@ volatile long pulseCount = 0; // Incremented by encoder interrupt
 int currentRPM = 0;           // Calculated current RPM
 static float filteredRPM = 0.0; // Smoothed RPM value
 unsigned long lastSpeedUpdateTime = 0;
-#define SPEED_UPDATE_INTERVAL 500 // PID and speed update interval in ms
+#define SPEED_UPDATE_INTERVAL 300 // PID and speed update interval in ms (balanced response)
 
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
@@ -49,8 +49,8 @@ const int CONV_MIN_PWM = 61;     // ~1.2 V minimum to start motor
 unsigned long lastDebugTime = 0;
 
 // Control refinements
-const int DEAD_BAND_RPM = 2;      // Skip adjustments within +/-2 RPM of setpoint
-const int PWM_SLEW_STEP = 2;      // Limit PWM change per update to reduce jitter
+const int DEAD_BAND_RPM = 0;      // Make adjustments for any error (tightest control)
+const int PWM_SLEW_STEP = 3;      // Allow faster PWM changes for responsiveness
 
 // --- Controller State ---
 static int lastCommandedPWM = 0;       // Last PWM actually written
@@ -61,7 +61,7 @@ int getJetPin(int jetNumber);
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   pinMode(JET_0_PIN, OUTPUT);
   pinMode(JET_1_PIN, OUTPUT);
@@ -155,6 +155,8 @@ void processSettings(char *message) {
     pidOutput = 0;
     pidInput = 0;
     pidSetpoint = 0;
+    // Reset PID to clear any accumulated integral term
+    conveyorPid.SetMode(MANUAL);
     conveyorPid.SetMode(AUTOMATIC);
 
     settingsInitialized = true;
@@ -196,10 +198,15 @@ void processMessage(char *message) {
       }
       Serial.print("'o' command received. New targetRPM: ");
       Serial.println(targetRPM);
-      // Reset controller if stopping
+      // Reset controller if stopping or starting
       if (targetRPM == 0) {
         lastCommandedPWM = 0;
         pidOutput = 0;
+        conveyorPid.SetMode(MANUAL);
+        conveyorPid.SetMode(AUTOMATIC);
+      } else {
+        // Reset PID when starting from stopped to prevent windup
+        conveyorPid.SetMode(MANUAL);
         conveyorPid.SetMode(AUTOMATIC);
       }
       break;
@@ -212,6 +219,11 @@ void processMessage(char *message) {
       if (targetRPM == 0) {
         lastCommandedPWM = 0;
         pidOutput = 0;
+        conveyorPid.SetMode(MANUAL);
+        conveyorPid.SetMode(AUTOMATIC);
+      } else {
+        // Reset PID when changing speed to prevent windup
+        conveyorPid.SetMode(MANUAL);
         conveyorPid.SetMode(AUTOMATIC);
       }
       break;
@@ -295,7 +307,7 @@ void loop() {
     double rawRPM = ((double)pulses / (double)pulsesPerRevolution / intervalSeconds * 60.0);
     
     // Apply simple exponential filter to smooth noisy readings
-    const float filterAlpha = 0.25; // Slightly stronger smoothing
+    const float filterAlpha = 0.2; // More smoothing to reduce oscillations
     if (filteredRPM == 0.0) {
       filteredRPM = rawRPM; // Initialize on first reading
     } else {
@@ -310,18 +322,28 @@ void loop() {
     if (targetRPM == 0) {
       analogWrite(CONV_RPWM_PIN, 0);
       pidOutput = 0;
+      conveyorPid.SetMode(MANUAL); // Reset integral term
+      conveyorPid.SetMode(AUTOMATIC);
     } else {
       // Deadband: hold PWM when close enough to setpoint
       int rpmErrorAbs = abs(targetRPM - currentRPM);
       if (rpmErrorAbs <= DEAD_BAND_RPM) {
         analogWrite(CONV_RPWM_PIN, lastCommandedPWM);
       } else {
+        // Reset PID if error is very large (prevents windup during startup)
+        if (rpmErrorAbs > 20) {
+          conveyorPid.SetMode(MANUAL);
+          conveyorPid.SetMode(AUTOMATIC);
+        }
+        
         conveyorPid.Compute();
         int outputPWM = (int)constrain((int)pidOutput, CONV_MIN_PWM, CONV_MAX_PWM);
+        
         // Slew limit: constrain change per cycle
         int delta = outputPWM - lastCommandedPWM;
         if (delta > PWM_SLEW_STEP) outputPWM = lastCommandedPWM + PWM_SLEW_STEP;
         else if (delta < -PWM_SLEW_STEP) outputPWM = lastCommandedPWM - PWM_SLEW_STEP;
+        
         lastCommandedPWM = outputPWM;
         analogWrite(CONV_RPWM_PIN, outputPWM);
       }
@@ -329,14 +351,18 @@ void loop() {
   }
 
   // Periodically print debug info  
-  if (now - lastDebugTime > 1500) {
+  if (CONVEYOR_DEBUG && (now - lastDebugTime > 1000)) {
     lastDebugTime = now;
     Serial.print("[DEBUG] targetRPM: ");
     Serial.print(targetRPM);
     Serial.print(", currentRPM: ");
     Serial.print(currentRPM);
+    Serial.print(", error: ");
+    Serial.print(targetRPM - currentRPM);
     Serial.print(", pwmValue: ");
-    Serial.println(lastCommandedPWM);
+    Serial.print(lastCommandedPWM);
+    Serial.print(", pidOut: ");
+    Serial.println((int)pidOutput);
   }
 
   // Check if any jets need to be turned off
