@@ -181,24 +181,17 @@ void checkFeeder() {
         lastFeederActionTime = currentMillis;
         break; // Exit immediately
       }
-
-      if (elapsedTime >= FEEDER_LONG_MOVE_TIME) { // Also check for total timeout during ramp
-        stopMotor();
-        totalFeederVibrationTime += elapsedTime;
-        if (FEEDER_DEBUG) {
-          Serial.println("FeederSTATE: -> paused (from ramp_up_move, timeout)");
-        }
-        currFeederState = FeederState::paused;
-        lastFeederActionTime = currentMillis;
-        break;
-      }
       
       if (elapsedTime < RAMP_UP_DURATION) {
         // Still ramping up
         int currentSpeed = map(elapsedTime, 0, RAMP_UP_DURATION, RAMP_START_SPEED, FEEDER_VIBRATION_SPEED);
-        // Explicitly clamp the speed to the absolute maximum allowed value.
-        // This provides an extra layer of safety.
-        currentSpeed = constrain(currentSpeed, 0, MAX_FEEDER_SPEED);
+        // Before settings arrive, allow ramp to use target speed so the motor moves.
+        // After settings, clamp to saved MAX_FEEDER_SPEED for safety.
+        if (settingsInitialized) {
+          currentSpeed = constrain(currentSpeed, 0, MAX_FEEDER_SPEED);
+        } else {
+          currentSpeed = constrain(currentSpeed, 0, FEEDER_VIBRATION_SPEED);
+        }
         digitalWrite(FEEDER_R_EN_PIN, HIGH);
         analogWrite(FEEDER_RPWM_PIN, currentSpeed);
       } else {
