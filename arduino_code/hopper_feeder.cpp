@@ -34,7 +34,7 @@ FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *hopperStepper = NULL;
  
 // --- Depth Sensor Variables
-unsigned short distanceReading = 0;
+unsigned short distanceReading = UINT_MAX; // initialize as "no part" to avoid false positives at startup
 unsigned char i2cReceiveBuffer[16];
 unsigned char distanceSensorAddress = 80;
 
@@ -47,7 +47,7 @@ SensorReadState currentSensorState = SensorReadState::IDLE;
 unsigned long sensorRequestTime = 0;
 const unsigned long SENSOR_READ_DELAY_US = 30000; // Increased from 30us. 30us is too short for most ToF sensors, which need ~20-50ms for a reading. This prevents spamming the bus.
 unsigned long sensorWaitStartTime = 0; // for timeout
-const unsigned long SENSOR_READ_TIMEOUT_MS = 10;
+const unsigned long SENSOR_READ_TIMEOUT_MS = 50; // Allow up to 50ms for sensor to deliver 2 bytes
 
 // -- Feeder Variables
 #define FEEDER_RPWM_PIN 11    // Changed from FEEDER_ENABLE_PIN
@@ -76,6 +76,7 @@ unsigned long lastReadySendTime = 0; // For periodic "Ready" signal
 // Function declarations
 int ReadDistance(unsigned char device);
 bool getLatestDistanceReading(unsigned short &reading); // New function to get reading when available
+void recoverI2CBus();
 
 void setup() {
   // The very first thing we do is initialize the serial port so we can always send debug messages.
@@ -87,6 +88,13 @@ void setup() {
   // Watchdog logic removed. If a subsystem fails, we will log and attempt recovery in software.
 
   Wire.begin(); 
+  
+  // If supported by this core, set an I2C timeout with auto-reset to prevent
+  // Wire.requestFrom from blocking indefinitely on a stuck bus.
+  // Many Arduino cores define timeout support in Wire; guard to keep portability.
+#if defined(WIRE_HAS_TIMEOUT)
+  Wire.setWireTimeout(50000, true); // 50,000 us = 50 ms, auto-reset TWI on timeout
+#endif
 
   // Watchdog timer removed. We rely on robust non-blocking code and error recovery.
 
@@ -526,6 +534,56 @@ void loop() {
 }
 
 // --- Sensor Read/Recovery Logic ---
+// Hardware I2C bus recovery by toggling SCL to release a stuck slave and
+// sending a STOP condition. Based on AN-686 and common Arduino recovery patterns.
+void recoverI2CBus() {
+  // Release Wire before manual pin control
+  Wire.end();
+
+  // On most Arduino boards, SCL/SDA are on A5/A4 (Uno/Nano). On others they map differently.
+  // Use SCL/SDA macros if available; fall back to A5/A4 as common default.
+#if defined(SCL) && defined(SDA)
+  const uint8_t sclPin = SCL;
+  const uint8_t sdaPin = SDA;
+#else
+  const uint8_t sclPin = A5;
+  const uint8_t sdaPin = A4;
+#endif
+
+  pinMode(sclPin, INPUT_PULLUP);
+  pinMode(sdaPin, INPUT_PULLUP);
+  delay(1);
+
+  // If SDA is low, clock out up to 9 pulses on SCL to free the bus
+  if (digitalRead(sdaPin) == LOW) {
+    pinMode(sclPin, OUTPUT);
+    for (int i = 0; i < 9; i++) {
+      digitalWrite(sclPin, HIGH);
+      delayMicroseconds(5);
+      digitalWrite(sclPin, LOW);
+      delayMicroseconds(5);
+      if (digitalRead(sdaPin) == HIGH) {
+        break;
+      }
+    }
+  }
+
+  // Generate a STOP condition: SDA high while SCL high
+  pinMode(sdaPin, OUTPUT);
+  digitalWrite(sdaPin, LOW);
+  delayMicroseconds(5);
+  pinMode(sclPin, OUTPUT);
+  digitalWrite(sclPin, HIGH);
+  delayMicroseconds(5);
+  pinMode(sdaPin, INPUT_PULLUP);
+  delayMicroseconds(5);
+
+  // Restore Wire
+  Wire.begin();
+#if defined(WIRE_HAS_TIMEOUT)
+  Wire.setWireTimeout(50000, true);
+#endif
+}
 // Non-blocking sensor read function
 // Returns true if a new reading was initiated or is in progress, false if I2C is busy from a previous call
 // The actual reading is obtained via getLatestDistanceReading
@@ -542,9 +600,7 @@ bool initiateDistanceRead(unsigned char deviceAddr) {
     Serial.print(endResult);
     Serial.println(")");
     // Attempt to recover I2C bus
-    Wire.end();
-    delay(10);
-    Wire.begin();
+    recoverI2CBus();
     Serial.println("INFO: I2C bus reinitialized after error.");
     return false;
   }
@@ -560,6 +616,18 @@ bool processSensorReading(unsigned char deviceAddr) {
     if (micros() - sensorRequestTime >= SENSOR_READ_DELAY_US) {
       currentSensorState = SensorReadState::WAITING_FOR_READING;
       Wire.requestFrom(deviceAddr, (unsigned char)2); // request 2 bytes
+#if defined(WIRE_HAS_TIMEOUT)
+      if (Wire.getWireTimeoutFlag()) {
+        Serial.println("ERROR: I2C requestFrom timeout. Recovering bus.");
+        Wire.clearWireTimeoutFlag();
+        // Reinitialize I2C bus to ensure clean state
+        recoverI2CBus();
+        // Provide a safe default indicating no part and reset state machine
+        distanceReading = UINT_MAX;
+        currentSensorState = SensorReadState::IDLE;
+        return true; // handled by returning a default reading
+      }
+#endif
       sensorWaitStartTime = millis(); // Start timeout timer
     }
     return false; // Reading not yet available
@@ -582,9 +650,7 @@ bool processSensorReading(unsigned char deviceAddr) {
       // Default to a value that indicates NO part is detected.
       distanceReading = UINT_MAX; 
       // Attempt to recover I2C bus
-      Wire.end();
-      delay(10);
-      Wire.begin();
+      recoverI2CBus();
       Serial.println("INFO: I2C bus reinitialized after sensor timeout.");
       currentSensorState = SensorReadState::IDLE; // Reset for next attempt
       return true; // Return true as we've "handled" it by providing a default.
