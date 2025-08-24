@@ -43,7 +43,7 @@ int minRPM = 30;             // Minimum allowed RPM
 int targetRPM = 0;           // Desired RPM, initialized to 0 for safety
 
 // Simple PWM control - empirically calibrated
-const int CONV_MAX_PWM = 140;    // ~2.75 V
+const int CONV_MAX_PWM = 160;    // ~3.1 V (increased to reach higher speeds)
 const int CONV_MIN_PWM = 61;     // ~1.2 V minimum to start motor
 
 unsigned long lastDebugTime = 0;
