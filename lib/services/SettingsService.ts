@@ -44,7 +44,8 @@ class SettingsService implements Service {
         if (docSnapshot.exists()) {
           try {
             const data = docSnapshot.data();
-            const result = settingsSchema.parse(data);
+            const migratedData = this.migrateSettingsData(data);
+            const result = settingsSchema.parse(migratedData);
             this.settings = result;
           } catch (error) {
             console.error('Error parsing settings:', error);
@@ -55,6 +56,23 @@ class SettingsService implements Service {
         console.error('Error fetching settings from DB:', error);
       },
     );
+  }
+
+  private migrateSettingsData(data: any): any {
+    // Handle migration from jetPositionEnd to jetDuration
+    if (data.sorters && Array.isArray(data.sorters)) {
+      data.sorters = data.sorters.map((sorter: any) => {
+        if (sorter.jetPositionEnd !== undefined && sorter.jetDuration === undefined) {
+          // Convert from end position to duration
+          const start = sorter.jetPositionStart || 0;
+          const end = sorter.jetPositionEnd;
+          sorter.jetDuration = Math.max(1, end - start);
+          delete sorter.jetPositionEnd;
+        }
+        return sorter;
+      });
+    }
+    return data;
   }
 
   getStatus(): ServiceState {

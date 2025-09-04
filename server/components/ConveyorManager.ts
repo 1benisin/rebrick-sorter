@@ -32,7 +32,7 @@ export class ConveyorManager extends BaseComponent {
   private sorterManager: SorterManager;
   private buildPart: (part: SortPartDto) => Part;
   private jetPositionsStart: number[] = [];
-  private jetPositionsEnd: number[] = [];
+  private jetDurations: number[] = [];
   private partQueue: Part[] = [];
   private speedLog: { time: number; speed: number }[] = [];
   private isRecalculating: boolean = false;
@@ -60,7 +60,7 @@ export class ConveyorManager extends BaseComponent {
 
       // Initialize from settings
       this.jetPositionsStart = settings.sorters.map((sorter) => sorter.jetPositionStart);
-      this.jetPositionsEnd = settings.sorters.map((sorter) => sorter.jetPositionEnd);
+      this.jetDurations = settings.sorters.map((sorter) => sorter.jetDuration);
       this.partQueue = [];
       this.speedLog = [];
 
@@ -106,7 +106,7 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public getJetPosition(sorter: number): number {
-    return (this.jetPositionsStart[sorter] + this.jetPositionsEnd[sorter]) / 2;
+    return this.jetPositionsStart[sorter] + this.jetDurations[sorter] / 2;
   }
 
   public findPreviousSorterPart(sorter: number): Part | null {
@@ -224,6 +224,13 @@ export class ConveyorManager extends BaseComponent {
     // Cancel existing return to default speed timer if it exists
     if (this.returnToDefaultConveyorSpeed) {
       clearTimeout(this.returnToDefaultConveyorSpeed.ref);
+      this.returnToDefaultConveyorSpeed = null;
+    }
+
+    // Skip scheduling return to default speed in constant speed mode
+    const settings = this.settingsManager.getSettings();
+    if (settings && settings.constantConveyorSpeed) {
+      return;
     }
 
     // Schedule new return to default speed timer
@@ -266,14 +273,19 @@ export class ConveyorManager extends BaseComponent {
       if (nextConveyorPart.conveyorSpeedRef) {
         clearTimeout(nextConveyorPart.conveyorSpeedRef);
       }
+
       // Update next part's conveyor speed time
       nextConveyorPart.conveyorSpeedTime = nextPartSpeedTime;
-      // Reschedule conveyor speed change
-      nextConveyorPart.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
-        nextConveyorPart.conveyorSpeed,
-        nextConveyorPart.conveyorSpeedTime,
-        (time: number, speed: number) => this.addSpeedToLog(time, speed),
-      );
+
+      // Reschedule conveyor speed change only if not in constant speed mode
+      const settings = this.settingsManager.getSettings();
+      if (settings && !settings.constantConveyorSpeed) {
+        nextConveyorPart.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
+          nextConveyorPart.conveyorSpeed,
+          nextConveyorPart.conveyorSpeedTime,
+          (time: number, speed: number) => this.addSpeedToLog(time, speed),
+        );
+      }
     }
   }
 
@@ -329,12 +341,15 @@ export class ConveyorManager extends BaseComponent {
     // Schedule jet action
     part.jetRef = this.scheduleJetFire(part.sorter, part.jetTime, part);
 
-    // Schedule conveyor speed change
-    part.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
-      part.conveyorSpeed,
-      part.conveyorSpeedTime,
-      (time: number, speed: number) => this.addSpeedToLog(time, speed),
-    );
+    // Schedule conveyor speed change only if not in constant speed mode
+    const settings = this.settingsManager.getSettings();
+    if (settings && !settings.constantConveyorSpeed) {
+      part.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
+        part.conveyorSpeed,
+        part.conveyorSpeedTime,
+        (time: number, speed: number) => this.addSpeedToLog(time, speed),
+      );
+    }
   }
 
   private cancelPartActions(parts: Part[]): void {

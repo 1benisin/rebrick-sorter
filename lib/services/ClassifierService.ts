@@ -150,6 +150,7 @@ class ClassifierService implements Service {
     detectionDimensions,
     classificationThresholdPercentage,
     maxPartDimensions,
+    videoCaptureDimensions,
   }: {
     imageURI1: string;
     imageURI2: string;
@@ -158,6 +159,7 @@ class ClassifierService implements Service {
     detectionDimensions: { width: number; height: number };
     classificationThresholdPercentage: number;
     maxPartDimensions: { width: number; height: number }[];
+    videoCaptureDimensions: { width: number; height: number };
   }): Promise<{ classification: ClassificationItem; reason?: SkipSortReason; error?: string }> {
     try {
       if (!this.binLookup) {
@@ -204,10 +206,16 @@ class ClassifierService implements Service {
         };
       }
 
+      // Transform coordinates: Frontend (right-to-left) → Backend (left-to-right)
+      const backendInitialPosition = videoCaptureDimensions.width - initialPosition;
+      console.log(
+        `[COORDINATE_TRANSFORM] Frontend x=${initialPosition} → Backend x=${backendInitialPosition} (canvas width=${videoCaptureDimensions.width})`,
+      );
+
       // send to sorter
       const data: SortPartDto = {
         partId: combinedResult.id,
-        initialPosition,
+        initialPosition: backendInitialPosition,
         initialTime,
         bin: binPosition.bin,
         sorter: binPosition.sorter,

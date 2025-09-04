@@ -22,7 +22,7 @@ export type SorterInitConfig = {
 export type ConveyorJetsInitConfig = {
   deviceType: DeviceType.CONVEYOR_JETS;
   JET_START_POSITIONS: number[];
-  JET_END_POSITIONS: number[];
+  JET_DURATIONS: number[];
 };
 
 export interface HopperFeederInitConfig {

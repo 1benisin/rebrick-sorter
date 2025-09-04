@@ -398,10 +398,10 @@ const SettingsForm = () => {
 
                   <FormField
                     control={form.control}
-                    name={`sorters.${index}.jetPositionEnd`}
+                    name={`sorters.${index}.jetDuration`}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>End Jet Position</FormLabel>
+                        <FormLabel>Jet Duration (ms)</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>

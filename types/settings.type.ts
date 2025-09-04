@@ -11,11 +11,11 @@ export const sorterSettingsSchema = z.object({
     .min(0, { message: 'Start jet position must be a non-negative number' })
     .max(99999, { message: 'Start jet position exceeds maximum allowed value' })
     .default(0),
-  jetPositionEnd: z.coerce
+  jetDuration: z.coerce
     .number()
-    .min(0, { message: 'End jet position must be a non-negative number' })
-    .max(99999, { message: 'End jet position exceeds maximum allowed value' })
-    .default(0),
+    .min(1, { message: 'Jet duration must be at least 1 millisecond' })
+    .max(1000, { message: 'Jet duration exceeds maximum allowed value' })
+    .default(100),
   maxPartDimensions: z
     .object({
       width: z.coerce.number().min(1, { message: 'Part width must be at least 1 unit' }).default(1),
@@ -67,9 +67,9 @@ export const settingsSchema = z.object({
   feederShortMoveTime: z.coerce.number().min(0).default(250),
   feederLongMoveTime: z.coerce.number().min(0).default(2000),
   conveyorPulsesPerRevolution: z.coerce.number().min(0).default(20),
-  conveyorKp: z.coerce.number().min(0).default(2.0),
-  conveyorKi: z.coerce.number().min(0).default(5.0),
-  conveyorKd: z.coerce.number().min(0).default(1.0),
+  conveyorKp: z.coerce.number().min(0).default(1.0),
+  conveyorKi: z.coerce.number().min(0).default(0.15),
+  conveyorKd: z.coerce.number().min(0).default(0.0),
   sorters: z.array(sorterSettingsSchema).default([]),
   hopperCycleInterval: z.coerce.number().min(0).default(20000),
 });

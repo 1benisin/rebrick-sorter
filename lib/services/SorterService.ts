@@ -82,18 +82,10 @@ class SortProcessControllerService implements Service {
         );
         const distanceBetweenDetections = Math.abs(predictedX - unmatchedDetection.centroid.x);
 
-        // Debug logging
-        console.log('Position calculation:', {
-          lastDetectionX: lastDetection.centroid.x,
-          unmatchedDetectionX: unmatchedDetection.centroid.x,
-          timeDiff: unmatchedDetection.timestamp - lastDetection.timestamp,
-          speedLogUsed: conveyorSpeedLog.filter(
-            (log) => log.time >= lastDetection.timestamp && log.time <= unmatchedDetection.timestamp,
-          ),
-          predictedX,
-          distanceBetweenDetections,
-          threshold: closestDistance,
-        });
+        // Debug logging for detection matching
+        console.log(
+          `Matching attempt: predicted=${predictedX.toFixed(1)}, actual=${unmatchedDetection.centroid.x.toFixed(1)}, distance=${distanceBetweenDetections.toFixed(1)}, threshold=${closestDistance}, willMatch=${distanceBetweenDetections < closestDistance}`,
+        );
 
         // distanceBetweenDetections is less than the maximum distance threshold for a match
         if (distanceBetweenDetections < closestDistance) {
@@ -128,8 +120,8 @@ class SortProcessControllerService implements Service {
         const lastDetectionIndex = group.detectionPairs.length - 1;
         const lastDetectionPair = group.detectionPairs[lastDetectionIndex];
 
-        // if past 1/3 of the screen and not already classifying: classify
-        if (lastDetectionPair[0].centroid.x > videoCaptureDimensions.width * 0.33 && !group?.classifying) {
+        // if traveled 1/3 of the way (right to left movement) and not already classifying: classify
+        if (lastDetectionPair[0].centroid.x < videoCaptureDimensions.width * 0.67 && !group?.classifying) {
           this.updateDetectionPairGroupValue(group.id, 'classifying', true);
 
           const settingsService = serviceManager.getService(ServiceName.SETTINGS);
@@ -145,6 +137,7 @@ class SortProcessControllerService implements Service {
               detectionDimensions: { width: lastDetectionPair[0].box.width, height: lastDetectionPair[0].box.height },
               classificationThresholdPercentage: settings.classificationThresholdPercentage,
               maxPartDimensions: settings.sorters.map((s) => s.maxPartDimensions),
+              videoCaptureDimensions,
             })
             .then(({ classification, error, reason }) => {
               // update values for detection group
@@ -217,7 +210,10 @@ class SortProcessControllerService implements Service {
 
       const detectionPairs = await detector.detect();
 
-      console.log('centerX', detectionPairs[0]?.[0]?.centroid.x);
+      // Log detections for debugging
+      if (detectionPairs.length > 0) {
+        console.log(`${detectionPairs.length} detection pair(s) found`);
+      }
 
       // match detections to proper DetectionGroups
       this.matchDetectionsPairsToGroups(detectionPairs);
