@@ -206,8 +206,8 @@ class ClassifierService implements Service {
         };
       }
 
-      // Transform coordinates: Frontend (right-to-left) → Backend (left-to-right)
-      const backendInitialPosition = videoCaptureDimensions.width - initialPosition;
+      // Use the same coordinate system for both frontend and backend (right-moving)
+      const backendInitialPosition = initialPosition;
       console.log(
         `[COORDINATE_TRANSFORM] Frontend x=${initialPosition} → Backend x=${backendInitialPosition} (canvas width=${videoCaptureDimensions.width})`,
       );
