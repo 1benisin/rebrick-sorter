@@ -183,21 +183,19 @@ class ClassifierService implements Service {
         };
       }
 
-      // lookup bin position
+      // lookup bin position, with fallback to Grid D (index 3) Bin 90 if none assigned
       const binPosition = this.binLookup[combinedResult.id];
+      const resolvedPosition = binPosition ?? { bin: 90, sorter: 3 };
       if (!binPosition) {
-        console.error(`No bin position found for part ID: ${combinedResult.id}`);
-        return {
-          classification: combinedResult,
-          reason: SkipSortReason.noBinForPartId,
-          error: combinedResult.id,
-        };
+        console.warn(
+          `No bin position found for part ID: ${combinedResult.id}. Using fallback Grid D (sorter 3), Bin 90.`,
+        );
       }
-      combinedResult.bin = binPosition.bin;
-      combinedResult.sorter = binPosition.sorter;
+      combinedResult.bin = resolvedPosition.bin;
+      combinedResult.sorter = resolvedPosition.sorter;
 
       // skip part if it's too large for the sorter
-      const { width: maxPartWidth, height: maxPartHeight } = maxPartDimensions[binPosition.sorter];
+      const { width: maxPartWidth, height: maxPartHeight } = maxPartDimensions[resolvedPosition.sorter];
       if (detectionDimensions.width > maxPartWidth || detectionDimensions.height > maxPartHeight) {
         return {
           classification: combinedResult,
@@ -217,8 +215,8 @@ class ClassifierService implements Service {
         partId: combinedResult.id,
         initialPosition: backendInitialPosition,
         initialTime,
-        bin: binPosition.bin,
-        sorter: binPosition.sorter,
+        bin: resolvedPosition.bin,
+        sorter: resolvedPosition.sorter,
       };
 
       const socketService = serviceManager.getService(ServiceName.SOCKET);
