@@ -24,6 +24,23 @@ export const CLASSIFICATION_DIMENSIONS = {
 class ClassifierService implements Service {
   private binLookup: BinLookupType | null = null;
   private state: ServiceState = ServiceState.UNINITIALIZED;
+  private inFlightClassifyImageCount: number = 0;
+  private maxInFlightClassifyImageCount: number = 4; // threshold to guard overload
+  private enableDualViewClassification: boolean = false; // when false, only imageURI1 is classified
+  private enableImageLogging: boolean = false; // controls saveImageAndResponse
+
+  // --- Runtime configuration setters ---
+  public setMaxInFlightClassifyImageCount(value: number): void {
+    this.maxInFlightClassifyImageCount = Math.max(0, value);
+  }
+
+  public setEnableDualViewClassification(enabled: boolean): void {
+    this.enableDualViewClassification = enabled;
+  }
+
+  public setEnableImageLogging(enabled: boolean): void {
+    this.enableImageLogging = enabled;
+  }
 
   public async init(): Promise<void> {
     this.state = ServiceState.INITIALIZING;
@@ -142,6 +159,23 @@ class ClassifierService implements Service {
     return combinedItems[0];
   }
 
+  private getTopClassificationItem(response: BrickognizeResponse): ClassificationItem {
+    const items = [...response.items].sort((a, b) => b.score - a.score);
+    return items[0];
+  }
+
+  private createPlaceholderClassification(): ClassificationItem {
+    return {
+      type: 'unknown',
+      score: 0,
+      id: 'unknown',
+      name: 'Unknown',
+      img_url: '',
+      external_sites: [],
+      category: 'Unknown',
+    };
+  }
+
   public async classify({
     imageURI1,
     imageURI2,
@@ -166,12 +200,26 @@ class ClassifierService implements Service {
         throw new Error('Classifier not initialized: binLookup not loaded');
       }
 
+      // Guard against overload: skip classification if too many classifyImage are in-flight
+      if (this.inFlightClassifyImageCount >= this.maxInFlightClassifyImageCount) {
+        return {
+          classification: this.createPlaceholderClassification(),
+          reason: SkipSortReason.overCapacity,
+          error: `${this.inFlightClassifyImageCount}/${this.maxInFlightClassifyImageCount}`,
+        };
+      }
+
       // Classify images
       const response1 = await this.classifyImage(imageURI1);
-      const response2 = await this.classifyImage(imageURI2);
+      let combinedResult: ClassificationItem;
+      if (this.enableDualViewClassification) {
+        const response2 = await this.classifyImage(imageURI2);
+        combinedResult = this.combineBrickognizeResponses(response1, response2);
+      } else {
+        combinedResult = this.getTopClassificationItem(response1);
+      }
 
       // Combine the results
-      const combinedResult = this.combineBrickognizeResponses(response1, response2);
       combinedResult.score = Math.round(combinedResult.score * 100) / 100;
 
       // skip part if confidence is too low
@@ -262,6 +310,7 @@ class ClassifierService implements Service {
   private async classifyImage(imageURI: string): Promise<BrickognizeResponse> {
     try {
       // Send the request to your Next.js server's API route with the image URI
+      this.inFlightClassifyImageCount++;
       const response: AxiosResponse = await axios.post('/api/brickognize', {
         imageURI: imageURI,
       });
@@ -269,12 +318,16 @@ class ClassifierService implements Service {
       const brickognizeResponse = brickognizeResponseSchema.parse(response.data);
 
       // Save the image and response to Firebase for future brickognize model distillation
-      await this.saveImageAndResponse(imageURI, brickognizeResponse);
+      if (this.enableImageLogging) {
+        await this.saveImageAndResponse(imageURI, brickognizeResponse);
+      }
 
       // Handle the server response as needed
       return brickognizeResponse;
     } catch (error) {
       throw error;
+    } finally {
+      this.inFlightClassifyImageCount = Math.max(0, this.inFlightClassifyImageCount - 1);
     }
   }
 }
