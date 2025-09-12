@@ -47,7 +47,7 @@ SensorReadState currentSensorState = SensorReadState::IDLE;
 unsigned long sensorRequestTime = 0;
 const unsigned long SENSOR_READ_DELAY_US = 30000; // Increased from 30us. 30us is too short for most ToF sensors, which need ~20-50ms for a reading. This prevents spamming the bus.
 unsigned long sensorWaitStartTime = 0; // for timeout
-const unsigned long SENSOR_READ_TIMEOUT_MS = 10;
+const unsigned long SENSOR_READ_TIMEOUT_MS = 50;
 
 // -- Feeder Variables
 #define FEEDER_RPWM_PIN 11    // Changed from FEEDER_ENABLE_PIN
@@ -87,6 +87,11 @@ void setup() {
   // Watchdog logic removed. If a subsystem fails, we will log and attempt recovery in software.
 
   Wire.begin(); 
+  // Configure I2C to be more robust against bus lockups
+  #ifdef WIRE_HAS_TIMEOUT
+  Wire.setWireTimeout(25000, true); // 25 ms timeout, auto reset TWI on timeout
+  #endif
+  Wire.setClock(100000); // Standard 100kHz for reliability
 
   // Watchdog timer removed. We rely on robust non-blocking code and error recovery.
 
@@ -545,6 +550,14 @@ bool initiateDistanceRead(unsigned char deviceAddr) {
     Wire.end();
     delay(10);
     Wire.begin();
+    #ifdef WIRE_HAS_TIMEOUT
+    Wire.setWireTimeout(25000, true);
+    #endif
+    Wire.setClock(100000);
+    // Fail-safe: stop feeder motor to avoid being stuck ON during I2C faults
+    stopMotor();
+    currFeederState = FeederState::paused;
+    lastFeederActionTime = millis();
     Serial.println("INFO: I2C bus reinitialized after error.");
     return false;
   }
@@ -559,8 +572,26 @@ bool processSensorReading(unsigned char deviceAddr) {
   if (currentSensorState == SensorReadState::REQUEST_SENT) {
     if (micros() - sensorRequestTime >= SENSOR_READ_DELAY_US) {
       currentSensorState = SensorReadState::WAITING_FOR_READING;
-      Wire.requestFrom(deviceAddr, (unsigned char)2); // request 2 bytes
+      // Request 2 bytes; check for immediate failure
+      uint8_t received = Wire.requestFrom(deviceAddr, (unsigned char)2); // request 2 bytes
       sensorWaitStartTime = millis(); // Start timeout timer
+      if (received != 2) {
+        Serial.println("ERROR: I2C requestFrom failed. Attempting I2C recovery.");
+        distanceReading = UINT_MAX; 
+        Wire.end();
+        delay(10);
+        Wire.begin();
+        #ifdef WIRE_HAS_TIMEOUT
+        Wire.setWireTimeout(25000, true);
+        #endif
+        Wire.setClock(100000);
+        // Fail-safe: stop feeder motor to avoid being stuck ON during I2C faults
+        stopMotor();
+        currFeederState = FeederState::paused;
+        lastFeederActionTime = millis();
+        currentSensorState = SensorReadState::IDLE; // Reset for next attempt
+        return true; // handled with default reading
+      }
     }
     return false; // Reading not yet available
   }
@@ -585,6 +616,14 @@ bool processSensorReading(unsigned char deviceAddr) {
       Wire.end();
       delay(10);
       Wire.begin();
+      #ifdef WIRE_HAS_TIMEOUT
+      Wire.setWireTimeout(25000, true);
+      #endif
+      Wire.setClock(100000);
+      // Fail-safe: stop feeder motor to avoid being stuck ON during I2C faults
+      stopMotor();
+      currFeederState = FeederState::paused;
+      lastFeederActionTime = millis();
       Serial.println("INFO: I2C bus reinitialized after sensor timeout.");
       currentSensorState = SensorReadState::IDLE; // Reset for next attempt
       return true; // Return true as we've "handled" it by providing a default.
