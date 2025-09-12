@@ -12,6 +12,7 @@ import serviceManager from './ServiceManager';
 import { findPositionAtTime } from '../utils';
 
 const MIN_PROCESS_LOOP_TIME = 500;
+const MAX_MATCH_DT_MS = 3000; // ignore groups whose last detection is too old
 
 class SortProcessControllerService implements Service {
   private status: ServiceState = ServiceState.UNINITIALIZED;
@@ -63,12 +64,18 @@ class SortProcessControllerService implements Service {
       let closestDistance = settingsService.getSettings().detectDistanceThreshold;
       let closestGroupIndex = null;
 
-      // start fromm the end of the array to get the last detection
-      for (let i = this.detectionPairGroups.length - 1; i >= 0; i--) {
+      // Iterate from newest to oldest groups (new groups are unshifted to index 0)
+      for (let i = 0; i < this.detectionPairGroups.length; i++) {
         // find the predicted centroid of the last detection in the detection group
         const [lastDetection, _] =
           this.detectionPairGroups[i].detectionPairs[this.detectionPairGroups[i].detectionPairs.length - 1];
         if (!lastDetection) {
+          continue;
+        }
+
+        const dt = unmatchedDetection.timestamp - lastDetection.timestamp;
+        // Skip if timestamps are out of order or stale; avoids huge drift predictions
+        if (dt <= 0 || dt > MAX_MATCH_DT_MS) {
           continue;
         }
 
@@ -84,7 +91,7 @@ class SortProcessControllerService implements Service {
 
         // Debug logging for detection matching
         console.log(
-          `Matching attempt: predicted=${predictedX.toFixed(1)}, actual=${unmatchedDetection.centroid.x.toFixed(1)}, distance=${distanceBetweenDetections.toFixed(1)}, threshold=${closestDistance}, willMatch=${distanceBetweenDetections < closestDistance}`,
+          `Matching attempt: predicted=${predictedX.toFixed(1)}, actual=${unmatchedDetection.centroid.x.toFixed(1)}, distance=${distanceBetweenDetections.toFixed(1)}, threshold=${closestDistance}, dt=${dt}ms, willMatch=${distanceBetweenDetections < closestDistance}`,
         );
 
         // distanceBetweenDetections is less than the maximum distance threshold for a match
