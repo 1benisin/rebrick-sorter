@@ -173,40 +173,55 @@ export class ConveyorManager extends BaseComponent {
         : []),
     ].sort((a, b) => a.time - b.time); // Sort by time
 
-    // If no speed changes, use current speed
-    if (allSpeedChanges.length === 0) {
-      const currentSpeed = this.speedManager.getCurrentSpeed();
-      const travelTime = distance / currentSpeed;
-      return startTime + travelTime;
-    }
+    // Determine the speed active at startTime
+    const lastChangeBeforeStart = [...allSpeedChanges].filter((c) => c.time <= startTime).pop();
+    let lastSpeed = lastChangeBeforeStart ? lastChangeBeforeStart.speed : this.speedManager.getCurrentSpeed();
+
     let remainingDistance = distance;
     let finishTime = startTime;
+    let lastTime = startTime;
 
-    // Calculate time based on all speed changes
-    for (let i = 0; i < allSpeedChanges.length; i++) {
-      if (remainingDistance <= 1) break;
-
-      const { speed, time: speedStart } = allSpeedChanges[i];
-      // if no next speed change use 10 minutes from start as the end time
-      const speedEnd = allSpeedChanges[i + 1]?.time || speedStart + 10 * 60 * 1000;
-
-      // use later start time
-      const start = speedStart > startTime ? speedStart : startTime;
-
-      let timeTraveled = speedEnd - start;
-
-      // if speed ended before the start time of the part timeTraveled will be negative
-      // -clamp the time traveled to 0 because it has no effect on the position
-      timeTraveled = timeTraveled < 0 ? 0 : timeTraveled;
-      let distanceTraveled = timeTraveled * speed;
-
-      if (distanceTraveled > remainingDistance) {
-        distanceTraveled = remainingDistance;
-        timeTraveled = distanceTraveled / speed;
+    // Iterate forward through changes after startTime, consuming distance
+    for (let i = 0; i < allSpeedChanges.length && remainingDistance > 0; i++) {
+      const { speed, time: changeTime } = allSpeedChanges[i];
+      if (changeTime <= startTime) {
+        // Keep updating lastSpeed for changes up to startTime
+        lastSpeed = speed;
+        continue;
       }
 
-      finishTime += timeTraveled;
-      remainingDistance -= distanceTraveled;
+      // Time span at lastSpeed until the next change
+      const timeTraveled = changeTime - lastTime;
+      if (timeTraveled > 0) {
+        const distanceTraveled = timeTraveled * lastSpeed;
+        if (distanceTraveled >= remainingDistance) {
+          finishTime += remainingDistance / lastSpeed;
+          remainingDistance = 0;
+          return finishTime;
+        } else {
+          finishTime += timeTraveled;
+          remainingDistance -= distanceTraveled;
+          lastTime = changeTime;
+        }
+      }
+
+      // Apply the new speed after the change
+      lastSpeed = speed;
+    }
+
+    // After processing all changes, continue at lastSpeed up to a reasonable bound
+    if (remainingDistance > 0) {
+      const maxHorizon = lastTime + 10 * 60 * 1000; // 10 minutes fallback horizon
+      const timeTraveled = maxHorizon - lastTime;
+      const distanceTraveled = timeTraveled * lastSpeed;
+      if (distanceTraveled >= remainingDistance) {
+        finishTime += remainingDistance / lastSpeed;
+        remainingDistance = 0;
+      } else {
+        // If still not enough, return the horizon (should not happen under normal speeds)
+        finishTime = maxHorizon;
+        remainingDistance = 0;
+      }
     }
 
     return finishTime;

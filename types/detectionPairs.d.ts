@@ -10,6 +10,7 @@ export enum SkipSortReason {
   tooLargeForSorter = 'tooLargeForSorter',
   tooLowConfidence = 'tooLowConfidence',
   noBinForPartId = 'noBinForPartId',
+  overCapacity = 'overCapacity',
 }
 
 export type DetectionPairGroup = {

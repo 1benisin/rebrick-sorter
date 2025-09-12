@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { sortProcessStore } from '@/stores/sortProcessStore';
-import { DetectionPairGroup, mockDetectionPairGroup } from '@/types/detectionPairs.d';
+import { DetectionPairGroup, SkipSortReason } from '@/types/detectionPairs.d';
 import { v4 as uuid } from 'uuid';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -36,6 +36,31 @@ const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
   const classification = group.classificationResult || null;
   const skipSort = group.skipSort || null;
   const skipSortReason = group.skipSortReason || null;
+  let cardSkipClasses = '';
+  let skipTextClass = 'text-xs text-red-700';
+  if (skipSortReason) {
+    switch (skipSortReason) {
+      case SkipSortReason.overCapacity:
+        cardSkipClasses = 'border-2 border-yellow-400 bg-yellow-50 text-yellow-800';
+        skipTextClass = 'text-xs text-yellow-700';
+        break;
+      case SkipSortReason.tooLowConfidence:
+        cardSkipClasses = 'border-2 border-orange-400 bg-orange-50 text-orange-800';
+        skipTextClass = 'text-xs text-orange-700';
+        break;
+      case SkipSortReason.tooLargeForSorter:
+        cardSkipClasses = 'border-2 border-red-400 bg-red-50 text-red-800';
+        skipTextClass = 'text-xs text-red-700';
+        break;
+      case SkipSortReason.noBinForPartId:
+        cardSkipClasses = 'border-2 border-blue-400 bg-blue-50 text-blue-800';
+        skipTextClass = 'text-xs text-blue-700';
+        break;
+      default:
+        cardSkipClasses = 'border-2 border-gray-300 bg-gray-50 text-gray-800';
+        skipTextClass = 'text-xs text-gray-700';
+    }
+  }
 
   if (!settings) {
     return <div>Loading Settings...</div>;
@@ -47,9 +72,7 @@ const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
 
   return (
     <>
-      <Card
-        className={`min-w-28 mr-1 flex w-28 flex-col items-center p-1 ${group.skipSortReason ? 'border-2 border-red-400 text-red-400' : ''}`}
-      >
+      <Card className={`min-w-28 mr-1 flex w-28 flex-col items-center p-1 ${cardSkipClasses}`}>
         {classification && (
           <div className={`relative flex h-24 w-24 items-center`}>
             <img
@@ -73,7 +96,7 @@ const DetectionCard = ({ group }: { group: DetectionPairGroup }) => {
             <div>{classification.name}</div>
           </div>
         )}
-        {skipSortReason && <div className="text-xs text-red-700">{`${skipSortReason}: ${skipSort}`}</div>}
+        {skipSortReason && <div className={skipTextClass}>{`${skipSortReason}: ${skipSort}`}</div>}
         {/* Display detections */}
         <div className="flex flex-col" onClick={() => console.log('Detection Pairs: ', group.detectionPairs)}>
           {group.detectionPairs.map((pair, index) => (
