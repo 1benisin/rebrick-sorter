@@ -26,7 +26,7 @@ class ClassifierService implements Service {
   private state: ServiceState = ServiceState.UNINITIALIZED;
   private inFlightClassifyImageCount: number = 0;
   private maxInFlightClassifyImageCount: number = 4; // threshold to guard overload
-  private enableDualViewClassification: boolean = false; // when false, only imageURI1 is classified
+  private enableDualViewClassification: boolean = true; // when false, only imageURI1 is classified
   private enableImageLogging: boolean = false; // controls saveImageAndResponse
 
   // --- Runtime configuration setters ---
