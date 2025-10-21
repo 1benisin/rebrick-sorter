@@ -41,7 +41,14 @@ class SortProcessControllerService implements Service {
 
       // Initialize conveyor speed in the store from settings
       const initialSpeed = settingsService.getSettings().conveyorSpeed;
+      console.log(`[SorterService.init] Setting initial conveyor speed from settings: ${initialSpeed}`);
       sortProcessStore.getState().setConveyorSpeed(initialSpeed);
+
+      // Verify it was set
+      const { conveyorSpeed, conveyorSpeedLog } = sortProcessStore.getState();
+      console.log(
+        `[SorterService.init] After init - conveyorSpeed: ${conveyorSpeed}, speedLog entries: ${conveyorSpeedLog.length}`,
+      );
 
       this.status = ServiceState.INITIALIZED;
     } catch (error) {
@@ -56,13 +63,30 @@ class SortProcessControllerService implements Service {
 
   // a function that matches detection pairs to proper DetectionPairGroups
   private matchDetectionsPairsToGroups(detectionPairs: [Detection, Detection][]): void {
+    const { conveyorSpeed: defaultSpeed, conveyorSpeedLog } = sortProcessStore.getState();
+
+    console.log('=== matchDetectionsPairsToGroups START ===');
+    console.log(`  Incoming detection pairs: ${detectionPairs.length}`);
+    console.log(`  Existing groups: ${this.detectionPairGroups.length}`);
+    console.log(`  Current conveyorSpeed (defaultSpeed): ${defaultSpeed}`);
+    console.log(`  ConveyorSpeedLog length: ${conveyorSpeedLog.length}`);
+    if (conveyorSpeedLog.length > 0) {
+      console.log(`  ConveyorSpeedLog entries:`, conveyorSpeedLog.map((e) => `[t:${e.time}, s:${e.speed}]`).join(', '));
+    }
+
     // loop through detectionPairs
     for (const detectionPair of detectionPairs) {
       const unmatchedDetection = detectionPair[0];
+      console.log(
+        `\n  Processing new detection at x=${unmatchedDetection.centroid.x.toFixed(1)}, t=${unmatchedDetection.timestamp}`,
+      );
+
       // find the index of the detection group whose last detection centroid is closest unmatchedDetection centroid
       const settingsService = serviceManager.getService(ServiceName.SETTINGS);
       let closestDistance = settingsService.getSettings().detectDistanceThreshold;
       let closestGroupIndex = null;
+
+      console.log(`    Distance threshold: ${closestDistance}`);
 
       // Iterate from newest to oldest groups (new groups are unshifted to index 0)
       for (let i = 0; i < this.detectionPairGroups.length; i++) {
@@ -70,16 +94,25 @@ class SortProcessControllerService implements Service {
         const [lastDetection, _] =
           this.detectionPairGroups[i].detectionPairs[this.detectionPairGroups[i].detectionPairs.length - 1];
         if (!lastDetection) {
+          console.log(`    Group ${i}: No last detection, skipping`);
           continue;
         }
 
         const dt = unmatchedDetection.timestamp - lastDetection.timestamp;
+        console.log(
+          `    Group ${i}: last x=${lastDetection.centroid.x.toFixed(1)}, last t=${lastDetection.timestamp}, dt=${dt}ms`,
+        );
+
         // Skip if timestamps are out of order or stale; avoids huge drift predictions
-        if (dt <= 0 || dt > MAX_MATCH_DT_MS) {
+        if (dt <= 0) {
+          console.log(`    Group ${i}: SKIPPED - dt <= 0 (timestamps out of order)`);
+          continue;
+        }
+        if (dt > MAX_MATCH_DT_MS) {
+          console.log(`    Group ${i}: SKIPPED - dt > ${MAX_MATCH_DT_MS}ms (too stale)`);
           continue;
         }
 
-        const { conveyorSpeed: defaultSpeed, conveyorSpeedLog } = sortProcessStore.getState();
         const predictedX = findPositionAtTime(
           lastDetection.centroid.x,
           lastDetection.timestamp,
@@ -91,7 +124,7 @@ class SortProcessControllerService implements Service {
 
         // Debug logging for detection matching
         console.log(
-          `Matching attempt: predicted=${predictedX.toFixed(1)}, actual=${unmatchedDetection.centroid.x.toFixed(1)}, distance=${distanceBetweenDetections.toFixed(1)}, threshold=${closestDistance}, dt=${dt}ms, willMatch=${distanceBetweenDetections < closestDistance}`,
+          `    Group ${i}: predicted=${predictedX.toFixed(1)}, actual=${unmatchedDetection.centroid.x.toFixed(1)}, distance=${distanceBetweenDetections.toFixed(1)}, threshold=${closestDistance}, MATCH=${distanceBetweenDetections < closestDistance}`,
         );
 
         // distanceBetweenDetections is less than the maximum distance threshold for a match
@@ -103,6 +136,9 @@ class SortProcessControllerService implements Service {
 
       if (closestGroupIndex !== null) {
         // if closestDetectionGroup is found, add unmatchedDetection to closestDetectionGroup
+        console.log(
+          `  ✓ MATCHED to existing group ${closestGroupIndex} (id: ${this.detectionPairGroups[closestGroupIndex].id}), final distance: ${closestDistance.toFixed(1)}`,
+        );
         this.detectionPairGroups[closestGroupIndex].detectionPairs.push(detectionPair);
         sortProcessStore
           .getState()
@@ -110,10 +146,12 @@ class SortProcessControllerService implements Service {
       } else {
         // else create a new detectionGroup with unmatchedDetection and add it to topViewDetectionPairGroups
         const newGroup: DetectionPairGroup = { id: uuid(), detectionPairs: [detectionPair] };
+        console.log(`  ✗ NO MATCH - Creating new group (id: ${newGroup.id})`);
         this.detectionPairGroups.unshift(newGroup);
         sortProcessStore.getState().addDetectionPairGroup(newGroup);
       }
     }
+    console.log(`=== matchDetectionsPairsToGroups END - Total groups now: ${this.detectionPairGroups.length} ===\n`);
   }
 
   // function that classifies detections past screen 1/3

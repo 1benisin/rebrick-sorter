@@ -252,11 +252,12 @@ class ClassifierService implements Service {
         };
       }
 
-      // Coordinate transform: frontend canvas moves leftward (x decreases over time),
-      // backend assumes rightward motion to the jet. Flip around canvas width.
-      const backendInitialPosition = videoCaptureDimensions.width - initialPosition;
+      // Frontend and backend now both use rightward motion (x increases over time)
+      // Parts move from left (low x) to right (high x) toward the jets
+      // No coordinate flip needed - pass frontend position directly to backend
+      const backendInitialPosition = initialPosition;
       console.log(
-        `[COORDINATE_TRANSFORM] Frontend x=${initialPosition} → Backend x=${backendInitialPosition} (flipped across width=${videoCaptureDimensions.width})`,
+        `[COORDINATE] Frontend x=${initialPosition} → Backend x=${backendInitialPosition} (no flip, same coordinate system)`,
       );
 
       // send to sorter

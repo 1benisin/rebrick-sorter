@@ -75,7 +75,7 @@ export const findPositionAtTime = (
     if (entry.time > lastTime && entry.time <= endTime) {
       // Calculate time elapsed at the previous speed
       const timeDiff = entry.time - lastTime;
-      currentPos -= lastSpeed * timeDiff; // Parts move left: x decreases over time
+      currentPos += lastSpeed * timeDiff; // Parts move right: x increases over time (frontend coordinates)
       lastTime = entry.time; // Update the time marker
       lastSpeed = entry.speed; // Update the speed for the next interval
     } else if (entry.time > endTime) {
@@ -90,7 +90,8 @@ export const findPositionAtTime = (
   // Calculate remaining distance traveled after the last log entry time up to endTime
   if (lastTime < endTime) {
     const remainingTimeDiff = endTime - lastTime;
-    currentPos -= lastSpeed * remainingTimeDiff; // Continue leftward motion
+    const distanceMoved = lastSpeed * remainingTimeDiff;
+    currentPos += distanceMoved; // Continue rightward motion (frontend coordinates)
   }
 
   return currentPos;
