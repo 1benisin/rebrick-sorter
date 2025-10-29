@@ -329,16 +329,31 @@ class DetectorService implements Service {
     cropCanvas: HTMLCanvasElement,
     predictionsPairs: PredictionsPair[],
   ): [Detection, Detection][] {
-    return predictionsPairs.map((pair) => {
+    const videoWidth = canvas.width;
+
+    return predictionsPairs.map((pair, index) => {
       const topViewDetectionImageURI = this.getCroppedImageURI(canvas, cropCanvas, pair.topView.box);
       const sideViewDetectionImageURI = this.getCroppedImageURI(canvas, cropCanvas, pair.sideView.box);
+
+      // Calculate raw x from ML detection box (physical leftward motion)
+      const xRaw = pair.topView.box.left + pair.topView.box.width / 2;
+
+      // Transform to canonical rightward coordinates
+      const xCanonical = videoWidth - xRaw;
+
+      // Log first 5 transformations for validation
+      if (index < 5) {
+        console.log(
+          `[COORD_TRANSFORM] detection ${index}: raw=${xRaw.toFixed(1)} → canonical=${xCanonical.toFixed(1)} (width=${videoWidth})`,
+        );
+      }
 
       const topViewDetection: Detection = {
         view: 'top',
         imageURI: topViewDetectionImageURI,
         timestamp,
         centroid: {
-          x: pair.topView.box.left + pair.topView.box.width / 2,
+          x: xCanonical, // Use canonical x instead of raw x
           y: pair.topView.box.top + pair.topView.box.height / 2,
         },
         box: pair.topView.box,

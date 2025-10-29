@@ -93,6 +93,7 @@ export class DeviceManager extends BaseComponent {
       }
 
       // Register for settings updates
+      console.log('\x1b[32m[SETTINGS_FLOW] Registering settings update callback\x1b[0m');
       this.settingsManager.registerSettingsUpdateCallback(this.updateSettings.bind(this));
 
       this.setStatus(ComponentStatus.READY);
@@ -556,14 +557,19 @@ export class DeviceManager extends BaseComponent {
 
   public async updateSettings(): Promise<void> {
     try {
+      console.log('\x1b[32m[SETTINGS_FLOW] updateSettings() callback triggered\x1b[0m');
       const settings = this.settingsManager.getSettings();
       if (!settings) {
+        console.log('\x1b[31m[SETTINGS_FLOW] Settings not available!\x1b[0m');
         throw new Error('Settings not available');
       }
+      console.log('\x1b[32m[SETTINGS_FLOW] Settings retrieved successfully\x1b[0m');
 
       // Update hopper feeder settings if connected
       const hopperFeeder = this.devices.get(DeviceName.HOPPER_FEEDER);
+      console.log(`\x1b[32m[SETTINGS_FLOW] Checking hopper_feeder device - exists: ${!!hopperFeeder}\x1b[0m`);
       if (hopperFeeder) {
+        console.log('\x1b[32m[SETTINGS_FLOW] Building hopper_feeder config...\x1b[0m');
         const config = {
           ...hopperFeeder.config,
           HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
@@ -573,11 +579,17 @@ export class DeviceManager extends BaseComponent {
           FEEDER_SHORT_MOVE_TIME: settings.feederShortMoveTime,
           FEEDER_LONG_MOVE_TIME: settings.feederLongMoveTime,
         };
+        console.log('\x1b[32m[SETTINGS_FLOW] Config values:\x1b[0m', JSON.stringify(config, null, 2));
 
         this.devices.set(DeviceName.HOPPER_FEEDER, { ...hopperFeeder, config });
         const configMessage = this.buildHopperFeederInitMessage(config);
+        console.log(`\x1b[32m[SETTINGS_FLOW] Built config message: "${configMessage}"\x1b[0m`);
         if (configMessage) {
+          console.log('\x1b[32m[SETTINGS_FLOW] Sending config message to hopper_feeder...\x1b[0m');
           this.sendCommand(DeviceName.HOPPER_FEEDER, configMessage);
+          console.log('\x1b[32m[SETTINGS_FLOW] Config message sent successfully\x1b[0m');
+        } else {
+          console.log('\x1b[31m[SETTINGS_FLOW] Config message is empty! Not sending.\x1b[0m');
         }
       }
 

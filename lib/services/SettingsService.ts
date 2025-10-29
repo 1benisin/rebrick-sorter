@@ -85,12 +85,15 @@ class SettingsService implements Service {
     }
 
     try {
+      console.log('\x1b[32m[SETTINGS_FLOW] Client: saveSettings called\x1b[0m');
       const result = settingsSchema.parse(newSettings);
       const settingsRef = doc(db, 'settings', this.userId);
+      console.log('\x1b[32m[SETTINGS_FLOW] Client: Writing to Firebase...\x1b[0m');
       await setDoc(settingsRef, result, { merge: true });
       this.settings = result;
+      console.log('\x1b[32m[SETTINGS_FLOW] Client: Settings saved to Firebase successfully\x1b[0m');
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('\x1b[31m[SETTINGS_FLOW] Client: Error saving settings:\x1b[0m', error);
       throw new Error('Failed to save settings');
     }
   }

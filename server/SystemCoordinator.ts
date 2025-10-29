@@ -173,9 +173,9 @@ export class SystemCoordinator {
     // -- calculate part properties --
     // default arrival time
     const jetPosition = this.conveyorManager.getJetPosition(sorter);
-    // Jet position is to the right of the detection in our coordinate system (origin at left).
-    // Use rightward distance; clamp to at least 1px to ensure future scheduling.
-    const distanceToJet = Math.max(1, jetPosition - initialPosition);
+    // Use absolute belt distance from detection to jet; clamp to at least 1px.
+    // This keeps timing correct regardless of leftward or rightward motion.
+    const distanceToJet = Math.max(1, Math.abs(jetPosition - initialPosition));
     const defaultSpeed = this.speedManager.getDefaultSpeed();
     const conveyorTravelTime = distanceToJet / defaultSpeed;
     const defaultArrivalTime = initialTime + conveyorTravelTime;

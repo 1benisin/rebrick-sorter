@@ -75,7 +75,14 @@ export const findPositionAtTime = (
     if (entry.time > lastTime && entry.time <= endTime) {
       // Calculate time elapsed at the previous speed
       const timeDiff = entry.time - lastTime;
-      currentPos += lastSpeed * timeDiff; // Parts move right: x increases over time (frontend coordinates)
+      currentPos += lastSpeed * timeDiff; // Parts move right: x increases over time
+      // Debug log each segment contribution
+      // Note: console logs in utils are noisy; include explicit tag and keep concise
+      console.log(
+        `[findPositionAtTime] seg: t(${lastTime}->${entry.time}) dt=${timeDiff}ms v=${lastSpeed.toFixed(
+          4,
+        )} px/ms -> dx=${(lastSpeed * timeDiff).toFixed(1)} pos=${currentPos.toFixed(1)}`,
+      );
       lastTime = entry.time; // Update the time marker
       lastSpeed = entry.speed; // Update the speed for the next interval
     } else if (entry.time > endTime) {
@@ -91,9 +98,19 @@ export const findPositionAtTime = (
   if (lastTime < endTime) {
     const remainingTimeDiff = endTime - lastTime;
     const distanceMoved = lastSpeed * remainingTimeDiff;
-    currentPos += distanceMoved; // Continue rightward motion (frontend coordinates)
+    currentPos += distanceMoved; // Continue rightward motion
+    console.log(
+      `[findPositionAtTime] tail: t(${lastTime}->${endTime}) dt=${remainingTimeDiff}ms v=${lastSpeed.toFixed(
+        4,
+      )} px/ms -> dx=${distanceMoved.toFixed(1)} pos=${currentPos.toFixed(1)}`,
+    );
   }
 
+  console.log(
+    `[findPositionAtTime] result: startPos=${startPos.toFixed(1)} -> endPos=${currentPos.toFixed(1)} (default=${defaultSpeed.toFixed(
+      4,
+    )}, entries=${relevantEntries.length})`,
+  );
   return currentPos;
 };
 

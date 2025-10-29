@@ -24,6 +24,9 @@ export class SettingsManager extends BaseComponent {
   }
 
   public registerSettingsUpdateCallback(callback: (settings: SettingsType) => Promise<void>): void {
+    console.log(
+      `\x1b[32m[SETTINGS_FLOW] Callback registered. Total callbacks: ${this.settingsUpdateCallbacks.length + 1}\x1b[0m`,
+    );
     this.settingsUpdateCallbacks.push(callback);
   }
 
@@ -32,11 +35,16 @@ export class SettingsManager extends BaseComponent {
   }
 
   private async notifySettingsUpdateCallbacks(settings: SettingsType): Promise<void> {
+    console.log(
+      `\x1b[32m[SETTINGS_FLOW] Notifying ${this.settingsUpdateCallbacks.length} callback(s) of settings update\x1b[0m`,
+    );
     for (const callback of this.settingsUpdateCallbacks) {
       try {
+        console.log('\x1b[32m[SETTINGS_FLOW] Calling callback...\x1b[0m');
         await callback(settings);
+        console.log('\x1b[32m[SETTINGS_FLOW] Callback completed successfully\x1b[0m');
       } catch (error) {
-        console.error('\x1b[33mError in settings update callback:\x1b[0m', error);
+        console.error('\x1b[33m[SETTINGS_FLOW] Error in settings update callback:\x1b[0m', error);
       }
     }
   }
@@ -64,13 +72,16 @@ export class SettingsManager extends BaseComponent {
 
   private async subscribeToSettings(): Promise<void> {
     try {
+      console.log('\x1b[32m[SETTINGS_FLOW] Setting up Firebase subscription...\x1b[0m');
       // Get initial settings
       const snapshot = await this.settingsRef.get();
       if (snapshot.exists) {
+        console.log('\x1b[32m[SETTINGS_FLOW] Initial settings loaded from Firebase\x1b[0m');
         const settingsData = snapshot.data();
         if (settingsData) {
           const settings = settingsSchema.parse(settingsData);
           this.settings = settings;
+          console.log('\x1b[32m[SETTINGS_FLOW] Notifying callbacks with initial settings\x1b[0m');
           await this.notifySettingsUpdateCallbacks(settings);
         }
       }
@@ -78,17 +89,24 @@ export class SettingsManager extends BaseComponent {
       // Set up real-time listener
       this.settingsRef.onSnapshot(
         async (snapshot: FirebaseFirestore.DocumentSnapshot) => {
+          console.log('\x1b[32m[SETTINGS_FLOW] Firebase snapshot received\x1b[0m');
           if (snapshot.exists) {
             const settingsData = snapshot.data();
             if (settingsData) {
               try {
                 const settings = settingsSchema.parse(settingsData);
                 // Only notify if settings actually changed
-                if (JSON.stringify(settings) !== JSON.stringify(this.settings)) {
+                const oldSettingsStr = JSON.stringify(this.settings);
+                const newSettingsStr = JSON.stringify(settings);
+                if (newSettingsStr !== oldSettingsStr) {
+                  console.log('\x1b[32m[SETTINGS_FLOW] Settings changed detected in Firebase\x1b[0m');
                   this.settings = settings;
                   await this.notifySettingsUpdateCallbacks(settings);
+                } else {
+                  console.log('\x1b[33m[SETTINGS_FLOW] Settings unchanged, skipping callback notification\x1b[0m');
                 }
               } catch (error) {
+                console.error('\x1b[31m[SETTINGS_FLOW] Error processing settings update:\x1b[0m', error);
                 this.setError(error instanceof Error ? error.message : 'Error processing settings update');
               }
             }
