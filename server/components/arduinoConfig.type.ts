@@ -28,6 +28,7 @@ export type ConveyorJetsInitConfig = {
 export interface HopperFeederInitConfig {
   deviceType: DeviceType.HOPPER_FEEDER;
   HOPPER_CYCLE_INTERVAL: number;
+  HOPPER_CYCLE_STEPS: number;
   FEEDER_VIBRATION_SPEED: number;
   FEEDER_STOP_DELAY: number;
   FEEDER_PAUSE_TIME: number;

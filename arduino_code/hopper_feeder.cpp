@@ -412,8 +412,8 @@ void processMessage(char *message) {
 
 void processSettings(char *message) {
   // Parse settings from message
-  // Expected format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>'
-  // Note: The 's' character is the command identifier, followed by 6 comma-separated settings values
+  // Expected format: 's,<HOPPER_CYCLE_INTERVAL>,<HOPPER_CYCLE_STEPS>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>'
+  // Note: The 's' character is the command identifier, followed by 7 comma-separated settings values
   
   // Validate message format
   if (message[0] != 's' || message[1] != ',') {
@@ -424,33 +424,34 @@ void processSettings(char *message) {
   }
 
   char *token;
-  int values[6]; // Array to hold 6 setting values
+  int values[7]; // Array to hold 7 setting values
   int valueIndex = 0;
   bool parseError = false;
 
   // Skip 's,' and start tokenizing
   token = strtok(&message[2], ",");
-  while (token != NULL && valueIndex < 6) {
+  while (token != NULL && valueIndex < 7) {
     values[valueIndex] = atoi(token);
     valueIndex++;  // Increment the index after assigning the value
     token = strtok(NULL, ",");
   }
 
-  if (valueIndex >= 6) {
+  if (valueIndex >= 7) {
     // Apply settings if all validations pass
     HOPPER_CYCLE_INTERVAL = values[0];
+    hopperFullStrokeSteps = values[1];
     
     // On the very first settings update, save the speed as the maximum allowed speed.
     if (MAX_FEEDER_SPEED == 1) {
-      MAX_FEEDER_SPEED = values[1];
+      MAX_FEEDER_SPEED = values[2];
     }
     // For all subsequent updates, clamp the new speed to the saved maximum.
-    FEEDER_VIBRATION_SPEED = min(values[1], MAX_FEEDER_SPEED);
+    FEEDER_VIBRATION_SPEED = min(values[2], MAX_FEEDER_SPEED);
 
-    FEEDER_STOP_DELAY = values[2];
-    FEEDER_PAUSE_TIME = values[3];
-    FEEDER_SHORT_MOVE_TIME = values[4];
-    FEEDER_LONG_MOVE_TIME = values[5];
+    FEEDER_STOP_DELAY = values[3];
+    FEEDER_PAUSE_TIME = values[4];
+    FEEDER_SHORT_MOVE_TIME = values[5];
+    FEEDER_LONG_MOVE_TIME = values[6];
 
     // Reset all state variables to their initial values
     currFeederState = FeederState::start_moving;

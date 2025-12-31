@@ -47,7 +47,7 @@ Communication occurs over a standard Serial (USB) connection. The backend sends 
 
 All commands from the backend to the Arduino **must** be framed with start and end markers: `<` and `>`.
 
-- **Example:** `<s,12000,92,1,1000,60,3000>`
+- **Example:** `<s,12000,2020,92,1,1000,60,3000>`
 
 The Arduino code in `loop()` captures characters into a buffer only after seeing a `<`. The message is processed when a `>` is received. This framing makes the protocol robust against line noise and incomplete transmissions.
 
@@ -57,8 +57,8 @@ The `processMessage()` function parses incoming commands based on the first char
 
 - **`s` (Settings Update):** This is the most critical command. It must be sent by the backend before any other command will be accepted.
 
-  - **Format:** `s,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>`
-  - **Action:** The `processSettings()` function parses the 6 integer values and updates the corresponding variables in the firmware. It also resets all state machines to their initial states.
+  - **Format:** `s,<HOPPER_CYCLE_INTERVAL>,<HOPPER_CYCLE_STEPS>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>`
+  - **Action:** The `processSettings()` function parses the 7 integer values and updates the corresponding variables in the firmware. It also resets all state machines to their initial states.
   - **Response:** `"Settings updated successfully"` on success, or an error message.
 
 - **`p` (Pause Time Update):** A specialized command to dynamically adjust the feeder's pause time.

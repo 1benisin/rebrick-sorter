@@ -72,6 +72,7 @@ export const settingsSchema = z.object({
   conveyorKd: z.coerce.number().min(0).default(0.0),
   sorters: z.array(sorterSettingsSchema).default([]),
   hopperCycleInterval: z.coerce.number().min(0).default(20000),
+  hopperCycleSteps: z.coerce.number().min(100).max(10000).default(2020),
 });
 
 export type SettingsType = z.infer<typeof settingsSchema>;
