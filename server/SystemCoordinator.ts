@@ -271,9 +271,10 @@ export class SystemCoordinator {
     shortMoveTime: number;
     longMoveTime: number;
     hopperCycleInterval: number;
+    hopperCycleSteps: number;
   }): void {
-    // Send settings to Arduino in the format: 's,<HOPPER_CYCLE_INTERVAL>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>'
-    const message = `s,${data.hopperCycleInterval},${data.vibrationSpeed},${data.stopDelay},${data.pauseTime},${data.shortMoveTime},${data.longMoveTime}`;
+    // Send settings to Arduino in the format: 's,<HOPPER_CYCLE_INTERVAL>,<HOPPER_CYCLE_STEPS>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>'
+    const message = `s,${data.hopperCycleInterval},${data.hopperCycleSteps},${data.vibrationSpeed},${data.stopDelay},${data.pauseTime},${data.shortMoveTime},${data.longMoveTime}`;
     this.deviceManager.sendCommand(DeviceName.HOPPER_FEEDER, message);
   }
 }

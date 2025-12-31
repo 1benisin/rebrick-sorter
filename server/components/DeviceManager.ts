@@ -57,6 +57,7 @@ export class DeviceManager extends BaseComponent {
           await this.connectDevice(DeviceName.HOPPER_FEEDER, settings.hopperFeederSerialPort, {
             deviceType: DeviceType.HOPPER_FEEDER,
             HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
+            HOPPER_CYCLE_STEPS: settings.hopperCycleSteps,
             FEEDER_VIBRATION_SPEED: settings.feederVibrationSpeed,
             FEEDER_STOP_DELAY: settings.feederStopDelay,
             FEEDER_PAUSE_TIME: settings.feederPauseTime,
@@ -400,6 +401,7 @@ export class DeviceManager extends BaseComponent {
     if (config.deviceType !== 'hopper_feeder') return '';
     const configValues = [
       config.HOPPER_CYCLE_INTERVAL,
+      config.HOPPER_CYCLE_STEPS,
       config.FEEDER_VIBRATION_SPEED,
       config.FEEDER_STOP_DELAY,
       config.FEEDER_PAUSE_TIME,
@@ -573,6 +575,7 @@ export class DeviceManager extends BaseComponent {
         const config = {
           ...hopperFeeder.config,
           HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
+          HOPPER_CYCLE_STEPS: settings.hopperCycleSteps,
           FEEDER_VIBRATION_SPEED: settings.feederVibrationSpeed,
           FEEDER_STOP_DELAY: settings.feederStopDelay,
           FEEDER_PAUSE_TIME: settings.feederPauseTime,
@@ -676,6 +679,7 @@ export class DeviceManager extends BaseComponent {
           config: {
             deviceType: DeviceType.HOPPER_FEEDER,
             HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
+            HOPPER_CYCLE_STEPS: settings.hopperCycleSteps,
             FEEDER_VIBRATION_SPEED: settings.feederVibrationSpeed,
             FEEDER_STOP_DELAY: settings.feederStopDelay,
             FEEDER_PAUSE_TIME: settings.feederPauseTime,

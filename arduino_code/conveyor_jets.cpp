@@ -1,3 +1,4 @@
+// NOTE: Use USB port /dev/cu.usbserial2201 for this Arduino
 #include <math.h>
 #include <PID_v1.h>
 

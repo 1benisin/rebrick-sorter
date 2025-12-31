@@ -20,6 +20,7 @@ export interface SocketManagerConfig extends ComponentConfig {
     shortMoveTime: number;
     longMoveTime: number;
     hopperCycleInterval: number;
+    hopperCycleSteps: number;
   }) => void;
 }
 

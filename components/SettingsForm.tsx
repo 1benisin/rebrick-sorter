@@ -331,6 +331,19 @@ const SettingsForm = () => {
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="hopperCycleSteps"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Hopper Cycle Steps</FormLabel>
+                  <FormControl>
+                    <Input className="w-full" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 
