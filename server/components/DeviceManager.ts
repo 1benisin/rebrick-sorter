@@ -57,6 +57,7 @@ export class DeviceManager extends BaseComponent {
           await this.connectDevice(DeviceName.HOPPER_FEEDER, settings.hopperFeederSerialPort, {
             deviceType: DeviceType.HOPPER_FEEDER,
             HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
+            HOPPER_CYCLE_STEPS: settings.hopperCycleSteps,
             FEEDER_VIBRATION_SPEED: settings.feederVibrationSpeed,
             FEEDER_STOP_DELAY: settings.feederStopDelay,
             FEEDER_PAUSE_TIME: settings.feederPauseTime,
@@ -678,6 +679,7 @@ export class DeviceManager extends BaseComponent {
           config: {
             deviceType: DeviceType.HOPPER_FEEDER,
             HOPPER_CYCLE_INTERVAL: settings.hopperCycleInterval,
+            HOPPER_CYCLE_STEPS: settings.hopperCycleSteps,
             FEEDER_VIBRATION_SPEED: settings.feederVibrationSpeed,
             FEEDER_STOP_DELAY: settings.feederStopDelay,
             FEEDER_PAUSE_TIME: settings.feederPauseTime,

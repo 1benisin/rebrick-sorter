@@ -1,3 +1,9 @@
+// NOTE: Use USB port for SORTER A /dev/cu.usbserial1201 for this Arduino
+// NOTE: Use USB port for SORTER B /dev/cu.usbserial1301 for this Arduino
+// NOTE: Use USB port for SORTER C /dev/cu.usbserial-214430 for this Arduino
+// NOTE: Use USB port for SORTER D /dev/cu.usbserial-214440 for this Arduino
+
+
 /*
  * Serial Communication Protocol
  * ----------------------------
