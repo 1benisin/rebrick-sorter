@@ -2,7 +2,8 @@
 #include <Wire.h>
 #include "FastAccelStepper.h"
 #include <limits.h>
-// Watchdog Timer removed: We now handle errors in software and do not reset the Arduino automatically.
+#include <avr/wdt.h>
+// Watchdog Timer re-enabled: Hardware WDT provides last-resort recovery from I2C lockups or other hangs.
 
 #define AUTO_DISABLE true
 
@@ -77,14 +78,82 @@ unsigned long lastReadySendTime = 0; // For periodic "Ready" signal
 int ReadDistance(unsigned char device);
 bool getLatestDistanceReading(unsigned short &reading); // New function to get reading when available
 
+// I2C Bus Recovery Function
+// Per I2C specification: sends up to 9 clock pulses on SCL to release any slave holding SDA low
+// This handles the case where a slave device is stuck mid-transaction and won't release the bus
+void I2C_ClearBus() {
+  // Arduino Uno I2C pins
+  const int I2C_SDA_PIN = A4;
+  const int I2C_SCL_PIN = A5;
+  
+  Wire.end(); // Disable Wire library to access pins as GPIO
+  
+  pinMode(I2C_SDA_PIN, INPUT_PULLUP);
+  pinMode(I2C_SCL_PIN, OUTPUT);
+  
+  // Check if SDA is stuck low (slave holding it down)
+  if (digitalRead(I2C_SDA_PIN) == LOW) {
+    if (SYSTEM_DEBUG) {
+      Serial.println("WARN: I2C SDA stuck low. Attempting bus recovery...");
+    }
+    
+    // Generate up to 9 clock pulses to release slave
+    // A slave in the middle of a byte transmission will release SDA after at most 9 clocks
+    for (int i = 0; i < 9; i++) {
+      digitalWrite(I2C_SCL_PIN, LOW);
+      delayMicroseconds(5);
+      digitalWrite(I2C_SCL_PIN, HIGH);
+      delayMicroseconds(5);
+      
+      // Check if SDA has been released
+      if (digitalRead(I2C_SDA_PIN) == HIGH) {
+        if (SYSTEM_DEBUG) {
+          Serial.print("INFO: I2C bus released after ");
+          Serial.print(i + 1);
+          Serial.println(" clock pulses.");
+        }
+        break;
+      }
+    }
+    
+    // If still stuck after 9 pulses, log it
+    if (digitalRead(I2C_SDA_PIN) == LOW) {
+      Serial.println("ERROR: I2C bus recovery failed - SDA still low after 9 clock pulses.");
+    }
+  }
+  
+  // Generate STOP condition to reset the bus state machine in all slaves
+  // STOP = SDA goes HIGH while SCL is HIGH
+  pinMode(I2C_SDA_PIN, OUTPUT);
+  digitalWrite(I2C_SDA_PIN, LOW);   // Ensure SDA is low
+  delayMicroseconds(5);
+  digitalWrite(I2C_SCL_PIN, HIGH);  // SCL high
+  delayMicroseconds(5);
+  digitalWrite(I2C_SDA_PIN, HIGH);  // SDA goes high while SCL is high = STOP
+  delayMicroseconds(5);
+  
+  // Re-initialize Wire library with same settings as original setup
+  Wire.begin();
+  #ifdef WIRE_HAS_TIMEOUT
+  Wire.setWireTimeout(25000, true); // 25 ms timeout, auto reset TWI on timeout
+  #endif
+  Wire.setClock(100000); // Standard 100kHz for reliability
+  
+  if (SYSTEM_DEBUG) {
+    Serial.println("INFO: I2C bus recovery complete, Wire reinitialized.");
+  }
+}
+
 void setup() {
+  // Disable watchdog first in case we're recovering from a WDT reset
+  // This prevents a reset loop if the watchdog was still enabled from previous run
+  wdt_disable();
+  
   // The very first thing we do is initialize the serial port so we can always send debug messages.
   Serial.begin(9600,SERIAL_8N1);
   // A small delay to allow the serial port to stabilize and for the server to
   // connect before we start sending data. This helps prevent garbled initial messages.
   delay(500);
-
-  // Watchdog logic removed. If a subsystem fails, we will log and attempt recovery in software.
 
   Wire.begin(); 
   // Configure I2C to be more robust against bus lockups
@@ -92,8 +161,6 @@ void setup() {
   Wire.setWireTimeout(25000, true); // 25 ms timeout, auto reset TWI on timeout
   #endif
   Wire.setClock(100000); // Standard 100kHz for reliability
-
-  // Watchdog timer removed. We rely on robust non-blocking code and error recovery.
 
   pinMode(FEEDER_RPWM_PIN, OUTPUT);
   pinMode(FEEDER_R_EN_PIN, OUTPUT);
@@ -119,6 +186,12 @@ void setup() {
 
     hopperStepper->move(100);
   }
+  
+  // Enable hardware watchdog timer with 2 second timeout
+  // If loop() doesn't call wdt_reset() within 2 seconds, the Arduino will hard reset
+  // This is our last-resort recovery from any hang condition (e.g., I2C lockup)
+  wdt_enable(WDTO_2S);
+  
   // Always send Ready signal so server can send settings
   Serial.println("Ready"); 
 }
@@ -475,6 +548,8 @@ void processSettings(char *message) {
 #define END_MARKER '>'
 
 void loop() {
+  wdt_reset(); // Reset watchdog timer - MUST be called every iteration to prevent reset
+  
   static char message[MAX_MESSAGE_LENGTH];
   static unsigned int message_pos = 0;
   static bool capturingMessage = false;
@@ -547,19 +622,14 @@ bool initiateDistanceRead(unsigned char deviceAddr) {
     Serial.print("ERROR: I2C end transmission failed (endResult: ");
     Serial.print(endResult);
     Serial.println(")");
-    // Attempt to recover I2C bus
-    Wire.end();
-    delay(10);
-    Wire.begin();
-    #ifdef WIRE_HAS_TIMEOUT
-    Wire.setWireTimeout(25000, true);
-    #endif
-    Wire.setClock(100000);
+    
+    // Use proper I2C bus recovery with clock pulse generation
+    I2C_ClearBus();
+    
     // Fail-safe: stop feeder motor to avoid being stuck ON during I2C faults
     stopMotor();
     currFeederState = FeederState::paused;
     lastFeederActionTime = millis();
-    Serial.println("INFO: I2C bus reinitialized after error.");
     return false;
   }
   sensorRequestTime = micros(); // Use micros for finer delay control
@@ -579,19 +649,16 @@ bool processSensorReading(unsigned char deviceAddr) {
       if (received != 2) {
         Serial.println("ERROR: I2C requestFrom failed. Attempting I2C recovery.");
         distanceReading = UINT_MAX; 
-        Wire.end();
-        delay(10);
-        Wire.begin();
-        #ifdef WIRE_HAS_TIMEOUT
-        Wire.setWireTimeout(25000, true);
-        #endif
-        Wire.setClock(100000);
+        
+        // Use proper I2C bus recovery with clock pulse generation
+        I2C_ClearBus();
+        
         // Fail-safe: stop feeder motor to avoid being stuck ON during I2C faults
         stopMotor();
         currFeederState = FeederState::paused;
         lastFeederActionTime = millis();
-        currentSensorState = SensorReadState::IDLE; // Reset for next attempt
-        return true; // handled with default reading
+        currentSensorState = SensorReadState::IDLE;
+        return true;
       }
     }
     return false; // Reading not yet available
@@ -611,23 +678,17 @@ bool processSensorReading(unsigned char deviceAddr) {
     // Timeout check
     if (millis() - sensorWaitStartTime > SENSOR_READ_TIMEOUT_MS) {
       Serial.println("ERROR: Sensor read timeout. Attempting I2C recovery.");
-      // Default to a value that indicates NO part is detected.
       distanceReading = UINT_MAX; 
-      // Attempt to recover I2C bus
-      Wire.end();
-      delay(10);
-      Wire.begin();
-      #ifdef WIRE_HAS_TIMEOUT
-      Wire.setWireTimeout(25000, true);
-      #endif
-      Wire.setClock(100000);
+      
+      // Use proper I2C bus recovery with clock pulse generation
+      I2C_ClearBus();
+      
       // Fail-safe: stop feeder motor to avoid being stuck ON during I2C faults
       stopMotor();
       currFeederState = FeederState::paused;
       lastFeederActionTime = millis();
-      Serial.println("INFO: I2C bus reinitialized after sensor timeout.");
-      currentSensorState = SensorReadState::IDLE; // Reset for next attempt
-      return true; // Return true as we've "handled" it by providing a default.
+      currentSensorState = SensorReadState::IDLE;
+      return true;
     }
     
     // Optional: Add a timeout here if Wire.available() never gets to 2
