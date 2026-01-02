@@ -750,14 +750,18 @@ export class DeviceManager extends BaseComponent {
 
         if (!isReconnectionAlreadyInProgress) {
           console.log(
-            `Port Scan: Device ${disconnectedDevice.name} is disconnected and no active reconnection attempt. Triggering reconnect via handleDisconnect.`,
+            `Port Scan: Device ${disconnectedDevice.name} is disconnected and no active reconnection attempt. Scheduling reconnect directly.`,
           );
-          // Using handleDisconnect will leverage the existing exponential backoff and max attempts logic.
-          // It expects the device to have been in the devices map, which it isn't here, but it will still
-          // proceed to the scheduleReconnect logic if deviceInfo is null, using the provided port and config.
-          // We pass portHint and config directly to scheduleReconnect if handleDisconnect is modified later to require device removal first.
-          // For now, handleDisconnect is robust enough.
-          await this.handleDisconnect(disconnectedDevice.name, 'scanner_periodic_check');
+          // Call scheduleReconnect directly instead of handleDisconnect.
+          // handleDisconnect expects the device to be in the devices map so it can clean up,
+          // but the scanner is detecting devices that are NOT in the map (or whose port is closed).
+          // scheduleReconnect has all the exponential backoff and retry logic we need.
+          this.scheduleReconnect(
+            disconnectedDevice.name,
+            disconnectedDevice.portHint,
+            disconnectedDevice.config,
+            0, // Start from attempt 0
+          );
         } else {
           console.log(
             `Port Scan: Device ${disconnectedDevice.name} is disconnected, but a reconnection attempt is already in progress. Scanner will not intervene.`,

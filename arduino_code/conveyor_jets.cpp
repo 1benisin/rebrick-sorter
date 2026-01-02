@@ -2,7 +2,7 @@
 #include <math.h>
 #include <PID_v1.h>
 
-#define CONVEYOR_DEBUG true
+#define CONVEYOR_DEBUG false
 #define SYSTEM_DEBUG false
 
 #define JET_0_PIN 11
