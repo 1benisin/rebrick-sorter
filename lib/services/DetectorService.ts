@@ -335,17 +335,13 @@ class DetectorService implements Service {
       const topViewDetectionImageURI = this.getCroppedImageURI(canvas, cropCanvas, pair.topView.box);
       const sideViewDetectionImageURI = this.getCroppedImageURI(canvas, cropCanvas, pair.sideView.box);
 
-      // Calculate raw x from ML detection box (physical leftward motion)
-      const xRaw = pair.topView.box.left + pair.topView.box.width / 2;
+      // Calculate x from ML detection box centroid
+      // Raw x already increases over time (rightward motion), matching findPositionAtTime's expectations
+      const centroidX = pair.topView.box.left + pair.topView.box.width / 2;
 
-      // Transform to canonical rightward coordinates
-      const xCanonical = videoWidth - xRaw;
-
-      // Log first 5 transformations for validation
+      // Log first 5 detections for validation
       if (index < 5) {
-        console.log(
-          `[COORD_TRANSFORM] detection ${index}: raw=${xRaw.toFixed(1)} → canonical=${xCanonical.toFixed(1)} (width=${videoWidth})`,
-        );
+        console.log(`[DETECTION] detection ${index}: x=${centroidX.toFixed(1)} (width=${videoWidth})`);
       }
 
       const topViewDetection: Detection = {
@@ -353,7 +349,7 @@ class DetectorService implements Service {
         imageURI: topViewDetectionImageURI,
         timestamp,
         centroid: {
-          x: xCanonical, // Use canonical x instead of raw x
+          x: centroidX, // Raw x increases over time (rightward motion)
           y: pair.topView.box.top + pair.topView.box.height / 2,
         },
         box: pair.topView.box,
