@@ -99,6 +99,14 @@ export class SocketManager extends BaseComponent {
     this.socket?.emit(BackToFrontEvents.CONVEYOR_SPEED_UPDATE, speed);
   }
 
+  public emitEncoderPositionUpdate(position: number, timestamp: number, velocity: number): void {
+    this.socket?.emit(BackToFrontEvents.ENCODER_POSITION_UPDATE, {
+      position,
+      timestamp,
+      velocity,
+    });
+  }
+
   public emitSortPartSuccess(success: boolean): void {
     this.socket?.emit(BackToFrontEvents.SORT_PART_SUCCESS, { success });
   }
