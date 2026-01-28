@@ -2,7 +2,7 @@ import { Socket } from 'socket.io';
 import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent';
 import { SettingsType } from '../../types/settings.type';
 import { BackToFrontEvents, FrontToBackEvents } from '../../types/socketMessage.type';
-import { Part } from '../../types/part.type';
+import { Part, EncoderPart } from '../../types/part.type';
 import { SortPartDto } from '../../types/sortPart.dto';
 
 export interface SocketManagerConfig extends ComponentConfig {
@@ -85,6 +85,26 @@ export class SocketManager extends BaseComponent {
     this.socket?.emit(BackToFrontEvents.SORTER_POSITION_UPDATE, { sorter, bin });
   }
 
+  public emitSorterStateUpdate(
+    sorter: number,
+    state: {
+      currentBin: number;
+      isMoving: boolean;
+      targetBin?: number | null;
+      scheduledMoveCount?: number;
+      encoderPosition: number;
+    },
+  ): void {
+    this.socket?.emit(BackToFrontEvents.SORTER_STATE_UPDATE, {
+      sorter,
+      currentBin: state.currentBin,
+      isMoving: state.isMoving,
+      targetBin: state.targetBin ?? null,
+      scheduledMoveCount: state.scheduledMoveCount ?? 0,
+      encoderPosition: state.encoderPosition,
+    });
+  }
+
   public emitPartSorted(part: Part): void {
     if (!this.socket) return;
     this.socket.emit(BackToFrontEvents.PART_SORTED, { part });
@@ -95,8 +115,58 @@ export class SocketManager extends BaseComponent {
     this.socket.emit(BackToFrontEvents.PART_SKIPPED, { part });
   }
 
+  // --- Encoder-Based Part Events (Phase 4) ---
+
+  /**
+   * Emits when an encoder-based part is scheduled.
+   */
+  public emitEncoderPartScheduled(part: EncoderPart): void {
+    if (!this.socket) return;
+    this.socket.emit(BackToFrontEvents.ENCODER_PART_SCHEDULED, {
+      partId: part.partId,
+      jetPosition: part.jetPosition,
+      moveTriggerPosition: part.moveTriggerPosition,
+      sorter: part.sorter,
+      bin: part.bin,
+    });
+  }
+
+  /**
+   * Emits when an encoder-based part is sorted (jet fired successfully).
+   */
+  public emitEncoderPartSorted(part: EncoderPart): void {
+    if (!this.socket) return;
+    this.socket.emit(BackToFrontEvents.ENCODER_PART_SORTED, {
+      partId: part.partId,
+      jetPosition: part.jetPosition,
+      sorter: part.sorter,
+      bin: part.bin,
+    });
+  }
+
+  /**
+   * Emits when an encoder-based part is skipped.
+   */
+  public emitEncoderPartSkipped(partId: string, reason: string, sorter: number, bin: number): void {
+    if (!this.socket) return;
+    this.socket.emit(BackToFrontEvents.ENCODER_PART_SKIPPED, {
+      partId,
+      reason,
+      sorter,
+      bin,
+    });
+  }
+
   public emitConveyorSpeedUpdate(speed: number): void {
     this.socket?.emit(BackToFrontEvents.CONVEYOR_SPEED_UPDATE, speed);
+  }
+
+  public emitEncoderPositionUpdate(position: number, timestamp: number, velocity: number): void {
+    this.socket?.emit(BackToFrontEvents.ENCODER_POSITION_UPDATE, {
+      position,
+      timestamp,
+      velocity,
+    });
   }
 
   public emitSortPartSuccess(success: boolean): void {

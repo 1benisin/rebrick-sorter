@@ -3,10 +3,12 @@ import { SettingsManager } from './components/SettingsManager';
 import { SocketManager } from './components/SocketManager';
 import { DeviceManager } from './components/DeviceManager';
 import { SorterManager } from './components/SorterManager';
+import { SorterStateManager } from './components/SorterStateManager';
 import { ConveyorManager } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
+import { PositionTranslator } from './components/PositionTranslator';
 import { SortPartDto } from '../types/sortPart.dto';
-import { Part } from '../types/part.type';
+import { Part, EncoderPart } from '../types/part.type';
 import { DeviceName } from '../types/deviceName.type';
 
 export const FALL_TIME_SHORTEST = 1200;
@@ -17,8 +19,10 @@ export class SystemCoordinator {
   private settingsManager: SettingsManager;
   private deviceManager: DeviceManager;
   private sorterManager: SorterManager;
+  private sorterStateManager: SorterStateManager;
   private conveyorManager: ConveyorManager;
   private speedManager: SpeedManager;
+  private positionTranslator: PositionTranslator;
 
   constructor(private io: SocketIOServer) {
     // Initialize components
@@ -61,6 +65,20 @@ export class SystemCoordinator {
       buildPart: this.buildPart.bind(this),
     });
 
+    // PositionTranslator for encoder-based scheduling (Phase 4)
+    this.positionTranslator = new PositionTranslator(this.conveyorManager, this.settingsManager);
+
+    this.sorterStateManager = new SorterStateManager({
+      deviceManager: this.deviceManager,
+      socketManager: this.socketManager,
+      settingsManager: this.settingsManager,
+      sorterManager: this.sorterManager,
+      conveyorManager: this.conveyorManager,
+    });
+
+    // Complete circular dependency: ConveyorManager needs SorterStateManager for encoder-based scheduling
+    this.conveyorManager.setSorterStateManager(this.sorterStateManager);
+
     // Setup socket connection handling
     this.io.on('connection', this.handleConnection.bind(this));
   }
@@ -100,6 +118,10 @@ export class SystemCoordinator {
       await this.conveyorManager.initialize();
       console.log('ConveyorManager initialized successfully.');
 
+      console.log('Initializing SorterStateManager...');
+      await this.sorterStateManager.initialize();
+      console.log('SorterStateManager initialized successfully.');
+
       console.log('All components initialized successfully. =============================');
     } catch (error) {
       console.error('\x1b[33mError during component initialization process:\x1b[0m', error);
@@ -116,51 +138,119 @@ export class SystemCoordinator {
         return;
       }
 
-      // Calculate all timings for the part
-      const part = this.buildPart(data);
-
-      // if constant speed is enabled and there is an arrival time delay, we must skip the part
-      if (settings.constantConveyorSpeed) {
-        if (part.arrivalTimeDelay > 0) {
-          console.log(`Skipping part ${part.partId}: Timing conflict with constant speed mode enabled.`);
-          this.socketManager.emitPartSkipped(part);
-          return;
-        }
-      } else {
-        // if there is an arrival time delay, we need to slow down the part
-        if (part.arrivalTimeDelay > 0) {
-          // Calculate required slowdown percentage before applying it
-          const targetJetTime = part.jetTime + part.arrivalTimeDelay;
-          const currentTimeGap = part.jetTime - part.conveyorSpeedTime;
-          const requiredTimeGap = targetJetTime - part.conveyorSpeedTime;
-          const slowdownPercent = currentTimeGap / requiredTimeGap;
-          const newSpeed = part.conveyorSpeed * slowdownPercent;
-
-          const minAllowedSpeed =
-            this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.maxConveyorRPM);
-
-          if (newSpeed < minAllowedSpeed) {
-            part.status = 'skipped';
-            this.socketManager.emitPartSkipped(part);
-            return;
-          }
-
-          // Update part with arrival time delay
-          part.moveTime += part.arrivalTimeDelay;
-          part.moveFinishedTime += part.arrivalTimeDelay;
-          part.jetTime += part.arrivalTimeDelay;
-          part.conveyorSpeed = newSpeed;
-        }
+      // Check if encoder-based scheduling is enabled (Phase 4)
+      if (settings.useEncoderScheduling) {
+        this.handleEncoderSortPart(data);
+        return;
       }
 
-      // Insert speed change
-      this.conveyorManager.insertPart(part);
-
-      // filter partQueue
-      this.conveyorManager.filterQueue();
+      // Legacy time-based scheduling
+      this.handleTimeSortPart(data, settings);
     } catch (error) {
       console.error('\x1b[33mError handling sort part:\x1b[0m', error);
     }
+  }
+
+  /**
+   * Handles part sorting using encoder-based position scheduling (Phase 4).
+   * Uses position triggers instead of setTimeout for jet firing and sorter moves.
+   */
+  private handleEncoderSortPart(data: SortPartDto): void {
+    // Build encoder part (returns null if sorter unavailable)
+    const encoderPart = this.buildEncoderPart(data);
+
+    if (!encoderPart) {
+      // Part skipped - sorter unavailable
+      this.handleEncoderSkippedPart(data, 'Sorter unavailable - cannot reach bin in time');
+      return;
+    }
+
+    // Check if part is already past jet position
+    const currentPos = this.conveyorManager.getInterpolatedPosition();
+    if (currentPos >= encoderPart.jetPosition) {
+      this.handleEncoderSkippedPart(data, 'Part already past jet position');
+      return;
+    }
+
+    // Insert into encoder part queue
+    this.conveyorManager.insertEncoderPart(encoderPart);
+
+    // Schedule move with SorterStateManager
+    this.sorterStateManager.scheduleMove(
+      encoderPart.sorter,
+      encoderPart.bin,
+      encoderPart.partId,
+      encoderPart.moveTriggerPosition,
+    );
+
+    // Emit scheduled event to frontend
+    this.socketManager.emitEncoderPartScheduled(encoderPart);
+
+    console.log(
+      `[ENCODER_SORT] Part ${encoderPart.partId} scheduled: ` +
+        `jetPos=${encoderPart.jetPosition}, movePos=${encoderPart.moveTriggerPosition}, ` +
+        `sorter=${encoderPart.sorter}, bin=${encoderPart.bin}`,
+    );
+  }
+
+  /**
+   * Handles skipped encoder parts.
+   */
+  private handleEncoderSkippedPart(data: SortPartDto, reason: string): void {
+    console.log(`[ENCODER_SKIP] Part ${data.partId} skipped: ${reason}`);
+    this.socketManager.emitEncoderPartSkipped(data.partId, reason, data.sorter, data.bin);
+  }
+
+  /**
+   * Handles part sorting using legacy time-based scheduling.
+   * Uses setTimeout for jet firing and sorter moves.
+   */
+  private handleTimeSortPart(
+    data: SortPartDto,
+    settings: NonNullable<ReturnType<typeof this.settingsManager.getSettings>>,
+  ): void {
+    // Calculate all timings for the part
+    const part = this.buildPart(data);
+
+    // if constant speed is enabled and there is an arrival time delay, we must skip the part
+    if (settings.constantConveyorSpeed) {
+      if (part.arrivalTimeDelay > 0) {
+        console.log(`Skipping part ${part.partId}: Timing conflict with constant speed mode enabled.`);
+        this.socketManager.emitPartSkipped(part);
+        return;
+      }
+    } else {
+      // if there is an arrival time delay, we need to slow down the part
+      if (part.arrivalTimeDelay > 0) {
+        // Calculate required slowdown percentage before applying it
+        const targetJetTime = part.jetTime + part.arrivalTimeDelay;
+        const currentTimeGap = part.jetTime - part.conveyorSpeedTime;
+        const requiredTimeGap = targetJetTime - part.conveyorSpeedTime;
+        const slowdownPercent = currentTimeGap / requiredTimeGap;
+        const newSpeed = part.conveyorSpeed * slowdownPercent;
+
+        const minAllowedSpeed =
+          this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.maxConveyorRPM);
+
+        if (newSpeed < minAllowedSpeed) {
+          part.status = 'skipped';
+          this.socketManager.emitPartSkipped(part);
+          return;
+        }
+
+        // Update part with arrival time delay
+        part.moveTime += part.arrivalTimeDelay;
+        part.moveFinishedTime += part.arrivalTimeDelay;
+        part.jetTime += part.arrivalTimeDelay;
+        part.conveyorSpeed = newSpeed;
+      }
+    }
+
+    // Insert speed change
+    this.conveyorManager.insertPart(part);
+
+    // filter partQueue
+    this.conveyorManager.filterQueue();
   }
 
   private buildPart(data: SortPartDto): Part {
@@ -234,16 +324,82 @@ export class SystemCoordinator {
     return part;
   }
 
+  /**
+   * Builds an EncoderPart for position-based scheduling.
+   * Returns null if the sorter is unavailable (part should be skipped).
+   *
+   * @param data - Sort part data from frontend
+   * @returns EncoderPart for scheduling, or null if part should be skipped
+   */
+  private buildEncoderPart(data: SortPartDto): EncoderPart | null {
+    const { partId, initialPosition, initialTime, bin, sorter } = data;
+
+    // 1. Translate pixel position to encoder position at detection time
+    const detectionEncoderPos = this.positionTranslator.pixelToEncoderPosition(initialPosition, initialTime);
+
+    // 2. Calculate jet fire position
+    const jetPosition = this.positionTranslator.calculateJetPosition(detectionEncoderPos, sorter);
+
+    // 3. Calculate the position by which the sorter must be ready
+    const requiredByPosition = this.positionTranslator.calculateRequiredByPosition(jetPosition);
+
+    // 4. Check if sorter can reach the bin in time
+    const availability = this.sorterStateManager.canSorterReachBin(sorter, bin, requiredByPosition);
+
+    // 5. Return null if sorter is unavailable (part will be skipped)
+    if (!availability.available) {
+      console.log(`[ENCODER_PART] Part ${partId} - sorter ${sorter} unavailable: ${availability.reason}`);
+      return null;
+    }
+
+    // 6. Get the effective "from bin" for lead count calculation
+    const fromBin = this.sorterStateManager.getCurrentBin(sorter);
+    const leadCounts = this.sorterStateManager.calculateLeadCounts(sorter, fromBin, bin);
+
+    // 7. Build the encoder part
+    const encoderPart: EncoderPart = {
+      partId,
+      detectionEncoderPos,
+      jetPosition,
+      jet: sorter, // jet number corresponds to sorter number
+      sorter,
+      bin,
+      moveTriggerPosition: availability.triggerPosition,
+      expectedMoveCompletePosition: availability.triggerPosition + leadCounts,
+      jetCommandSent: false,
+      moveCommandSent: false,
+      status: 'scheduled',
+      detectionTime: initialTime,
+      pixelPosition: initialPosition,
+    };
+
+    console.log('[ENCODER_PART] Built encoder part:', {
+      partId,
+      detectionEncoderPos,
+      jetPosition,
+      moveTriggerPosition: availability.triggerPosition,
+      expectedMoveCompletePosition: availability.triggerPosition + leadCounts,
+      sorter,
+      bin,
+    });
+
+    return encoderPart;
+  }
+
   private handleConveyorOnOff(): void {
     console.log('handleConveyorOnOff');
     this.conveyorManager.toggleConveyor();
   }
 
   private async handleHomeSorter(data: { sorter: number }): Promise<void> {
+    // Mark move started before homing (homing always goes to bin 1)
+    this.sorterStateManager.markMoveStarted(data.sorter, 1);
     await this.sorterManager.homeSorter(data.sorter);
   }
 
   private async handleMoveSorter(data: { sorter: number; bin: number }): Promise<void> {
+    // Mark move started before sending move command
+    this.sorterStateManager.markMoveStarted(data.sorter, data.bin);
     await this.sorterManager.moveSorter(data.sorter, data.bin);
   }
 
@@ -261,7 +417,13 @@ export class SystemCoordinator {
   }
 
   private handleResetSortProcess(): void {
+    // Clear encoder part queue and reset conveyor manager
     this.conveyorManager.reinitialize();
+
+    // Clear scheduled moves in SorterStateManager (Phase 4)
+    this.sorterStateManager.clearAllScheduledMoves();
+
+    console.log('[RESET] Sort process reset complete');
   }
 
   private handleUpdateFeederSettings(data: {
