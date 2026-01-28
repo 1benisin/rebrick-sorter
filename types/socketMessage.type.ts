@@ -12,6 +12,10 @@ export enum FrontToBackEvents {
   LIST_SERIAL_PORTS = 'list-serial-ports',
   RESET_SORT_PROCESS = 'reset-sort-process',
   UPDATE_FEEDER_SETTINGS = 'update-feeder-settings',
+  // Phase 7: Encoder calibration events
+  RESET_ENCODER = 'reset-encoder',
+  RECORD_CAMERA_POSITION = 'record-camera-position',
+  RECORD_JET_POSITION = 'record-jet-position',
 }
 
 export enum BackToFrontEvents {
@@ -34,6 +38,9 @@ export enum BackToFrontEvents {
   ENCODER_PART_SKIPPED = 'encoder-part-skipped',
   // Phase 5: Buffer status for pending jets
   BUFFER_STATUS_UPDATE = 'buffer-status-update',
+  // Phase 7: Encoder calibration responses
+  ENCODER_RESET_COMPLETE = 'encoder-reset-complete',
+  CALIBRATION_POINT_RECORDED = 'calibration-point-recorded',
 }
 
 export const AllEvents = { ...FrontToBackEvents, ...BackToFrontEvents } as const;
@@ -55,6 +62,15 @@ export interface EventPayloads {
     shortMoveTime: number;
     longMoveTime: number;
     hopperCycleInterval: number;
+  };
+  /** Phase 7: Reset encoder position to zero */
+  [FrontToBackEvents.RESET_ENCODER]: void;
+  /** Phase 7: Record current encoder position as camera calibration point */
+  [FrontToBackEvents.RECORD_CAMERA_POSITION]: void;
+  /** Phase 7: Record current encoder position as jet calibration point for a sorter */
+  [FrontToBackEvents.RECORD_JET_POSITION]: {
+    /** Sorter index (0-3) to record jet position for */
+    sorter: number;
   };
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.SORT_PART_SUCCESS]: { success: boolean };
@@ -126,5 +142,23 @@ export interface EventPayloads {
     count: number;
     /** Total capacity of the pending jets buffer */
     capacity: number;
+  };
+  /** Phase 7: Encoder reset completed confirmation */
+  [BackToFrontEvents.ENCODER_RESET_COMPLETE]: {
+    /** Whether the reset was successful */
+    success: boolean;
+    /** New encoder position (should be 0) */
+    position: number;
+  };
+  /** Phase 7: Calibration point recorded confirmation */
+  [BackToFrontEvents.CALIBRATION_POINT_RECORDED]: {
+    /** Type of calibration point recorded */
+    type: 'camera' | 'jet';
+    /** Encoder position that was recorded */
+    position: number;
+    /** Sorter index (only for jet calibration) */
+    sorter?: number;
+    /** Whether the calibration was saved successfully */
+    success: boolean;
   };
 }

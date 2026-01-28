@@ -23,6 +23,21 @@ export class SettingsManager extends BaseComponent {
     return this.settings;
   }
 
+  /**
+   * Updates settings in Firebase. Used for server-side calibration operations.
+   * @param updates - Partial settings object to merge with existing settings
+   * @returns Promise that resolves when settings are updated
+   */
+  public async updateSettings(updates: Partial<SettingsType>): Promise<void> {
+    try {
+      await this.settingsRef.set(updates, { merge: true });
+      console.log('[SETTINGS] Settings updated from server:', Object.keys(updates));
+    } catch (error) {
+      console.error('[SETTINGS] Error updating settings:', error);
+      throw error;
+    }
+  }
+
   public registerSettingsUpdateCallback(callback: (settings: SettingsType) => Promise<void>): void {
     console.log(
       `\x1b[32m[SETTINGS_FLOW] Callback registered. Total callbacks: ${this.settingsUpdateCallbacks.length + 1}\x1b[0m`,
