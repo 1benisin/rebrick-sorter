@@ -169,6 +169,15 @@ export class SocketManager extends BaseComponent {
     });
   }
 
+  /**
+   * Emits the current buffer status for pending jets on the Arduino.
+   * @param count - Number of active pending jets in the buffer
+   * @param capacity - Total capacity of the pending jets buffer
+   */
+  public emitBufferStatusUpdate(count: number, capacity: number): void {
+    this.socket?.emit(BackToFrontEvents.BUFFER_STATUS_UPDATE, { count, capacity });
+  }
+
   public emitSortPartSuccess(success: boolean): void {
     this.socket?.emit(BackToFrontEvents.SORT_PART_SUCCESS, { success });
   }

@@ -35,6 +35,17 @@ export type SortProcessState = {
   ppmCount: number;
   ppmTimestamps: number[];
 
+  // --- Encoder position tracking (Phase 5)
+  encoderPosition: number;
+  encoderTimestamp: number;
+  encoderVelocity: number;
+  setEncoderState: (position: number, timestamp: number, velocity: number) => void;
+
+  // --- Buffer status for pending jets (Phase 5)
+  bufferCount: number;
+  bufferCapacity: number;
+  setBufferStatus: (count: number, capacity: number) => void;
+
   // ---
   serialPorts: string[];
   setSerialPorts: (ports: string[]) => void;
@@ -108,6 +119,18 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   // ---
   ppmCount: 0,
   ppmTimestamps: [],
+
+  // --- Encoder position tracking (Phase 5)
+  encoderPosition: 0,
+  encoderTimestamp: 0,
+  encoderVelocity: 0,
+  setEncoderState: (position: number, timestamp: number, velocity: number) =>
+    set({ encoderPosition: position, encoderTimestamp: timestamp, encoderVelocity: velocity }),
+
+  // --- Buffer status for pending jets (Phase 5)
+  bufferCount: 0,
+  bufferCapacity: 16,
+  setBufferStatus: (count: number, capacity: number) => set({ bufferCount: count, bufferCapacity: capacity }),
 
   // ---
   serialPorts: [],
