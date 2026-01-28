@@ -2,7 +2,7 @@ import { Socket } from 'socket.io';
 import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent';
 import { SettingsType } from '../../types/settings.type';
 import { BackToFrontEvents, FrontToBackEvents } from '../../types/socketMessage.type';
-import { Part } from '../../types/part.type';
+import { Part, EncoderPart } from '../../types/part.type';
 import { SortPartDto } from '../../types/sortPart.dto';
 
 export interface SocketManagerConfig extends ComponentConfig {
@@ -113,6 +113,48 @@ export class SocketManager extends BaseComponent {
   public emitPartSkipped(part: Part): void {
     if (!this.socket) return;
     this.socket.emit(BackToFrontEvents.PART_SKIPPED, { part });
+  }
+
+  // --- Encoder-Based Part Events (Phase 4) ---
+
+  /**
+   * Emits when an encoder-based part is scheduled.
+   */
+  public emitEncoderPartScheduled(part: EncoderPart): void {
+    if (!this.socket) return;
+    this.socket.emit(BackToFrontEvents.ENCODER_PART_SCHEDULED, {
+      partId: part.partId,
+      jetPosition: part.jetPosition,
+      moveTriggerPosition: part.moveTriggerPosition,
+      sorter: part.sorter,
+      bin: part.bin,
+    });
+  }
+
+  /**
+   * Emits when an encoder-based part is sorted (jet fired successfully).
+   */
+  public emitEncoderPartSorted(part: EncoderPart): void {
+    if (!this.socket) return;
+    this.socket.emit(BackToFrontEvents.ENCODER_PART_SORTED, {
+      partId: part.partId,
+      jetPosition: part.jetPosition,
+      sorter: part.sorter,
+      bin: part.bin,
+    });
+  }
+
+  /**
+   * Emits when an encoder-based part is skipped.
+   */
+  public emitEncoderPartSkipped(partId: string, reason: string, sorter: number, bin: number): void {
+    if (!this.socket) return;
+    this.socket.emit(BackToFrontEvents.ENCODER_PART_SKIPPED, {
+      partId,
+      reason,
+      sorter,
+      bin,
+    });
   }
 
   public emitConveyorSpeedUpdate(speed: number): void {

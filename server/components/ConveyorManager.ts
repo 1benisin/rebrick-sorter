@@ -2,12 +2,15 @@ import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent
 import { DeviceManager } from './DeviceManager';
 import { SocketManager } from './SocketManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
-import { Part } from '../../types/part.type';
+import { Part, EncoderPart } from '../../types/part.type';
 import { SettingsManager } from './SettingsManager';
 import { SpeedManager } from './SpeedManager';
 import { SorterManager } from './SorterManager';
 import { DeviceName } from '../../types/deviceName.type';
 import { SortPartDto } from '../../types/sortPart.dto';
+
+// Forward declaration to avoid circular dependency
+import type { SorterStateManager } from './SorterStateManager';
 
 interface ReturnToDefaultSpeed {
   time: number;
@@ -22,6 +25,8 @@ export interface ConveyorManagerConfig extends ComponentConfig {
   speedManager: SpeedManager;
   sorterManager: SorterManager;
   buildPart: (part: SortPartDto) => Part;
+  /** Optional - set via setSorterStateManager() due to circular dependency */
+  sorterStateManager?: SorterStateManager;
 }
 
 export class ConveyorManager extends BaseComponent {
@@ -30,6 +35,7 @@ export class ConveyorManager extends BaseComponent {
   private settingsManager: SettingsManager;
   private speedManager: SpeedManager;
   private sorterManager: SorterManager;
+  private sorterStateManager: SorterStateManager | null = null;
   private buildPart: (part: SortPartDto) => Part;
   private jetPositionsStart: number[] = [];
   private jetDurations: number[] = [];
@@ -37,6 +43,20 @@ export class ConveyorManager extends BaseComponent {
   private speedLog: { time: number; speed: number }[] = [];
   private isRecalculating: boolean = false;
   private returnToDefaultConveyorSpeed: ReturnToDefaultSpeed | null = null;
+
+  // --- Encoder-Based Part Queue (Phase 4) ---
+
+  /**
+   * Queue of parts being tracked for position-based scheduling.
+   * Sorted by jetPosition (ascending) for efficient action processing.
+   */
+  private encoderPartQueue: EncoderPart[] = [];
+
+  /**
+   * How many encoder counts before the jet position to send the jet queue command.
+   * This gives the Arduino time to receive and queue the command.
+   */
+  private readonly JET_LEAD_COUNTS = 100;
   // --- Encoder Position Tracking State (Phase 2) ---
 
   /**
@@ -116,6 +136,7 @@ export class ConveyorManager extends BaseComponent {
       this.jetDurations = settings.sorters.map((sorter) => sorter.jetDuration);
       this.partQueue = [];
       this.speedLog = [];
+      this.encoderPartQueue = []; // Clear encoder queue (Phase 4)
 
       // Reset encoder state
       this.currentEncoderPosition = 0;
@@ -161,6 +182,7 @@ export class ConveyorManager extends BaseComponent {
     }
     this.partQueue = [];
     this.speedLog = [];
+    this.encoderPartQueue = []; // Clear encoder queue (Phase 4)
 
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
@@ -558,14 +580,45 @@ export class ConveyorManager extends BaseComponent {
     this.currentEncoderPosition = position;
     this.lastEncoderUpdateTime = now;
 
+    // Process position-based actions for encoder scheduling (Phase 4)
+    this.processPositionActions(position);
+
     // Broadcast to frontend
     this.socketManager.emitEncoderPositionUpdate(position, now, this.encoderVelocity);
   }
 
+  /**
+   * Handles a jet fired confirmation from the Arduino.
+   * Updates the part status and removes it from the queue.
+   * @param jet - The jet number that fired (0-3)
+   * @param position - The encoder position when the jet fired
+   */
   private handleJetFired(jet: number, position: number): void {
     console.log(`\x1b[32m[ENCODER] Jet ${jet} fired at encoder position ${position}\x1b[0m`);
-    // Future: This can be used to confirm jet firing and update part status
-    // For now, just log it
+
+    // Check if encoder scheduling is enabled
+    const settings = this.settingsManager.getSettings();
+    if (!settings?.useEncoderScheduling) {
+      return;
+    }
+
+    // Find the part in the encoder queue that matches this jet and hasn't been sorted yet
+    const part = this.encoderPartQueue.find((p) => p.jet === jet && p.status !== 'sorted');
+
+    if (part) {
+      // Update part status
+      part.status = 'sorted';
+
+      // Remove from queue
+      this.removeEncoderPart(part.partId);
+
+      // Emit sorted event to frontend
+      this.socketManager.emitEncoderPartSorted(part);
+
+      console.log(`\x1b[32m[JET_FIRED] Jet ${jet} at position ${position} sorted part ${part.partId}\x1b[0m`);
+    } else {
+      console.warn(`[JET_FIRED] No matching part found for jet ${jet} at position ${position}`);
+    }
   }
 
   /**
@@ -608,6 +661,174 @@ export class ConveyorManager extends BaseComponent {
    */
   public getEncoderVelocity(): number {
     return this.encoderVelocity;
+  }
+
+  /**
+   * Returns a snapshot of the current encoder state.
+   * Useful for position translation with accurate timestamp.
+   * @returns Object containing position, timestamp, and velocity
+   */
+  public getEncoderSnapshot(): { position: number; timestamp: number; velocity: number } {
+    return {
+      position: this.currentEncoderPosition,
+      timestamp: this.lastEncoderUpdateTime,
+      velocity: this.encoderVelocity,
+    };
+  }
+
+  // ============================================================================
+  // Encoder-Based Part Queue Methods (Phase 4)
+  // ============================================================================
+
+  /**
+   * Inserts a part into the encoder part queue, maintaining sort order by jetPosition.
+   * @param part - The EncoderPart to insert
+   */
+  public insertEncoderPart(part: EncoderPart): void {
+    // Find insertion index to maintain jetPosition order (ascending)
+    const insertIndex = this.encoderPartQueue.findIndex((p) => p.jetPosition > part.jetPosition);
+
+    if (insertIndex === -1) {
+      this.encoderPartQueue.push(part);
+    } else {
+      this.encoderPartQueue.splice(insertIndex, 0, part);
+    }
+
+    console.log(
+      `[ENCODER_QUEUE] Added part ${part.partId} at jetPos ${part.jetPosition}, ` +
+        `queue size: ${this.encoderPartQueue.length}`,
+    );
+  }
+
+  /**
+   * Removes a part from the encoder part queue by partId.
+   * @param partId - The ID of the part to remove
+   * @returns The removed part, or null if not found
+   */
+  public removeEncoderPart(partId: string): EncoderPart | null {
+    const index = this.encoderPartQueue.findIndex((p) => p.partId === partId);
+    if (index !== -1) {
+      const removed = this.encoderPartQueue.splice(index, 1)[0];
+      console.log(`[ENCODER_QUEUE] Removed part ${partId}, queue size: ${this.encoderPartQueue.length}`);
+      return removed;
+    }
+    return null;
+  }
+
+  /**
+   * Gets parts that are ready for action based on current encoder position.
+   * @param currentPosition - Current encoder position
+   * @returns Object containing arrays of parts ready for jet queuing and move sending
+   */
+  public getActionableParts(currentPosition: number): {
+    jetsToQueue: EncoderPart[];
+    movesToSend: EncoderPart[];
+  } {
+    const jetsToQueue: EncoderPart[] = [];
+    const movesToSend: EncoderPart[] = [];
+
+    for (const part of this.encoderPartQueue) {
+      // Check if jet command should be sent (position is within lead distance of jet)
+      if (!part.jetCommandSent && currentPosition >= part.jetPosition - this.JET_LEAD_COUNTS) {
+        jetsToQueue.push(part);
+      }
+
+      // Check if move command should be sent
+      if (!part.moveCommandSent && currentPosition >= part.moveTriggerPosition) {
+        movesToSend.push(part);
+      }
+    }
+
+    return { jetsToQueue, movesToSend };
+  }
+
+  /**
+   * Gets the current encoder part queue.
+   * @returns Array of EncoderParts in the queue
+   */
+  public getEncoderPartQueue(): EncoderPart[] {
+    return this.encoderPartQueue;
+  }
+
+  /**
+   * Clears all encoder parts from the queue.
+   * Used for reset/reinitialization.
+   */
+  public clearEncoderPartQueue(): void {
+    const count = this.encoderPartQueue.length;
+    this.encoderPartQueue = [];
+    console.log(`[ENCODER_QUEUE] Cleared ${count} parts from queue`);
+  }
+
+  /**
+   * Sets the SorterStateManager reference.
+   * Called after construction to avoid circular dependency.
+   */
+  public setSorterStateManager(sorterStateManager: SorterStateManager): void {
+    this.sorterStateManager = sorterStateManager;
+  }
+
+  // ============================================================================
+  // Position-Based Action Loop (Phase 4)
+  // ============================================================================
+
+  /**
+   * Processes position-based actions for the encoder part queue.
+   * Called on each encoder position update to trigger jet queuing and move commands.
+   * @param currentPosition - Current encoder position
+   */
+  private processPositionActions(currentPosition: number): void {
+    // Only process if encoder scheduling is enabled
+    const settings = this.settingsManager.getSettings();
+    if (!settings?.useEncoderScheduling) {
+      return;
+    }
+
+    const { jetsToQueue, movesToSend } = this.getActionableParts(currentPosition);
+
+    // Send jet queue commands to Arduino
+    for (const part of jetsToQueue) {
+      this.queueJetFire(part);
+      part.jetCommandSent = true;
+    }
+
+    // Send move commands to sorters
+    for (const part of movesToSend) {
+      this.sendMoveCommand(part);
+      part.moveCommandSent = true;
+      part.status = 'moving';
+    }
+  }
+
+  /**
+   * Queues a jet fire command with the Arduino.
+   * Sends the position-triggered jet command.
+   * @param part - The EncoderPart for which to queue the jet
+   */
+  private queueJetFire(part: EncoderPart): void {
+    // Send queue jet command: q<jet>,<position>
+    const command = `q${part.jet},${part.jetPosition}`;
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, command);
+    console.log(`[JET_QUEUE] Queued jet ${part.jet} at position ${part.jetPosition} for part ${part.partId}`);
+  }
+
+  /**
+   * Sends a move command to the sorter.
+   * @param part - The EncoderPart for which to send the move
+   */
+  private sendMoveCommand(part: EncoderPart): void {
+    if (!this.sorterStateManager) {
+      console.error('[ENCODER_ACTION] Cannot send move command - SorterStateManager not set');
+      return;
+    }
+
+    // Send move command to sorter
+    this.sorterManager.moveSorter(part.sorter, part.bin);
+
+    // Mark move started in SorterStateManager
+    this.sorterStateManager.markMoveStarted(part.sorter, part.bin);
+
+    console.log(`[ENCODER_MOVE] Sent move to bin ${part.bin} on sorter ${part.sorter} for part ${part.partId}`);
   }
 
   /**
