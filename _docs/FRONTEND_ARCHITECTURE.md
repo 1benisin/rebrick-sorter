@@ -48,11 +48,11 @@ The most important architectural pattern is the use of a **service layer** on th
 The key services are:
 
 - **`SettingsService`**: Manages fetching and saving application settings from/to Firebase Firestore.
-- **`SocketService`**: Manages the persistent WebSocket connection to the Node.js backend.
+- **`SocketService`**: Manages the persistent WebSocket connection to the Node.js backend. Also tracks the current encoder position received from the server for visualization and interpolation.
 - **`VideoCaptureService`**: Handles access to the webcam video streams and provides a method for capturing frames.
 - **`DetectorService`**: Loads the local TensorFlow.js model and performs object detection on captured video frames.
 - **`ClassifierService`**: Manages the multi-step process of classifying a detected part, interacting with the Brickognize API (via a proxy), and looking up part data.
-- **`SortProcessControllerService`** (in `SorterService.ts`): The central orchestrator. It runs the main processing loop, coordinating the detector, classifier, and state updates.
+- **`SortProcessControllerService`** (in `SorterService.ts`): The central orchestrator. It runs the main processing loop, coordinating the detector, classifier, and state updates. When sending `SORT_PART` events, it includes the detection timestamp so the server can translate pixel position to encoder position.
 
 ### 4.2. Global State Management with Zustand
 
@@ -70,8 +70,18 @@ The frontend communicates with several other systems, each with a distinct proto
 - **Protocol:** WebSockets, managed by `socket.io-client`.
 - **Manager:** `SocketService.ts`.
 - **Flow:** This is the primary channel for real-time control and status.
-  - **Client -> Server:** The frontend emits events to control hardware. The most important is `SORT_PART`, which sends classified part data to the backend to be physically sorted. Other commands include manual controls for the conveyor, jets, etc.
-  - **Server -> Client:** The backend streams status updates, such as hardware state (`INIT_HARDWARE_SUCCESS`), conveyor speed updates (`CONVEYOR_SPEED_UPDATE`), and confirmations (`PART_SORTED`).
+  - **Client -> Server:** The frontend emits events to control hardware. The most important is `SORT_PART`, which sends classified part data to the backend to be physically sorted. The payload includes:
+    - `partId`: Unique identifier
+    - `pixelPosition`: X position in camera frame
+    - `detectionTime`: Timestamp when part was detected
+    - `bin`: Target bin number
+    - `sorter`: Which sorter (0-3)
+  - **Server -> Client:** The backend streams status updates:
+    - `ENCODER_POSITION`: Current conveyor encoder position (for visualization/debugging)
+    - `PART_SORTED`: Confirmation when a part is successfully sorted
+    - `PART_SKIPPED`: Notification when a part couldn't be sorted (sorter unavailable)
+    - `INIT_HARDWARE_SUCCESS`: Hardware initialization status
+    - `CONVEYOR_SPEED_UPDATE`: Current conveyor speed
 
 ### 5.2. Frontend <-> Firebase
 
@@ -137,5 +147,13 @@ sequenceDiagram
 6.  **Proxy to Brickognize:** The `ClassifierService` sends these images, one by one, to the `/api/brickognize` proxy, which gets the classification result from the external Brickognize service.
 7.  **Data Enrichment:** The `ClassifierService` combines the results from both views, assigns a final score, and if the score is high enough, it looks up the part's assigned bin and sorter location from the catalog data it loaded from Firebase.
 8.  **Logging:** The classification result and image are saved to Firestore and Firebase Storage for logging.
-9.  **Hand-off to Backend:** Finally, the `ClassifierService` calls `SocketService.emit()` to send a `SORT_PART` event to the main Node.js backend server. This payload contains everything the backend needs to execute the physical sort: the Part ID, its exact position and time of classification, and the target bin/sorter.
-10. **Physical Sort:** The frontend's direct involvement in this part's journey is now complete. The backend takes over to schedule the air jet firing and sorter positioning.
+9.  **Hand-off to Backend:** Finally, the `ClassifierService` calls `SocketService.emit()` to send a `SORT_PART` event to the main Node.js backend server. This payload contains:
+    - Part ID
+    - Pixel position (X coordinate in camera frame)
+    - Detection timestamp
+    - Target bin and sorter
+10. **Physical Sort:** The frontend's direct involvement in this part's journey is now complete. The backend:
+    - Translates pixel position to encoder position
+    - Checks if the target sorter can reach the bin in time
+    - If available: schedules jet fire and sorter move at appropriate encoder positions
+    - If unavailable: skips the part and sends `PART_SKIPPED` event back to frontend
