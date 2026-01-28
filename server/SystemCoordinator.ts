@@ -35,6 +35,10 @@ export class SystemCoordinator {
       onListSerialPorts: this.handleListSerialPorts.bind(this),
       onResetSortProcess: this.handleResetSortProcess.bind(this),
       onUpdateFeederSettings: this.handleUpdateFeederSettings.bind(this),
+      // Phase 7: Encoder calibration handlers
+      onResetEncoder: this.handleResetEncoder.bind(this),
+      onRecordCameraPosition: this.handleRecordCameraPosition.bind(this),
+      onRecordJetPosition: this.handleRecordJetPosition.bind(this),
     });
 
     this.settingsManager = new SettingsManager(this.socketManager);
@@ -438,5 +442,95 @@ export class SystemCoordinator {
     // Send settings to Arduino in the format: 's,<HOPPER_CYCLE_INTERVAL>,<HOPPER_CYCLE_STEPS>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>'
     const message = `s,${data.hopperCycleInterval},${data.hopperCycleSteps},${data.vibrationSpeed},${data.stopDelay},${data.pauseTime},${data.shortMoveTime},${data.longMoveTime}`;
     this.deviceManager.sendCommand(DeviceName.HOPPER_FEEDER, message);
+  }
+
+  // --- Phase 7: Encoder Calibration Handlers ---
+
+  /**
+   * Handles encoder reset request from frontend.
+   * Resets the encoder position to zero on both Arduino and server.
+   */
+  private handleResetEncoder(): void {
+    try {
+      console.log('[CALIBRATION] Resetting encoder position to 0');
+      this.conveyorManager.resetEncoderPosition();
+      const position = this.conveyorManager.getCurrentEncoderPosition();
+      this.socketManager.emitEncoderResetComplete(true, position);
+      console.log('[CALIBRATION] Encoder reset complete, new position:', position);
+    } catch (error) {
+      console.error('[CALIBRATION] Error resetting encoder:', error);
+      this.socketManager.emitEncoderResetComplete(false, -1);
+    }
+  }
+
+  /**
+   * Handles record camera position request from frontend.
+   * Records the current encoder position as the camera calibration offset.
+   */
+  private async handleRecordCameraPosition(): Promise<void> {
+    try {
+      const position = this.conveyorManager.getInterpolatedPosition();
+      console.log('[CALIBRATION] Recording camera position:', position);
+
+      // Update settings in Firebase
+      const currentSettings = this.settingsManager.getSettings();
+      if (!currentSettings) {
+        throw new Error('Settings not available');
+      }
+
+      await this.settingsManager.updateSettings({
+        positionCalibration: {
+          ...currentSettings.positionCalibration,
+          cameraEncoderOffset: position,
+        },
+      });
+
+      this.socketManager.emitCalibrationPointRecorded('camera', position, true);
+      console.log('[CALIBRATION] Camera position recorded successfully:', position);
+    } catch (error) {
+      console.error('[CALIBRATION] Error recording camera position:', error);
+      this.socketManager.emitCalibrationPointRecorded('camera', 0, false);
+    }
+  }
+
+  /**
+   * Handles record jet position request from frontend.
+   * Records the current encoder position as the jet calibration offset for a specific sorter.
+   */
+  private async handleRecordJetPosition(data: { sorter: number }): Promise<void> {
+    try {
+      const { sorter } = data;
+
+      // Validate sorter index
+      if (sorter < 0 || sorter > 3) {
+        throw new Error(`Invalid sorter index: ${sorter}`);
+      }
+
+      const position = this.conveyorManager.getInterpolatedPosition();
+      console.log(`[CALIBRATION] Recording jet position for sorter ${sorter}:`, position);
+
+      // Update settings in Firebase
+      const currentSettings = this.settingsManager.getSettings();
+      if (!currentSettings) {
+        throw new Error('Settings not available');
+      }
+
+      // Clone the current jet offsets array and update the specific sorter
+      const jetEncoderOffsets = [...currentSettings.positionCalibration.jetEncoderOffsets];
+      jetEncoderOffsets[sorter] = position;
+
+      await this.settingsManager.updateSettings({
+        positionCalibration: {
+          ...currentSettings.positionCalibration,
+          jetEncoderOffsets,
+        },
+      });
+
+      this.socketManager.emitCalibrationPointRecorded('jet', position, true, sorter);
+      console.log(`[CALIBRATION] Jet position for sorter ${sorter} recorded successfully:`, position);
+    } catch (error) {
+      console.error('[CALIBRATION] Error recording jet position:', error);
+      this.socketManager.emitCalibrationPointRecorded('jet', 0, false, data.sorter);
+    }
   }
 }

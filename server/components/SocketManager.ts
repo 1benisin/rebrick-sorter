@@ -22,6 +22,10 @@ export interface SocketManagerConfig extends ComponentConfig {
     hopperCycleInterval: number;
     hopperCycleSteps: number;
   }) => void;
+  // Phase 7: Encoder calibration handlers
+  onResetEncoder: () => void;
+  onRecordCameraPosition: () => void;
+  onRecordJetPosition: (data: { sorter: number }) => void;
 }
 
 export class SocketManager extends BaseComponent {
@@ -67,6 +71,11 @@ export class SocketManager extends BaseComponent {
     this.socket.on(FrontToBackEvents.LIST_SERIAL_PORTS, this.handlers.onListSerialPorts);
     this.socket.on(FrontToBackEvents.RESET_SORT_PROCESS, this.handlers.onResetSortProcess);
     this.socket.on(FrontToBackEvents.UPDATE_FEEDER_SETTINGS, this.handlers.onUpdateFeederSettings);
+
+    // Phase 7: Encoder calibration events
+    this.socket.on(FrontToBackEvents.RESET_ENCODER, this.handlers.onResetEncoder);
+    this.socket.on(FrontToBackEvents.RECORD_CAMERA_POSITION, this.handlers.onRecordCameraPosition);
+    this.socket.on(FrontToBackEvents.RECORD_JET_POSITION, this.handlers.onRecordJetPosition);
 
     this.socket.on('disconnect', () => {
       this.setStatus(ComponentStatus.UNINITIALIZED);
@@ -184,6 +193,32 @@ export class SocketManager extends BaseComponent {
 
   public emitListSerialPortsSuccess(ports: string[]): void {
     this.socket?.emit(BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS, ports);
+  }
+
+  // --- Phase 7: Encoder Calibration Events ---
+
+  /**
+   * Emits when encoder reset is complete.
+   */
+  public emitEncoderResetComplete(success: boolean, position: number): void {
+    this.socket?.emit(BackToFrontEvents.ENCODER_RESET_COMPLETE, { success, position });
+  }
+
+  /**
+   * Emits when a calibration point has been recorded.
+   */
+  public emitCalibrationPointRecorded(
+    type: 'camera' | 'jet',
+    position: number,
+    success: boolean,
+    sorter?: number,
+  ): void {
+    this.socket?.emit(BackToFrontEvents.CALIBRATION_POINT_RECORDED, {
+      type,
+      position,
+      success,
+      sorter,
+    });
   }
 
   protected notifyStatusChange(): void {

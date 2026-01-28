@@ -347,6 +347,137 @@ const SettingsForm = () => {
           </CardContent>
         </Card>
 
+        {/* Position Calibration (Encoder-based scheduling) */}
+        <Card>
+          <Collapsible>
+            <CollapsibleTrigger className="flex w-full items-center justify-between p-4">
+              <CardTitle>Position Calibration (Encoder)</CardTitle>
+              <ChevronDown className="h-4 w-4" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+                  These settings control encoder-based position tracking. Use the Encoder Calibration button on the
+                  Sorter page to record positions automatically, or edit values manually here.
+                </div>
+
+                {/* Enable Encoder Scheduling */}
+                <HoverCard>
+                  <HoverCardTrigger asChild>
+                    <FormField
+                      control={form.control}
+                      name="useEncoderScheduling"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-start gap-x-2 rounded-lg border p-3">
+                          <FormControl>
+                            <Input
+                              type="checkbox"
+                              className="h-5 w-5"
+                              checked={field.value}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                            />
+                          </FormControl>
+                          <FormLabel className="text-base font-semibold">Enable Encoder-Based Scheduling</FormLabel>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </HoverCardTrigger>
+                  <HoverCardContent>
+                    When enabled, uses encoder position tracking instead of time-based scheduling for more accurate part
+                    sorting.
+                  </HoverCardContent>
+                </HoverCard>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {/* Camera Encoder Offset */}
+                  <FormField
+                    control={form.control}
+                    name="positionCalibration.cameraEncoderOffset"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Camera Encoder Offset</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Counts Per Pixel */}
+                  <FormField
+                    control={form.control}
+                    name="positionCalibration.countsPerPixel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Counts Per Pixel</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Fall Time in Counts */}
+                  <FormField
+                    control={form.control}
+                    name="positionCalibration.fallTimeInCounts"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fall Time (counts)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Jet Lead Counts */}
+                  <FormField
+                    control={form.control}
+                    name="positionCalibration.jetLeadCounts"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Jet Lead (counts)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Jet Encoder Offsets */}
+                <div className="space-y-2">
+                  <FormLabel className="text-sm font-medium">Jet Encoder Offsets (per sorter)</FormLabel>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {[0, 1, 2, 3].map((index) => (
+                      <FormField
+                        key={index}
+                        control={form.control}
+                        name={`positionCalibration.jetEncoderOffsets.${index}`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Jet {String.fromCharCode(65 + index)}</FormLabel>
+                            <FormControl>
+                              <Input type="number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+
         {/* sorter settings array */}
         <Card>
           <CardHeader>
