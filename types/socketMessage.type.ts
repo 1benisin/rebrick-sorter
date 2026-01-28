@@ -32,6 +32,8 @@ export enum BackToFrontEvents {
   ENCODER_PART_SCHEDULED = 'encoder-part-scheduled',
   ENCODER_PART_SORTED = 'encoder-part-sorted',
   ENCODER_PART_SKIPPED = 'encoder-part-skipped',
+  // Phase 5: Buffer status for pending jets
+  BUFFER_STATUS_UPDATE = 'buffer-status-update',
 }
 
 export const AllEvents = { ...FrontToBackEvents, ...BackToFrontEvents } as const;
@@ -117,5 +119,12 @@ export interface EventPayloads {
     reason: string;
     sorter: number;
     bin: number;
+  };
+  /** Phase 5: Buffer status update for pending jets on Arduino */
+  [BackToFrontEvents.BUFFER_STATUS_UPDATE]: {
+    /** Number of active pending jets in Arduino buffer */
+    count: number;
+    /** Total capacity of the pending jets buffer */
+    capacity: number;
   };
 }

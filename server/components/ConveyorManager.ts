@@ -533,7 +533,14 @@ export class ConveyorManager extends BaseComponent {
       console.log(`\x1b[32m[ENCODER] Jet queued: ${data}\x1b[0m`);
     } else if (data.startsWith('BS:')) {
       // Buffer status: BS:<count>,<capacity>
-      console.log(`\x1b[32m[ENCODER] Buffer status: ${data}\x1b[0m`);
+      const parts = data.substring(3).split(',');
+      if (parts.length === 2) {
+        const count = parseInt(parts[0], 10);
+        const capacity = parseInt(parts[1], 10);
+        if (!isNaN(count) && !isNaN(capacity)) {
+          this.socketManager.emitBufferStatusUpdate(count, capacity);
+        }
+      }
     } else if (data.startsWith('ER:')) {
       // Encoder reset confirmation: ER:0
       console.log(`\x1b[32m[ENCODER] Encoder reset confirmed: ${data}\x1b[0m`);

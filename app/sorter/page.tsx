@@ -9,6 +9,7 @@ import ConveyorButton from '@/components/buttons/ConveyorButton';
 import HomeSorterButton from '@/components/buttons/HomeSorterButton';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import SorterPositionDisplay from '@/components/SorterPositionDisplay';
+import EncoderStatusDisplay from '@/components/EncoderStatusDisplay';
 
 const SortPage = () => {
   const ppmCount = sortProcessStore((state) => state.ppmCount);
@@ -21,6 +22,7 @@ const SortPage = () => {
           <ConveyorButton />
           <HomeSorterButton />
           <SorterPositionDisplay />
+          <EncoderStatusDisplay />
           <div>{`${ppmCount} PPM (last 10min)`}</div>
         </div>
         <div className="col-span-3 w-full">

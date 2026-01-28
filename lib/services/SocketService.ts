@@ -59,6 +59,19 @@ class SocketService implements Service {
     this.socket.on(AllEvents.PART_SORTED, () => {
       sortProcessStore.getState().handlePartSorted();
     });
+
+    // Encoder position tracking (Phase 5)
+    this.socket.on(
+      AllEvents.ENCODER_POSITION_UPDATE,
+      (data: { position: number; timestamp: number; velocity: number }) => {
+        sortProcessStore.getState().setEncoderState(data.position, data.timestamp, data.velocity);
+      },
+    );
+
+    // Buffer status for pending jets (Phase 5)
+    this.socket.on(AllEvents.BUFFER_STATUS_UPDATE, (data: { count: number; capacity: number }) => {
+      sortProcessStore.getState().setBufferStatus(data.count, data.capacity);
+    });
   }
 
   public getStatus(): ServiceState {
