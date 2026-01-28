@@ -469,10 +469,22 @@ Does NOT:
 - Add `requestEncoderPosition()` method
 - Send `<e>` command via DeviceManager
 - Return promise that resolves when `EP:` response received
+- Implement pending request pattern:
+  ```typescript
+  private pendingPositionRequest: {
+    resolve: (position: number) => void;
+    reject: (error: Error) => void;
+    timeout: NodeJS.Timeout;
+  } | null = null;
+  ```
+- In `handleConveyorData()`, resolve pending request when `EP:` received
+- Add timeout (e.g., 1000ms) to reject if no response
 
 **Acceptance Criteria:**
 
 - [ ] Can request and receive position on demand
+- [ ] Returns Promise that resolves with actual position
+- [ ] Rejects on timeout if Arduino doesn't respond
 
 ---
 
@@ -510,6 +522,204 @@ Does NOT:
 
 - [ ] Frontend receives encoder position updates
 - [ ] Updates include timestamp
+
+---
+
+#### Task 2.6: Fix Callback Registration Memory Leak
+
+**File:** `server/components/ConveyorManager.ts`
+
+**Description:** Fix memory leak caused by `.bind()` creating new function references on each call.
+
+**Requirements:**
+
+- Store bound callback functions as instance properties during construction:
+
+  ```typescript
+  private boundReinitialize: () => Promise<void>;
+  private boundHandleConveyorData: (data: string) => void;
+
+  constructor(config: ConveyorManagerConfig) {
+    // ...
+    this.boundReinitialize = this.reinitialize.bind(this);
+    this.boundHandleConveyorData = this.handleConveyorData.bind(this);
+  }
+  ```
+
+- Use these bound references for both register and unregister calls
+- Ensure callbacks are properly removed on `deinitialize()`
+
+**Acceptance Criteria:**
+
+- [ ] Same function reference used for register and unregister
+- [ ] No callbacks remain registered after deinitialize
+- [ ] No memory leaks from orphaned callbacks
+
+---
+
+#### Task 2.7: Add Encoder State Recovery on Reconnect
+
+**File:** `server/components/ConveyorManager.ts`, `server/components/DeviceManager.ts`
+
+**Description:** Sync encoder state when Arduino reconnects after disconnect or reset.
+
+**Requirements:**
+
+- Add callback/event for device reconnection in DeviceManager:
+  ```typescript
+  registerDeviceReconnectCallback(deviceName: DeviceName, callback: () => void): void
+  ```
+- In ConveyorManager, register for conveyor reconnect events
+- On reconnect:
+  - Clear stale velocity and timestamp data
+  - Request current encoder position from Arduino
+  - Log reconnection and state reset
+  - Optionally notify frontend of encoder reset
+- Handle Arduino's `ER:0` response (encoder reset confirmation)
+
+**Acceptance Criteria:**
+
+- [ ] Encoder state syncs after Arduino reconnect
+- [ ] Stale velocity data cleared on reconnect
+- [ ] Position requested from Arduino after settings handshake completes
+- [ ] Frontend notified of encoder state change
+
+---
+
+#### Task 2.8: Handle Encoder Position Overflow
+
+**File:** `server/components/ConveyorManager.ts`, `arduino_code/conveyor_jets.cpp`
+
+**Description:** Detect and handle encoder position overflow (wrap-around at INT32_MAX).
+
+**Requirements:**
+
+- Define overflow detection threshold (e.g., delta > 1,000,000 indicates wrap)
+- In `updateEncoderPosition()`:
+  ```typescript
+  const delta = position - this.currentEncoderPosition;
+  // Detect overflow: large negative delta likely means Arduino wrapped
+  if (delta < -1000000) {
+    console.warn('[ENCODER] Position overflow detected, resetting state');
+    this.encoderVelocity = 0;
+    // Optionally request encoder reset or handle gracefully
+  }
+  ```
+- Consider periodic encoder reset during calibration or at known points
+- Document expected runtime before overflow (at typical tick rates)
+
+**Acceptance Criteria:**
+
+- [ ] Overflow detected and logged
+- [ ] System recovers gracefully from overflow
+- [ ] No invalid velocity calculations from wrap-around
+
+---
+
+#### Task 2.9: Add Velocity Smoothing
+
+**File:** `server/components/ConveyorManager.ts`
+
+**Description:** Smooth velocity calculations to handle jitter and delayed updates.
+
+**Requirements:**
+
+- Implement exponential moving average for velocity:
+
+  ```typescript
+  private readonly VELOCITY_SMOOTHING_ALPHA = 0.3; // Lower = more smoothing
+
+  private updateEncoderPosition(position: number): void {
+    // ...
+    if (this.lastEncoderUpdateTime > 0 && elapsed > 0) {
+      const instantVelocity = delta / elapsed;
+      // Apply exponential smoothing
+      this.encoderVelocity =
+        this.VELOCITY_SMOOTHING_ALPHA * instantVelocity +
+        (1 - this.VELOCITY_SMOOTHING_ALPHA) * this.encoderVelocity;
+    }
+    // ...
+  }
+  ```
+
+- Reset smoothed velocity to 0 when conveyor stops (velocity near 0 for multiple updates)
+- Consider minimum velocity threshold to avoid noise when stopped
+
+**Acceptance Criteria:**
+
+- [ ] Velocity smoothed across updates
+- [ ] No erratic velocity spikes from timing jitter
+- [ ] Velocity resets properly when conveyor stops
+
+---
+
+#### Task 2.10: Improve Interpolation Accuracy
+
+**File:** `server/components/ConveyorManager.ts`
+
+**Description:** Improve position interpolation during start/stop and edge cases.
+
+**Requirements:**
+
+- Add maximum interpolation time limit:
+
+  ```typescript
+  private readonly MAX_INTERPOLATION_MS = 500; // Don't extrapolate beyond this
+
+  public getInterpolatedPosition(): number {
+    if (this.lastEncoderUpdateTime === 0) {
+      return this.currentEncoderPosition;
+    }
+    const elapsed = Date.now() - this.lastEncoderUpdateTime;
+    // Cap interpolation to avoid runaway extrapolation
+    const cappedElapsed = Math.min(elapsed, this.MAX_INTERPOLATION_MS);
+    return Math.round(this.currentEncoderPosition + cappedElapsed * this.encoderVelocity);
+  }
+  ```
+
+- Add `isEncoderDataStale()` method to check if data is too old
+- Consider adding conveyor running state to disable interpolation when stopped
+
+**Acceptance Criteria:**
+
+- [ ] Interpolation bounded to reasonable time window
+- [ ] Stale data detection available for callers
+- [ ] No runaway position extrapolation
+
+---
+
+#### Task 2.11: Add Documentation and Type Safety
+
+**File:** `server/components/ConveyorManager.ts`, `types/socketMessage.type.ts`
+
+**Description:** Document encoder-related code and improve type safety.
+
+**Requirements:**
+
+- Add JSDoc comments for all encoder-related properties and methods:
+
+  ```typescript
+  /**
+   * Current encoder position in ticks (counts).
+   * Updated from Arduino EP: messages at ~10Hz.
+   */
+  private currentEncoderPosition: number = 0;
+
+  /**
+   * Encoder velocity in counts per millisecond.
+   * Smoothed using exponential moving average.
+   */
+  private encoderVelocity: number = 0;
+  ```
+
+- Document velocity units in socket message payload
+- Add runtime validation for encoder position updates (must be number, not NaN)
+
+**Acceptance Criteria:**
+
+- [ ] All encoder properties have JSDoc comments
+- [ ] Velocity units documented for frontend consumers
+- [ ] Invalid data (NaN, undefined) handled gracefully
 
 ---
 

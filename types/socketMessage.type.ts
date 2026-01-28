@@ -26,6 +26,7 @@ export enum BackToFrontEvents {
   SORTER_POSITION_UPDATE = 'sorter-position-update',
   PART_SORTED = 'part-sorted',
   PART_SKIPPED = 'part-skipped',
+  ENCODER_POSITION_UPDATE = 'encoder-position-update',
 }
 
 export const AllEvents = { ...FrontToBackEvents, ...BackToFrontEvents } as const;
@@ -66,4 +67,13 @@ export interface EventPayloads {
   };
   [BackToFrontEvents.PART_SORTED]: { part: Part };
   [BackToFrontEvents.PART_SKIPPED]: { part: Part };
+  /** Encoder position update from server to frontend for real-time tracking */
+  [BackToFrontEvents.ENCODER_POSITION_UPDATE]: {
+    /** Encoder position in ticks (counts) */
+    position: number;
+    /** Server timestamp when position was recorded (ms since epoch) */
+    timestamp: number;
+    /** Velocity in counts per millisecond (smoothed via EMA, alpha=0.3) */
+    velocity: number;
+  };
 }
