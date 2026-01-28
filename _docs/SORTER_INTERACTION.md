@@ -2,240 +2,78 @@
 
 ## 1. Overview
 
-This document details the functionality of the Sorter Arduino controller (`sorter.cpp`) and its communication with the backend server. The system has **four identical sorters**, each controlled by its own Arduino. Each sorter is a 2-axis (X and Y) gantry system controlled by two stepper motors. Its sole purpose is to position the collection funnel directly over a specific bin in a grid, ready to receive a part ejected from the conveyor belt.
+This document details the functionality of the Sorter Arduino controller (`sorter.cpp`) and its communication with the backend server. The sorter is a 2-axis (X and Y) gantry system controlled by two stepper motors. Its sole purpose is to position the collection funnel directly over a specific bin in a grid, ready to receive a part ejected from the conveyor belt.
 
 Precise positioning and a reliable homing mechanism are the two most critical aspects of this component.
 
-## 2. Role in System Architecture
+## 2. Core Logic in `sorter.cpp`
 
-### 2.1. Server-Centric Coordination
+The Arduino's logic is centered around moving the gantry to calculated coordinates and managing a state machine for its homing sequence.
 
-The sorter Arduinos are intentionally simple "muscles" that execute commands. All coordination intelligence lives on the server:
+### 2.1. Bin-to-Coordinate Calculation
 
-- **Server responsibilities:**
+The backend doesn't command the sorter with raw stepper motor positions. Instead, it sends a simple, 1-based bin number. The Arduino firmware is responsible for translating this bin number into the correct X and Y stepper motor coordinates.
 
-  - Track each sorter's current and scheduled positions
-  - Determine when to send move commands (based on encoder position)
-  - Check if sorter can reach a bin in time for an incoming part
-  - Skip parts when sorter unavailable
+- **`moveToBin(int binNum)`:** This function contains the core logic for the translation.
+  - It uses the configured `GRID_DIMENSION` and `ROW_MAJOR_ORDER` settings to determine the target (x, y) index within the grid.
+  - It then calculates the final stepper position by multiplying the index by the steps-per-bin (`xStepsPerBin`, `yStepsPerBin`) and adding the base `X_OFFSET` and `Y_OFFSET`.
+  - Finally, it issues non-blocking `moveTo` commands to the `FastAccelStepper` library for both axes.
 
-- **Sorter Arduino responsibilities:**
-  - Move to commanded bin position
-  - Report when move is complete
-  - Handle homing sequence
+### 2.2. Homing State Machine
 
-### 2.2. Why Four Sorters?
+Before the sorter can move to any bin accurately, it must first establish a known zero position. This is handled by the `handleHoming()` function, which implements a multi-step, non-blocking state machine.
 
-With a 30-foot conveyor and multiple parts in transit, a single sorter can't keep up. Four sorters provide:
-
-- Parallelism: Different parts route to different sorters
-- Reduced travel time: Each sorter covers a portion of bins
-- Redundancy: System can operate with sorter failures
-
-## 3. Core Logic in `sorter.cpp`
-
-### 3.1. Bin-to-Coordinate Calculation
-
-The backend sends a simple, 1-based bin number. The Arduino translates this to stepper coordinates.
-
-- **`moveToBin(int binNum)`:** Core translation logic
-  - Uses `GRID_DIMENSION` and `ROW_MAJOR_ORDER` to determine (x, y) index
-  - Calculates stepper position: `index × stepsPerBin + offset`
-  - Issues non-blocking `moveTo` commands to `FastAccelStepper` library
-
-### 3.2. Homing State Machine
-
-Before accurate movement, the sorter must establish a known zero position via the `handleHoming()` function.
-
-- **Trigger:** `a` command from backend
+- **Trigger:** The homing sequence is initiated by an `a` command from the backend.
 - **States (`HomingState`):**
+  1.  `HOMING_START`: Initiates the sequence.
+  2.  `HOMING_Y_BACKWARD`: Moves the Y-axis backward at a slow `HOMING_SPEED` until its endstop switch is triggered.
+  3.  `HOMING_X_BACKWARD`: Once the Y-axis is home, it does the same for the X-axis.
+  4.  After hitting an endstop, each axis backs off by a small, hardcoded amount (`HOMING_BACKOFF_STEPS`) and then has its position zeroed using `setCurrentPosition(0)`.
+  5.  `HOMING_WAIT_FOR_OFFSET`: Once both axes are zeroed, they both move to the configured `X_OFFSET` and `Y_OFFSET` positions. This becomes the new "home" position, representing the corner of the grid.
+  6.  `HOMING_COMPLETE`: The sequence is finished, and the sorter is ready for normal operation. `NOT_HOMING` is then set.
+- **Safety:** The homing process includes a 30-second timeout (`HOMING_TIMEOUT_MS`) for each axis movement. If an endstop is not hit within this time, the process enters a `HOMING_ERROR` state, preventing any further movement until a new homing command (`a`) is received.
 
-  1. `HOMING_START`: Initiates sequence
-  2. `HOMING_Y_BACKWARD`: Y-axis moves until endstop triggered
-  3. `HOMING_X_BACKWARD`: X-axis moves until endstop triggered
-  4. After endstop hit, backs off by `HOMING_BACKOFF_STEPS`, zeros position
-  5. `HOMING_WAIT_FOR_OFFSET`: Moves to configured `X_OFFSET` and `Y_OFFSET`
-  6. `HOMING_COMPLETE`: Ready for normal operation
+## 3. Backend <-> Arduino Communication Protocol
 
-- **Safety:** 30-second timeout per axis. Timeout triggers `HOMING_ERROR` state.
+The sorter's communication adheres to the same robust, standardized protocol used by the other Arduino modules in the system.
 
-### 3.3. Move Complete Detection
+### 3.1. Standardization Notes
 
-The Arduino monitors stepper motor completion and sends `MC: <bin>` when the move finishes. The server uses this to:
+1.  **Serial Message Framing:** Commands are wrapped in `<...>` for integrity.
+2.  **'Ready' Handshake:** The Arduino sends `Ready` on boot, which the backend must wait for.
+3.  **Mandatory Settings Initialization:** The `s` command must be sent first. The firmware will respond with `Settings not initialized` to any other command if it hasn't been configured.
+4.  **State Reset on Settings Update:** A successful `s` command resets all internal states, stops all motors, and prepares the device for a fresh start, requiring a new homing sequence.
 
-- Update the sorter's current position
-- Trigger the next scheduled move (if any)
-- Confirm the sorter is ready for the incoming part
-
-## 4. Backend <-> Arduino Communication Protocol
-
-### 4.1. Standardization Notes
-
-1. **Serial Message Framing:** Commands wrapped in `<...>` (e.g., `<m045>`)
-2. **'Ready' Handshake:** Arduino sends `Ready` on boot; backend waits for this
-3. **Mandatory Settings Initialization:** `s` command must be sent first
-4. **State Reset on Settings Update:** `s` command stops motors, requires re-homing
-
-### 4.2. Commands (Backend to Arduino)
+### 3.2. Commands (Backend to Arduino)
 
 - **`s` (Settings Update):**
 
   - **Format:** `s,<GRID_DIMENSION>,<X_OFFSET>,<Y_OFFSET>,<X_STEPS_TO_LAST>,<Y_STEPS_TO_LAST>,<ACCELERATION>,<HOMING_SPEED>,<SPEED>,<ROW_MAJOR_ORDER>`
-  - **Action:** Configures grid parameters, calculates `stepsPerBin`
+  - **Action:** Configures all physical parameters of the sorter grid. The firmware uses these values to calculate `xStepsPerBin` and `yStepsPerBin`. It also updates the stepper motor speed and acceleration settings.
   - **Response:** `Settings updated`
 
 - **`m` (Move to Bin):**
 
-  - **Format:** `m<BIN>` (e.g., `<m045>`) - zero-padded 3-digit bin
-  - **Action:** Non-blocking move to specified bin
-  - **Response:** `MC: <BIN>` when move completes
+  - **Format:** `m<BIN>` (e.g., `<m001>`, `<m012>`). The bin number is a zero-padded, 3-digit string.
+  - **Action:** Commands the sorter to move to the specified bin number. The movement is non-blocking.
+  - **Response:** The Arduino sends a move complete message (`MC: <BIN>`) _after_ the move is finished.
 
 - **`h` (Move to Home/Center):**
 
   - **Format:** `h`
-  - **Action:** Move to center of grid
-  - **Response:** `MC: <BIN>` when complete
+  - **Action:** Calculates and moves to the bin located at the center of the grid.
+  - **Response:** `MC: <BIN>` upon completion.
 
 - **`a` (Start Homing):**
   - **Format:** `a`
-  - **Action:** Initiates homing state machine
-  - **Response:** Multiple status messages, ending with `Homing complete.`
+  - **Action:** Initiates the homing state machine.
+  - **Response:** The Arduino sends multiple status messages throughout the homing process (e.g., `Homing sequence initiated...`, `Homing Y axis...`, `Y endstop hit.`, `Homing complete.`).
 
-### 4.3. Responses (Arduino to Backend)
+### 3.3. Responses (Arduino to Backend)
 
-| Response                   | Format                     | Description                        |
-| -------------------------- | -------------------------- | ---------------------------------- |
-| `Ready`                    | `Ready`                    | Sent on boot                       |
-| `Settings updated`         | `Settings updated`         | Settings received                  |
-| `Settings not initialized` | `Settings not initialized` | Command rejected                   |
-| `MC: <BIN>`                | `MC: 45`                   | **Move Complete** - arrived at bin |
-| `Homing ...`               | Various                    | Status during homing sequence      |
-| `Error: ...`               | `Error: ...`               | Malformed command or timeout       |
-
-**The `MC: <BIN>` response is critical.** The server waits for this to:
-
-- Confirm the sorter is in position
-- Start the next scheduled move
-- Calculate availability for new parts
-
-## 5. Server-Side State Management
-
-### 5.1. SorterStateManager
-
-The server maintains state for each of the 4 sorters:
-
-```typescript
-interface SorterState {
-  currentBin: number; // Where sorter is now
-  isMoving: boolean; // Currently in motion
-  targetBin: number | null; // Where it's heading
-  lastMoveCompletePosition: number; // Encoder position when move finished
-  scheduledMoves: ScheduledMove[]; // Queue of upcoming moves
-}
-
-interface ScheduledMove {
-  bin: number;
-  partId: string;
-  triggerPosition: number; // Encoder position to send command
-  expectedCompletePosition: number; // Estimated completion position
-}
-```
-
-### 5.2. Availability Check
-
-Before scheduling a part, the server checks:
-
-```typescript
-canSorterReachBin(
-  sorterNum: number,
-  targetBin: number,
-  deadline: number  // Encoder position by which sorter must arrive
-): boolean {
-  // 1. When will sorter be free? (after current + scheduled moves)
-  // 2. From that position, how long to reach targetBin?
-  // 3. Will it arrive before deadline?
-}
-```
-
-### 5.3. Travel Time Matrix
-
-The server stores pre-calculated travel times between bins:
-
-```typescript
-travelTimes[sorterNum][fromBin][toBin] = milliseconds;
-```
-
-This is converted to encoder counts using current conveyor velocity.
-
-## 6. Timing Considerations
-
-### 6.1. Move Command Timing
-
-The server sends the move command when encoder reaches `triggerPosition`:
-
-```
-triggerPosition = previousMoveCompletePosition
-```
-
-For the first move, or when sorter is idle:
-
-```
-triggerPosition = currentEncoderPosition (send immediately)
-```
-
-### 6.2. Part Deadline
-
-The sorter must be in position before the part falls:
-
-```
-deadline = jetPosition - fallTimeInCounts
-```
-
-Where `fallTimeInCounts` is the time for a part to fall from conveyor to funnel, converted to encoder counts.
-
-### 6.3. Skip Logic
-
-If `arrivalPosition > deadline`, the part is skipped:
-
-- No jet command sent (part stays on conveyor)
-- No move command sent (sorter stays put)
-- Server logs reason: "Sorter X cannot reach bin Y in time"
-- Frontend notified via `PART_SKIPPED` event
-
-## 7. Error Handling
-
-### 7.1. Homing Failure
-
-If endstop not hit within 30 seconds:
-
-- `HOMING_ERROR` state entered
-- Motors stopped
-- Error reported to backend
-- Manual intervention or re-home required
-
-### 7.2. Communication Loss
-
-- `DeviceManager` handles reconnection with exponential backoff
-- On reconnect, settings re-sent
-- Re-homing required after Arduino reset
-
-### 7.3. Move Timeout
-
-If `MC:` not received within expected time:
-
-- Server can query sorter status
-- May need to re-home if position uncertain
-
-## 8. Configuration Parameters
-
-| Parameter                            | Description                        |
-| ------------------------------------ | ---------------------------------- |
-| `GRID_DIMENSION`                     | Size of bin grid (e.g., 8 for 8×8) |
-| `X_OFFSET`, `Y_OFFSET`               | Steps from home to first bin       |
-| `X_STEPS_TO_LAST`, `Y_STEPS_TO_LAST` | Steps across full grid             |
-| `ACCELERATION`                       | Stepper acceleration (steps/s²)    |
-| `SPEED`                              | Normal move speed (steps/s)        |
-| `HOMING_SPEED`                       | Slower speed for homing (steps/s)  |
-| `ROW_MAJOR_ORDER`                    | Grid layout (true/false)           |
-
-These are stored in Firebase settings and sent to each sorter Arduino on initialization.
+- `Ready`: Sent on boot.
+- `Settings updated`: Confirms settings were received.
+- `Settings not initialized`: Error if not configured.
+- `Error: ...`: For malformed commands, timeouts, or other issues.
+- `Homing ...`: Various status messages during the homing sequence.
+- **`MC: <BIN>`**: **M**ove **C**omplete. This is the most important response during operation. It signifies that the sorter has successfully arrived at the requested bin and is ready for the next command. The backend should wait for this message before assuming a move is finished.
