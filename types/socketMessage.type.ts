@@ -24,6 +24,7 @@ export enum BackToFrontEvents {
   JET_FIRED = 'jet-fired',
   COMPONENT_STATUS_UPDATE = 'component-status-update',
   SORTER_POSITION_UPDATE = 'sorter-position-update',
+  SORTER_STATE_UPDATE = 'sorter-state-update',
   PART_SORTED = 'part-sorted',
   PART_SKIPPED = 'part-skipped',
   ENCODER_POSITION_UPDATE = 'encoder-position-update',
@@ -64,6 +65,21 @@ export interface EventPayloads {
   [BackToFrontEvents.SORTER_POSITION_UPDATE]: {
     sorter: number;
     bin: number;
+  };
+  /** Detailed sorter state update for encoder-based tracking */
+  [BackToFrontEvents.SORTER_STATE_UPDATE]: {
+    /** Sorter index (0-3) */
+    sorter: number;
+    /** Confirmed current bin (from MC: response) */
+    currentBin: number;
+    /** True if sorter is currently moving */
+    isMoving: boolean;
+    /** Target bin if moving, null otherwise */
+    targetBin: number | null;
+    /** Number of scheduled moves in queue */
+    scheduledMoveCount: number;
+    /** Current encoder position when update was sent */
+    encoderPosition: number;
   };
   [BackToFrontEvents.PART_SORTED]: { part: Part };
   [BackToFrontEvents.PART_SKIPPED]: { part: Part };
