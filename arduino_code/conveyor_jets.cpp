@@ -505,16 +505,25 @@ void processPendingJets() {
     if (pendingJets[i].active && currentPos >= (int32_t)pendingJets[i].position) {
       uint8_t jet = pendingJets[i].jet;
       if (jet < 4) {
-        int jetPin = getJetPin(jet);
-        digitalWrite(jetPin, HIGH);
-        jetActive[jet] = true;
-        jetEndTime[jet] = millis() + JET_FIRE_TIMES[jet];
-        
-        // Send confirmation with actual position (Task 1.7)
-        Serial.print("JF:");
-        Serial.print(jet);
-        Serial.print(",");
-        Serial.println(currentPos);
+        // Only fire if jet is not already active
+        if (!jetActive[jet]) {
+          int jetPin = getJetPin(jet);
+          digitalWrite(jetPin, HIGH);
+          jetActive[jet] = true;
+          jetEndTime[jet] = millis() + JET_FIRE_TIMES[jet];
+
+          // Send confirmation with actual position
+          Serial.print("JF:");
+          Serial.print(jet);
+          Serial.print(",");
+          Serial.println(currentPos);
+        } else {
+          // Jet already active - log but don't overwrite timing
+          Serial.print("JF:"); // Still confirm firing happened
+          Serial.print(jet);
+          Serial.print(",");
+          Serial.println(currentPos);
+        }
       }
       pendingJets[i].active = false;
     }

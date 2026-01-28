@@ -75,7 +75,8 @@ export class PositionTranslator {
     const positionAtDetection = snapshot.position - timeSinceDetection * snapshot.velocity;
 
     // Add pixel offset (countsPerPixel converts camera pixels to encoder counts)
-    const encoderPosition = positionAtDetection + pixelX * calibration.countsPerPixel;
+    // Add cameraEncoderOffset to account for camera position relative to encoder zero
+    const encoderPosition = positionAtDetection + pixelX * calibration.countsPerPixel + calibration.cameraEncoderOffset;
 
     return Math.round(encoderPosition);
   }

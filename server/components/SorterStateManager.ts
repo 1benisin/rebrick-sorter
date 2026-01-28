@@ -319,19 +319,18 @@ export class SorterStateManager extends BaseComponent {
     state.targetBin = null;
     state.lastMoveCompletePosition = currentPosition;
 
-    // Remove completed move from scheduled queue using FIFO ordering
-    // Moves complete in the order they were triggered, so the first scheduled move
-    // should be the one completing (avoids race condition with same-bin moves)
-    if (state.scheduledMoves.length > 0 && state.scheduledMoves[0].bin === bin) {
-      const completedMove = state.scheduledMoves.shift()!;
+    // Find and remove the matching scheduled move by bin number
+    const moveIndex = state.scheduledMoves.findIndex((m) => m.bin === bin);
+    if (moveIndex !== -1) {
+      const completedMove = state.scheduledMoves.splice(moveIndex, 1)[0];
       console.log(`[SORTER_STATE] Sorter ${sorterNum} completed move for part ${completedMove.partId} to bin ${bin}`);
     } else if (state.scheduledMoves.length > 0) {
-      // Unexpected: first scheduled move doesn't match the completed bin
-      // This could happen if a manual move was triggered or state got out of sync
+      // No matching move found - likely a manual move
       console.warn(
-        `[SORTER_STATE] Sorter ${sorterNum} completed move to bin ${bin}, but first scheduled move was to bin ${state.scheduledMoves[0].bin}. Clearing it anyway.`,
+        `[SORTER_STATE] Sorter ${sorterNum} completed move to bin ${bin}, but no matching scheduled move found. ` +
+          `This may be a manual move. Scheduled moves remain: ${state.scheduledMoves.length}`,
       );
-      state.scheduledMoves.shift();
+      // Don't remove any scheduled moves for manual moves
     }
 
     // Emit update to frontend
@@ -354,7 +353,7 @@ export class SorterStateManager extends BaseComponent {
    * Determines the effective "from bin" for calculating travel time.
    * This is the bin the sorter will be at before starting a new move.
    */
-  private getEffectiveFromBin(sorterNum: number): number {
+  public getEffectiveFromBin(sorterNum: number): number {
     const state = this.sorterStates.get(sorterNum);
     if (!state) {
       return 1; // Default to bin 1

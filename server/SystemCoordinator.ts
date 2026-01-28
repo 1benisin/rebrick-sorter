@@ -357,7 +357,7 @@ export class SystemCoordinator {
     }
 
     // 6. Get the effective "from bin" for lead count calculation
-    const fromBin = this.sorterStateManager.getCurrentBin(sorter);
+    const fromBin = this.sorterStateManager.getEffectiveFromBin(sorter);
     const leadCounts = this.sorterStateManager.calculateLeadCounts(sorter, fromBin, bin);
 
     // 7. Build the encoder part

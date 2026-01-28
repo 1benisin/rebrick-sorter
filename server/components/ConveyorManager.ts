@@ -530,7 +530,20 @@ export class ConveyorManager extends BaseComponent {
       }
     } else if (data.startsWith('JQ:')) {
       // Jet queued confirmation: JQ:<jet>,<position>
-      console.log(`\x1b[32m[ENCODER] Jet queued: ${data}\x1b[0m`);
+      const parts = data.substring(3).split(',');
+      if (parts.length === 2) {
+        const jet = parseInt(parts[0], 10);
+        const position = parseInt(parts[1], 10);
+        console.log(`\x1b[32m[ENCODER] Jet ${jet} queued at position ${position}\x1b[0m`);
+
+        // Verify the queued jet matches a pending part
+        const matchingPart = this.encoderPartQueue.find(
+          (p) => p.jet === jet && p.jetPosition === position && p.jetCommandSent,
+        );
+        if (!matchingPart) {
+          console.warn(`[ENCODER] JQ confirmation for unknown jet/position: ${jet}/${position}`);
+        }
+      }
     } else if (data.startsWith('BS:')) {
       // Buffer status: BS:<count>,<capacity>
       const parts = data.substring(3).split(',');
@@ -544,6 +557,10 @@ export class ConveyorManager extends BaseComponent {
     } else if (data.startsWith('ER:')) {
       // Encoder reset confirmation: ER:0
       console.log(`\x1b[32m[ENCODER] Encoder reset confirmed: ${data}\x1b[0m`);
+    } else if (data.includes('Error: Jet buffer full')) {
+      // Arduino buffer is full - log warning
+      console.error('\x1b[31m[ENCODER] Arduino jet buffer full - commands may be lost\x1b[0m');
+      // Could emit event to frontend to display warning
     }
   }
 
@@ -735,6 +752,11 @@ export class ConveyorManager extends BaseComponent {
     const movesToSend: EncoderPart[] = [];
 
     for (const part of this.encoderPartQueue) {
+      // Skip parts that have been marked as skipped
+      if (part.status === 'skipped') {
+        continue;
+      }
+
       // Check if jet command should be sent (position is within lead distance of jet)
       if (!part.jetCommandSent && currentPosition >= part.jetPosition - this.JET_LEAD_COUNTS) {
         jetsToQueue.push(part);
@@ -788,6 +810,12 @@ export class ConveyorManager extends BaseComponent {
     // Only process if encoder scheduling is enabled
     const settings = this.settingsManager.getSettings();
     if (!settings?.useEncoderScheduling) {
+      return;
+    }
+
+    // Don't process actions if encoder data is stale
+    if (this.isEncoderDataStale()) {
+      console.warn('[ENCODER_ACTION] Skipping action processing - encoder data is stale');
       return;
     }
 
