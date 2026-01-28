@@ -3,6 +3,25 @@
 import { z } from 'zod';
 import { serialPortNameEnumSchema } from './serialPort.type';
 
+// ============================================================================
+// Position Calibration (Phase 4 - Encoder-based scheduling)
+// ============================================================================
+
+export const positionCalibrationSchema = z.object({
+  /** Encoder position at camera center (pixel 0) */
+  cameraEncoderOffset: z.coerce.number().default(0),
+  /** Encoder counts per camera pixel (typically negative since camera is upstream) */
+  countsPerPixel: z.coerce.number().default(1),
+  /** Encoder position offset from detection to each jet (indexed by sorter) */
+  jetEncoderOffsets: z.array(z.coerce.number()).default([1000, 1000, 1000, 1000]),
+  /** Encoder counts for part to fall from jet to sorter position */
+  fallTimeInCounts: z.coerce.number().default(24),
+  /** How far ahead (in encoder counts) to send jet commands to Arduino */
+  jetLeadCounts: z.coerce.number().default(100),
+});
+
+export type PositionCalibrationType = z.infer<typeof positionCalibrationSchema>;
+
 export const sorterSettingsSchema = z.object({
   name: serialPortNameEnumSchema.default(serialPortNameEnumSchema.Values.conveyor_jets),
   serialPort: z.string().min(1).default('default'),
@@ -73,6 +92,10 @@ export const settingsSchema = z.object({
   sorters: z.array(sorterSettingsSchema).default([]),
   hopperCycleInterval: z.coerce.number().min(0).default(20000),
   hopperCycleSteps: z.coerce.number().min(100).max(10000).default(2020),
+  /** Position calibration for encoder-based scheduling (Phase 4) */
+  positionCalibration: positionCalibrationSchema.default({}),
+  /** Feature flag: use encoder-based scheduling instead of time-based */
+  useEncoderScheduling: z.boolean().default(false),
 });
 
 export type SettingsType = z.infer<typeof settingsSchema>;
