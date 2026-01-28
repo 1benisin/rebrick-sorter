@@ -3,6 +3,7 @@ import { SettingsManager } from './components/SettingsManager';
 import { SocketManager } from './components/SocketManager';
 import { DeviceManager } from './components/DeviceManager';
 import { SorterManager } from './components/SorterManager';
+import { SorterStateManager } from './components/SorterStateManager';
 import { ConveyorManager } from './components/ConveyorManager';
 import { SpeedManager } from './components/SpeedManager';
 import { SortPartDto } from '../types/sortPart.dto';
@@ -17,6 +18,7 @@ export class SystemCoordinator {
   private settingsManager: SettingsManager;
   private deviceManager: DeviceManager;
   private sorterManager: SorterManager;
+  private sorterStateManager: SorterStateManager;
   private conveyorManager: ConveyorManager;
   private speedManager: SpeedManager;
 
@@ -61,6 +63,14 @@ export class SystemCoordinator {
       buildPart: this.buildPart.bind(this),
     });
 
+    this.sorterStateManager = new SorterStateManager({
+      deviceManager: this.deviceManager,
+      socketManager: this.socketManager,
+      settingsManager: this.settingsManager,
+      sorterManager: this.sorterManager,
+      conveyorManager: this.conveyorManager,
+    });
+
     // Setup socket connection handling
     this.io.on('connection', this.handleConnection.bind(this));
   }
@@ -99,6 +109,10 @@ export class SystemCoordinator {
       console.log('Initializing ConveyorManager...');
       await this.conveyorManager.initialize();
       console.log('ConveyorManager initialized successfully.');
+
+      console.log('Initializing SorterStateManager...');
+      await this.sorterStateManager.initialize();
+      console.log('SorterStateManager initialized successfully.');
 
       console.log('All components initialized successfully. =============================');
     } catch (error) {
@@ -240,10 +254,14 @@ export class SystemCoordinator {
   }
 
   private async handleHomeSorter(data: { sorter: number }): Promise<void> {
+    // Mark move started before homing (homing always goes to bin 1)
+    this.sorterStateManager.markMoveStarted(data.sorter, 1);
     await this.sorterManager.homeSorter(data.sorter);
   }
 
   private async handleMoveSorter(data: { sorter: number; bin: number }): Promise<void> {
+    // Mark move started before sending move command
+    this.sorterStateManager.markMoveStarted(data.sorter, data.bin);
     await this.sorterManager.moveSorter(data.sorter, data.bin);
   }
 

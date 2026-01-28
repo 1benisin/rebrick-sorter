@@ -85,6 +85,26 @@ export class SocketManager extends BaseComponent {
     this.socket?.emit(BackToFrontEvents.SORTER_POSITION_UPDATE, { sorter, bin });
   }
 
+  public emitSorterStateUpdate(
+    sorter: number,
+    state: {
+      currentBin: number;
+      isMoving: boolean;
+      targetBin?: number | null;
+      scheduledMoveCount?: number;
+      encoderPosition: number;
+    },
+  ): void {
+    this.socket?.emit(BackToFrontEvents.SORTER_STATE_UPDATE, {
+      sorter,
+      currentBin: state.currentBin,
+      isMoving: state.isMoving,
+      targetBin: state.targetBin ?? null,
+      scheduledMoveCount: state.scheduledMoveCount ?? 0,
+      encoderPosition: state.encoderPosition,
+    });
+  }
+
   public emitPartSorted(part: Part): void {
     if (!this.socket) return;
     this.socket.emit(BackToFrontEvents.PART_SORTED, { part });
