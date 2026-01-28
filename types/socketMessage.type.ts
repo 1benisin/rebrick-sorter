@@ -24,14 +24,8 @@ export enum BackToFrontEvents {
   JET_FIRED = 'jet-fired',
   COMPONENT_STATUS_UPDATE = 'component-status-update',
   SORTER_POSITION_UPDATE = 'sorter-position-update',
-  SORTER_STATE_UPDATE = 'sorter-state-update',
   PART_SORTED = 'part-sorted',
   PART_SKIPPED = 'part-skipped',
-  ENCODER_POSITION_UPDATE = 'encoder-position-update',
-  // Phase 4: Encoder-based part scheduling events
-  ENCODER_PART_SCHEDULED = 'encoder-part-scheduled',
-  ENCODER_PART_SORTED = 'encoder-part-sorted',
-  ENCODER_PART_SKIPPED = 'encoder-part-skipped',
 }
 
 export const AllEvents = { ...FrontToBackEvents, ...BackToFrontEvents } as const;
@@ -70,52 +64,6 @@ export interface EventPayloads {
     sorter: number;
     bin: number;
   };
-  /** Detailed sorter state update for encoder-based tracking */
-  [BackToFrontEvents.SORTER_STATE_UPDATE]: {
-    /** Sorter index (0-3) */
-    sorter: number;
-    /** Confirmed current bin (from MC: response) */
-    currentBin: number;
-    /** True if sorter is currently moving */
-    isMoving: boolean;
-    /** Target bin if moving, null otherwise */
-    targetBin: number | null;
-    /** Number of scheduled moves in queue */
-    scheduledMoveCount: number;
-    /** Current encoder position when update was sent */
-    encoderPosition: number;
-  };
   [BackToFrontEvents.PART_SORTED]: { part: Part };
   [BackToFrontEvents.PART_SKIPPED]: { part: Part };
-  /** Encoder position update from server to frontend for real-time tracking */
-  [BackToFrontEvents.ENCODER_POSITION_UPDATE]: {
-    /** Encoder position in ticks (counts) */
-    position: number;
-    /** Server timestamp when position was recorded (ms since epoch) */
-    timestamp: number;
-    /** Velocity in counts per millisecond (smoothed via EMA, alpha=0.3) */
-    velocity: number;
-  };
-  /** Phase 4: Encoder part scheduled for sorting */
-  [BackToFrontEvents.ENCODER_PART_SCHEDULED]: {
-    partId: string;
-    jetPosition: number;
-    moveTriggerPosition: number;
-    sorter: number;
-    bin: number;
-  };
-  /** Phase 4: Encoder part successfully sorted (jet fired) */
-  [BackToFrontEvents.ENCODER_PART_SORTED]: {
-    partId: string;
-    jetPosition: number;
-    sorter: number;
-    bin: number;
-  };
-  /** Phase 4: Encoder part skipped (sorter unavailable or past position) */
-  [BackToFrontEvents.ENCODER_PART_SKIPPED]: {
-    partId: string;
-    reason: string;
-    sorter: number;
-    bin: number;
-  };
 }
