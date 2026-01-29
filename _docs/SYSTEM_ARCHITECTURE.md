@@ -172,7 +172,7 @@ Text-based command protocol with `<>` framing.
 
 ## 6. Position-Based Scheduling
 
-The system uses **encoder position** as the source of truth for part location, replacing the previous time-based approach.
+The system uses **encoder position** as the source of truth for part location. This can be toggled via the `useEncoderScheduling` feature flag in settings - when false, the legacy time-based scheduling is used.
 
 ### 6.1. Why Position-Based?
 
@@ -185,13 +185,35 @@ The system uses **encoder position** as the source of truth for part location, r
 
 ### 6.2. How It Works
 
-1. **Detection:** Frontend detects part at pixel position, sends to server with timestamp.
-2. **Translation:** Server converts pixel position to encoder position using calibration data.
-3. **Jet Position:** `jetPosition = detectionEncoderPos + cameraToJetOffset`
-4. **Sorter Check:** Server checks if target sorter can reach the bin in time.
-5. **Scheduling:** If available, server calculates `moveTriggerPosition` and adds to queue.
-6. **Execution:** Server monitors encoder position, sends commands when thresholds reached.
-7. **Precision:** Conveyor Arduino fires jet instantly when position crosses threshold.
+1. **Detection:** Frontend detects part at pixel position, sends `SORT_PART` to server with timestamp.
+2. **Translation:** `PositionTranslator` converts pixel position to encoder position using calibration data:
+   - Interpolates encoder position at detection time based on current position and velocity
+   - Applies `cameraEncoderOffset` and `countsPerPixel` calibration values
+3. **Jet Position:** `jetPosition = detectionEncoderPos + jetEncoderOffsets[sorter]`
+4. **Required-By Position:** `requiredByPosition = jetPosition - fallTimeInCounts` (sorter must arrive before this)
+5. **Sorter Availability Check:** `SorterStateManager.canSorterReachBin()` determines:
+   - When the sorter will be free (after current + scheduled moves)
+   - How many encoder counts to travel from effective position to target bin
+   - Whether it can arrive before the deadline
+6. **Scheduling:** If available, creates `EncoderPart` with `jetPosition` and `moveTriggerPosition`, inserts into sorted queue.
+7. **Execution:** On each encoder update, `ConveyorManager.processPositionActions()`:
+   - Sends jet queue commands (`q<jet>,<position>`) when `position >= jetPosition - JET_LEAD_COUNTS`
+   - Sends sorter move commands when `position >= moveTriggerPosition`
+8. **Precision:** Conveyor Arduino fires jet instantly when `encoderPosition >= targetPosition` (~<1ms latency).
+
+### 6.3. Position Calibration Settings
+
+Stored in `settings.positionCalibration`:
+
+```typescript
+{
+  cameraEncoderOffset: number;   // Encoder position at camera detection point
+  countsPerPixel: number;        // Encoder counts per camera pixel (may be negative)
+  jetEncoderOffsets: number[];   // Per-sorter offset from detection to jet position
+  fallTimeInCounts: number;      // Encoder counts for part to fall from jet to sorter
+  jetLeadCounts: number;         // How far ahead to send jet commands to Arduino (default 100)
+}
+```
 
 ### 6.3. Sorter Availability
 
@@ -209,20 +231,29 @@ If the sorter can't make it, the part is **skipped** (no jet fires, falls off co
 
 ### 7.1. Server State
 
-| State            | Component                     | Description                                     |
-| ---------------- | ----------------------------- | ----------------------------------------------- |
-| Encoder Position | ConveyorManager               | Current conveyor position (synced from Arduino) |
-| Part Queue       | ConveyorManager/PartScheduler | Scheduled parts with encoder positions          |
-| Sorter States    | SorterStateManager            | Current bin, scheduled moves for all 4 sorters  |
-| Calibration      | Settings                      | Pixel-to-encoder mapping, jet offsets           |
+| State              | Component          | Description                                                          |
+| ------------------ | ------------------ | -------------------------------------------------------------------- |
+| Encoder Position   | ConveyorManager    | Current position, timestamp, velocity (synced from Arduino EP: msgs) |
+| Encoder Part Queue | ConveyorManager    | `EncoderPart[]` sorted by jetPosition (position-based scheduling)    |
+| Part Queue         | ConveyorManager    | `Part[]` for legacy time-based scheduling                            |
+| Sorter States      | SorterStateManager | Per-sorter: currentBin, isMoving, targetBin, scheduledMoves queue    |
+| Settings           | SettingsManager    | All configuration from Firebase with real-time sync                  |
+| Device Connections | DeviceManager      | Connected Arduinos, reconnection state, handshake tracking           |
 
 ### 7.2. Arduino State
 
-| State            | Component        | Description                                 |
-| ---------------- | ---------------- | ------------------------------------------- |
-| Encoder Position | Conveyor Arduino | Raw counter, source of truth                |
-| Pending Jets     | Conveyor Arduino | Small buffer of position-triggered commands |
-| Current Position | Sorter Arduinos  | Current bin location                        |
+| State            | Component        | Description                                                |
+| ---------------- | ---------------- | ---------------------------------------------------------- |
+| Encoder Position | Conveyor Arduino | `int32_t encoderPosition` - raw counter, never auto-resets |
+| Pulse Count      | Conveyor Arduino | For RPM calculation, reset each interval                   |
+| Pending Jets     | Conveyor Arduino | `PendingJet[16]` buffer of position-triggered commands     |
+| Jet Active Flags | Conveyor Arduino | `bool[4]` and end times for non-blocking jet firing        |
+| PID State        | Conveyor Arduino | Input, output, setpoint for speed control                  |
+| Current Bin      | Sorter Arduino   | `curBin` - last commanded bin position                     |
+| Homing State     | Sorter Arduino   | `HomingState` enum for homing state machine                |
+| Feeder State     | Hopper Arduino   | `FeederState` enum including ramp_up_move                  |
+| Hopper State     | Hopper Arduino   | `HopperState` enum for agitation cycle                     |
+| Max Feeder Speed | Hopper Arduino   | Latched maximum speed from first settings message          |
 
 ## 8. Error Handling and Recovery
 
@@ -242,12 +273,15 @@ Skipped parts are logged and reported to frontend.
 
 ## 9. Configuration
 
-System configuration is stored in Firebase Firestore and includes:
+System configuration is stored in Firebase Firestore (schema defined in `types/settings.type.ts`) and includes:
 
-- **Serial Ports:** Paths to Arduino devices
-- **Sorter Settings:** Grid dimensions, travel times, offsets
-- **Jet Settings:** Fire durations per jet
-- **Calibration:** Camera position, counts per pixel, jet offsets
-- **Speed Settings:** Target RPM, min/max bounds
+- **Serial Ports:** `conveyorJetsSerialPort`, `hopperFeederSerialPort`, per-sorter `serialPort`
+- **Sorter Settings:** Grid dimensions, step offsets, acceleration, speed, row/column order
+- **Jet Settings:** Fire durations per jet (`jetDuration`), pixel positions (`jetPositionStart`)
+- **Hopper/Feeder:** Vibration speed, pause times, cycle intervals
+- **Conveyor Motor:** Max/min RPM, PID tuning (Kp, Ki, Kd), pulses per revolution
+- **Position Calibration:** `positionCalibration` object with encoder offsets and counts per pixel
+- **Feature Flags:** `useEncoderScheduling` (true = position-based, false = time-based)
+- **Detection/Classification:** Thresholds, camera positions, video stream IDs
 
-Changes propagate in real-time via Firestore listeners.
+Changes propagate in real-time via Firestore `onSnapshot` listeners, triggering component reinitialization as needed.

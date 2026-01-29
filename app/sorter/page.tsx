@@ -10,7 +10,7 @@ import HomeSorterButton from '@/components/buttons/HomeSorterButton';
 import { sortProcessStore } from '@/stores/sortProcessStore';
 import SorterPositionDisplay from '@/components/SorterPositionDisplay';
 import EncoderStatusDisplay from '@/components/EncoderStatusDisplay';
-import EncoderCalibrationButton from '@/components/buttons/EncoderCalibrationButton';
+import JetCalibrationPanel from '@/components/buttons/JetCalibrationPanel';
 
 const SortPage = () => {
   const ppmCount = sortProcessStore((state) => state.ppmCount);
@@ -18,13 +18,13 @@ const SortPage = () => {
     <div>
       {/* <StatusIndicator /> */}
       <div className="grid grid-cols-6">
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-2">
           <SorterControllerButton />
           <ConveyorButton />
           <HomeSorterButton />
           <SorterPositionDisplay />
           <EncoderStatusDisplay />
-          <EncoderCalibrationButton />
+          <JetCalibrationPanel />
           <div>{`${ppmCount} PPM (last 10min)`}</div>
         </div>
         <div className="col-span-3 w-full">

@@ -75,7 +75,9 @@ Once complete, the server listens for HTTP and WebSocket connections.
   - Notifies components on settings updates
 - **Key Methods:**
   - `getSettings()`: Returns current settings
-  - `registerSettingsUpdateCallback()`: Subscribe to changes
+  - `registerSettingsUpdateCallback()`: Subscribe to settings changes
+  - `unregisterSettingsUpdateCallback()`: Unsubscribe from settings changes
+  - `updateSettings()`: Partial update settings in Firebase
 
 ### 4.3. `DeviceManager`
 
@@ -100,35 +102,64 @@ Once complete, the server listens for HTTP and WebSocket connections.
 
 - **Purpose:** Centralized tracking of all 4 sorter states
 - **State (per sorter):**
+
   ```typescript
   interface SorterState {
-    currentBin: number; // Where sorter is now
-    isMoving: boolean; // Currently in motion
-    targetBin: number | null; // Where it's heading
+    currentBin: number; // Confirmed bin position from MC: response
+    isMoving: boolean; // True between move command sent and MC: received
+    targetBin: number | null; // Bin being moved to, null if not moving
+    lastMoveCompletePosition: number; // Encoder position when last move completed
+    moveStartPosition: number; // Encoder position when current move started
     scheduledMoves: ScheduledMove[]; // Queue of upcoming moves
   }
+
+  interface ScheduledMove {
+    partId: string; // Unique identifier for the part
+    bin: number; // Target bin number
+    triggerPosition: number; // Encoder position to send move command
+    expectedCompletePosition: number; // Estimated completion position
+  }
   ```
+
 - **Key Methods:**
-  - `canSorterReachBin()`: Check if sorter can reach a bin by deadline
-  - `calculateLeadCounts()`: Encoder counts needed for move
-  - `scheduleMove()`: Add move to sorter's queue
-  - `handleMoveComplete()`: Update state when `MC:` received
+  - `canSorterReachBin(sorterNum, targetBin, requiredByPosition)`: Check if sorter can reach a bin by deadline
+  - `calculateLeadCounts(sorterNum, fromBin, toBin)`: Encoder counts needed for move
+  - `scheduleMove(sorterNum, bin, partId, triggerPosition)`: Add move to sorter's queue
+  - `markMoveStarted(sorterNum, targetBin)`: Called when move command is sent
+  - `getEffectiveFromBin(sorterNum)`: Get the bin sorter will be at before starting a new move
+  - `clearAllScheduledMoves()`: Clear all scheduled moves (for reset)
 
 ### 4.6. `ConveyorManager`
 
-- **Purpose:** Encoder position tracking and part queue management
+- **Purpose:** Encoder position tracking, part queue management, and jet command dispatch
 - **State:**
   ```typescript
-  currentEncoderPosition: number;   // Latest from Arduino
-  lastEncoderUpdateTime: number;    // For interpolation
-  encoderVelocity: number;          // Counts per millisecond
-  partQueue: EncoderPart[];         // Scheduled parts
+  currentEncoderPosition: number;   // Latest from Arduino EP: messages
+  lastEncoderUpdateTime: number;    // Timestamp for interpolation
+  encoderVelocity: number;          // Counts per millisecond (smoothed via EMA)
+  partQueue: Part[];                // Legacy time-based parts
+  encoderPartQueue: EncoderPart[];  // Position-based parts (sorted by jetPosition)
   ```
+- **Constants:**
+  - `JET_LEAD_COUNTS = 100`: How far ahead to send jet queue commands
+  - `VELOCITY_SMOOTHING_ALPHA = 0.3`: EMA smoothing factor
+  - `MAX_INTERPOLATION_MS = 500`: Max extrapolation time
+  - `STALE_DATA_THRESHOLD_MS = 1000`: When encoder data is considered stale
 - **Key Methods:**
   - `getInterpolatedPosition()`: Estimate current position between updates
-  - `handleEncoderUpdate()`: Process `EP:` messages from Arduino
-  - `scheduleJet()`: Send `q<jet>,<position>` command
-  - `processPartQueue()`: Check for parts needing action
+  - `getCurrentEncoderPosition()`: Raw position without interpolation
+  - `getEncoderVelocity()`: Current smoothed velocity
+  - `isEncoderDataStale()`: Check if encoder data is too old
+  - `insertEncoderPart(part)`: Add part to position-based queue
+  - `getActionableParts(position)`: Get parts ready for jet/move commands
+  - `resetEncoderPosition()`: Reset encoder to zero (sends `r` command)
+  - `requestEncoderPosition()`: Request position from Arduino (Promise-based)
+- **Message Handling:**
+  - `EP:<position>`: Encoder position update
+  - `JF:<jet>,<position>`: Jet fired confirmation
+  - `JQ:<jet>,<position>`: Jet queued confirmation
+  - `BS:<count>,<capacity>`: Buffer status
+  - `ER:0`: Encoder reset confirmation
 
 ### 4.7. `SorterManager`
 
@@ -211,32 +242,46 @@ Once complete, the server listens for HTTP and WebSocket connections.
 
 ### 5.5. Command Execution
 
-The `ConveyorManager` runs a position-check loop on each encoder update:
+The `ConveyorManager` runs a position-check loop on each encoder update via `processPositionActions()`:
 
 ```typescript
-processPartQueue() {
-  const currentPos = this.getInterpolatedPosition();
+processPositionActions(currentPosition: number) {
+  // Only process if encoder scheduling is enabled
+  if (!settings.useEncoderScheduling) return;
 
-  for (const part of this.partQueue) {
-    // Send jet command with lead time
-    if (!part.jetCommandSent &&
-        currentPos >= part.jetPosition - JET_LEAD_COUNTS) {
-      this.deviceManager.sendCommand(
-        DeviceName.CONVEYOR_JETS,
-        `q${part.jet},${part.jetPosition}`
-      );
-      part.jetCommandSent = true;
-    }
+  // Skip if encoder data is stale
+  if (this.isEncoderDataStale()) return;
 
-    // Send sorter move command
-    if (!part.moveCommandSent &&
-        currentPos >= part.moveTriggerPosition) {
-      this.sorterManager.moveSorter(part.sorter, part.bin);
-      part.moveCommandSent = true;
-    }
+  const { jetsToQueue, movesToSend } = this.getActionableParts(currentPosition);
+
+  // Send jet queue commands to Arduino (position-triggered)
+  for (const part of jetsToQueue) {
+    // Command format: q<jet>,<position>
+    this.deviceManager.sendCommand(
+      DeviceName.CONVEYOR_JETS,
+      `q${part.jet},${part.jetPosition}`
+    );
+    part.jetCommandSent = true;
+  }
+
+  // Send move commands to sorters
+  for (const part of movesToSend) {
+    this.sorterManager.moveSorter(part.sorter, part.bin);
+    this.sorterStateManager.markMoveStarted(part.sorter, part.bin);
+    part.moveCommandSent = true;
+    part.status = 'moving';
   }
 }
+
+// Jet commands are sent when position reaches: jetPosition - JET_LEAD_COUNTS (100)
+// Move commands are sent when position reaches: moveTriggerPosition
 ```
+
+**Arduino Responses:**
+
+- `JQ:<jet>,<position>`: Confirms jet was queued successfully
+- `JF:<jet>,<position>`: Confirms jet actually fired at that position
+- `Error: Jet buffer full`: Arduino's pending jets buffer (16 slots) is full
 
 ### 5.6. Confirmation Handling
 
@@ -320,28 +365,76 @@ If server restarts:
 
 ## 8. Configuration
 
-Settings stored in Firebase Firestore:
+Settings stored in Firebase Firestore (defined via Zod schema in `types/settings.type.ts`):
 
 ```typescript
 interface Settings {
   // Serial ports
-  conveyorJetsPort: string;
-  sorterPorts: string[];
-  hopperFeederPort: string;
+  conveyorJetsSerialPort: string;
+  hopperFeederSerialPort: string;
 
-  // Calibration
-  cameraEncoderOffset: number;
-  countsPerPixel: number;
-  jetEncoderOffsets: number[];
-  jetLeadCounts: number;
-
-  // Sorter settings
-  sorters: SorterSettings[];
-
-  // Speed settings
-  defaultConveyorRPM: number;
+  // Conveyor settings
+  conveyorSpeed: number; // pixels per millisecond (for time-based)
   maxConveyorRPM: number;
   minConveyorRPM: number;
+  constantConveyorSpeed: boolean; // If true, skip parts rather than slow down
+  conveyorPulsesPerRevolution: number; // Encoder PPR
+
+  // PID tuning for conveyor motor
+  conveyorKp: number;
+  conveyorKi: number;
+  conveyorKd: number;
+
+  // Hopper/Feeder settings
+  feederVibrationSpeed: number;
+  feederStopDelay: number;
+  feederPauseTime: number;
+  feederShortMoveTime: number;
+  feederLongMoveTime: number;
+  hopperCycleInterval: number;
+  hopperCycleSteps: number;
+
+  // Position calibration (encoder-based scheduling)
+  positionCalibration: {
+    cameraEncoderOffset: number; // Encoder position at camera center
+    countsPerPixel: number; // Encoder counts per camera pixel
+    jetEncoderOffsets: number[]; // Per-sorter jet position offsets
+    fallTimeInCounts: number; // Time for part to fall from jet to sorter
+    jetLeadCounts: number; // How far ahead to send jet commands
+  };
+
+  // Feature flag
+  useEncoderScheduling: boolean; // Use position-based instead of time-based
+
+  // Per-sorter settings
+  sorters: SorterSettings[];
+
+  // Detection/Classification
+  detectDistanceThreshold: number;
+  classificationThresholdPercentage: number;
+
+  // Video settings
+  camera1VerticalPositionPercentage: number;
+  camera2VerticalPositionPercentage: number;
+  videoStreamId1: string;
+  videoStreamId2: string;
+}
+
+interface SorterSettings {
+  name: string;
+  serialPort: string;
+  jetPositionStart: number;
+  jetDuration: number;
+  maxPartDimensions: { width: number; height: number };
+  gridDimension: number; // e.g., 12 for 12x12 bin grid
+  xOffset: number;
+  yOffset: number;
+  xStepsToLast: number;
+  yStepsToLast: number;
+  acceleration: number;
+  homingSpeed: number;
+  speed: number;
+  rowMajorOrder: boolean;
 }
 ```
 

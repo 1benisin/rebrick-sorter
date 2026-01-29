@@ -38,6 +38,7 @@ export class SystemCoordinator {
       // Phase 7: Encoder calibration handlers
       onResetEncoder: this.handleResetEncoder.bind(this),
       onRecordCameraPosition: this.handleRecordCameraPosition.bind(this),
+      onRecordCameraWidth: this.handleRecordCameraWidth.bind(this),
       onRecordJetPosition: this.handleRecordJetPosition.bind(this),
     });
 
@@ -332,17 +333,57 @@ export class SystemCoordinator {
    * Builds an EncoderPart for position-based scheduling.
    * Returns null if the sorter is unavailable (part should be skipped).
    *
+   * Uses the new left-edge-based calibration system:
+   * 1. Gets encoder position at detection time via interpolation
+   * 2. Uses calculateJetTriggerEncoder() for accurate pixel-to-tick translation
+   *
    * @param data - Sort part data from frontend
    * @returns EncoderPart for scheduling, or null if part should be skipped
    */
   private buildEncoderPart(data: SortPartDto): EncoderPart | null {
-    const { partId, initialPosition, initialTime, bin, sorter } = data;
+    const { partId, initialPosition, initialTime, bin, sorter, cameraWidthPixels: providedCameraWidth } = data;
 
-    // 1. Translate pixel position to encoder position at detection time
-    const detectionEncoderPos = this.positionTranslator.pixelToEncoderPosition(initialPosition, initialTime);
+    // Get calibration settings for camera width
+    const calibration = this.positionTranslator.getCalibration();
+    const isCalibrated = this.positionTranslator.isCalibrated();
 
-    // 2. Calculate jet fire position
-    const jetPosition = this.positionTranslator.calculateJetPosition(detectionEncoderPos, sorter);
+    // Determine effective camera width: prefer provided value from frontend, fall back to calibration
+    let effectiveCameraWidthPixels = calibration.cameraWidthPixels;
+    if (providedCameraWidth && providedCameraWidth > 0) {
+      // Validate against calibration - warn if mismatch detected
+      if (calibration.cameraWidthPixels !== providedCameraWidth) {
+        console.warn(
+          `[ENCODER_PART] Camera width mismatch: calibration=${calibration.cameraWidthPixels}px, ` +
+            `actual=${providedCameraWidth}px. Using actual value. Consider recalibrating.`,
+        );
+      }
+      effectiveCameraWidthPixels = providedCameraWidth;
+    }
+
+    // 1. Get encoder position at detection time
+    // When calibrated: get raw encoder position (no pixel offset) - pixel conversion is done in calculateJetTriggerEncoder
+    // When not calibrated: use legacy pixelToEncoderPosition which includes pixel offset
+    const detectionEncoderPos = isCalibrated
+      ? this.positionTranslator.getEncoderPositionAtTime(initialTime)
+      : this.positionTranslator.pixelToEncoderPosition(initialPosition, initialTime);
+
+    // 2. Calculate jet fire position using the new calibration-based method
+    // If calibrated: uses pixel position + raw encoder at detection + calibration data
+    // If not calibrated: falls back to adding jet offset to detection position (which already has pixel offset)
+    let jetPosition: number;
+    if (isCalibrated) {
+      // Use the new calibration-based calculation with raw encoder position
+      jetPosition = this.positionTranslator.calculateJetTriggerEncoder(
+        initialPosition, // pixelX from detection
+        detectionEncoderPos, // raw encoder value at detection time (no pixel offset)
+        sorter, // jet index
+        effectiveCameraWidthPixels, // camera resolution width (from frontend or calibration)
+      );
+    } else {
+      // Fallback to old method if not calibrated
+      jetPosition = this.positionTranslator.calculateJetPosition(detectionEncoderPos, sorter);
+      console.log('[ENCODER_PART] Using legacy calculation (not calibrated)');
+    }
 
     // 3. Calculate the position by which the sorter must be ready
     const requiredByPosition = this.positionTranslator.calculateRequiredByPosition(jetPosition);
@@ -385,6 +426,7 @@ export class SystemCoordinator {
       expectedMoveCompletePosition: availability.triggerPosition + leadCounts,
       sorter,
       bin,
+      calibrated: this.positionTranslator.isCalibrated(),
     });
 
     return encoderPart;
@@ -466,6 +508,7 @@ export class SystemCoordinator {
   /**
    * Handles record camera position request from frontend.
    * Records the current encoder position as the camera calibration offset.
+   * @deprecated Use handleRecordCameraWidth instead for the new calibration workflow.
    */
   private async handleRecordCameraPosition(): Promise<void> {
     try {
@@ -494,22 +537,68 @@ export class SystemCoordinator {
   }
 
   /**
-   * Handles record jet position request from frontend.
-   * Records the current encoder position as the jet calibration offset for a specific sorter.
+   * Handles record camera width request from frontend.
+   * Records the camera view width in encoder ticks (left edge to right edge).
+   * Optionally updates cameraWidthPixels if provided from video capture.
+   * This is used for pixel-to-tick translation during part detection.
    */
-  private async handleRecordJetPosition(data: { sorter: number }): Promise<void> {
+  private async handleRecordCameraWidth(data: { widthInTicks: number; cameraWidthPixels?: number }): Promise<void> {
     try {
-      const { sorter } = data;
+      const { widthInTicks, cameraWidthPixels } = data;
+
+      if (widthInTicks <= 0) {
+        throw new Error(`Invalid camera width: ${widthInTicks} (must be positive)`);
+      }
+
+      console.log(`[CALIBRATION] Recording camera width: ${widthInTicks} ticks`);
+      if (cameraWidthPixels) {
+        console.log(`[CALIBRATION] Auto-syncing camera width pixels: ${cameraWidthPixels}`);
+      }
+
+      const currentSettings = this.settingsManager.getSettings();
+      if (!currentSettings) {
+        throw new Error('Settings not available');
+      }
+
+      await this.settingsManager.updateSettings({
+        positionCalibration: {
+          ...currentSettings.positionCalibration,
+          cameraWidthInTicks: widthInTicks,
+          // Update cameraWidthPixels if provided from video capture
+          ...(cameraWidthPixels && cameraWidthPixels > 0 && { cameraWidthPixels }),
+        },
+      });
+
+      this.socketManager.emitCalibrationPointRecorded('cameraWidth', widthInTicks, true);
+      console.log(`[CALIBRATION] Camera width recorded successfully: ${widthInTicks} ticks`);
+    } catch (error) {
+      console.error('[CALIBRATION] Error recording camera width:', error);
+      this.socketManager.emitCalibrationPointRecorded('cameraWidth', 0, false);
+    }
+  }
+
+  /**
+   * Handles record jet position request from frontend.
+   * Records the encoder tick offset from camera left edge to a specific jet.
+   * The frontend sends the offset directly (encoder position at mark time,
+   * which equals offset since encoder was reset to 0 at calibration start).
+   */
+  private async handleRecordJetPosition(data: { sorter: number; offsetFromLeftEdge: number }): Promise<void> {
+    try {
+      const { sorter, offsetFromLeftEdge } = data;
 
       // Validate sorter index
       if (sorter < 0 || sorter > 3) {
         throw new Error(`Invalid sorter index: ${sorter}`);
       }
 
-      const position = this.conveyorManager.getInterpolatedPosition();
-      console.log(`[CALIBRATION] Recording jet position for sorter ${sorter}:`, position);
+      // Validate offset value - must be a non-negative number (not undefined/NaN)
+      if (typeof offsetFromLeftEdge !== 'number' || Number.isNaN(offsetFromLeftEdge) || offsetFromLeftEdge < 0) {
+        throw new Error(`Invalid offset: ${offsetFromLeftEdge} (must be a non-negative number)`);
+      }
 
-      // Update settings in Firebase
+      console.log(`[CALIBRATION] Recording jet ${sorter}: ${offsetFromLeftEdge} ticks from camera left edge`);
+
       const currentSettings = this.settingsManager.getSettings();
       if (!currentSettings) {
         throw new Error('Settings not available');
@@ -517,7 +606,7 @@ export class SystemCoordinator {
 
       // Clone the current jet offsets array and update the specific sorter
       const jetEncoderOffsets = [...currentSettings.positionCalibration.jetEncoderOffsets];
-      jetEncoderOffsets[sorter] = position;
+      jetEncoderOffsets[sorter] = offsetFromLeftEdge;
 
       await this.settingsManager.updateSettings({
         positionCalibration: {
@@ -526,8 +615,17 @@ export class SystemCoordinator {
         },
       });
 
-      this.socketManager.emitCalibrationPointRecorded('jet', position, true, sorter);
-      console.log(`[CALIBRATION] Jet position for sorter ${sorter} recorded successfully:`, position);
+      this.socketManager.emitCalibrationPointRecorded('jet', offsetFromLeftEdge, true, sorter);
+      console.log(`[CALIBRATION] Jet ${sorter} recorded successfully: ${offsetFromLeftEdge} ticks from left edge`);
+
+      // Validate that jet offset is greater than camera width (jets must be past the camera)
+      const cameraWidth = currentSettings.positionCalibration.cameraWidthInTicks;
+      if (cameraWidth > 0 && offsetFromLeftEdge <= cameraWidth) {
+        console.warn(
+          `[CALIBRATION] Warning: Jet ${sorter} offset (${offsetFromLeftEdge}) ` +
+            `is not greater than camera width (${cameraWidth}). This may cause timing issues.`,
+        );
+      }
     } catch (error) {
       console.error('[CALIBRATION] Error recording jet position:', error);
       this.socketManager.emitCalibrationPointRecorded('jet', 0, false, data.sorter);

@@ -23,8 +23,9 @@ The Arduino's main `loop()` manages three primary, non-blocking tasks: maintaini
 The encoder serves two purposes: speed measurement (RPM) and absolute position tracking.
 
 - **Position Counter:** A global `encoderPosition` variable (int32_t) tracks the absolute conveyor position in encoder counts.
-- **Interrupt Service Routine:** The ISR increments `encoderPosition` on each encoder pulse.
-- **Periodic Reporting:** The Arduino reports its current position to the server at regular intervals (configurable, typically every 5-10 ticks).
+- **Interrupt Service Routine:** The ISR increments both `pulseCount` (for RPM, reset periodically) and `encoderPosition` (persistent, never auto-reset) on each encoder pulse. Uses `CHANGE` interrupt mode to count both edges, doubling resolution.
+- **Periodic Reporting:** The Arduino reports its current position to the server every 100ms via `EP:<position>` messages (configurable via `POSITION_REPORT_INTERVAL`).
+- **Pulses Per Revolution:** Configurable via settings (default 20), sent from server on initialization.
 - **Position is the source of truth** for when actions should occur, replacing time-based scheduling.
 
 ### 2.2. Closed-Loop Conveyor Speed Control
@@ -80,9 +81,16 @@ The interaction between the backend and the Arduino firmware follows these stand
 #### Settings Command
 
 - **`s` (Settings Update):**
-  - **Format:** `s,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<MAX_RPM>,<MIN_RPM>,<PPR>`
-  - **Action:** Configures jet fire durations (ms), RPM bounds, and pulses per revolution. Resets device state.
+  - **Format:** `s,<FIRE_TIME_0>,<FIRE_TIME_1>,<FIRE_TIME_2>,<FIRE_TIME_3>,<MAX_RPM>,<MIN_RPM>,<PPR>,<KP_INT>,<KI_INT>,<KD_INT>`
+  - **Parameters:**
+    - `FIRE_TIME_0..3`: Jet fire durations in milliseconds (one per jet)
+    - `MAX_RPM`: Maximum allowed conveyor RPM
+    - `MIN_RPM`: Minimum allowed conveyor RPM
+    - `PPR`: Pulses per revolution for encoder (default 20)
+    - `KP_INT`, `KI_INT`, `KD_INT`: PID gains multiplied by 100 (e.g., Kp=0.30 → 30)
+  - **Action:** Configures jet fire durations, RPM bounds, encoder PPR, and PID tuning. Resets device state including motor, PID controller, and pending jets buffer.
   - **Response:** `Settings updated`
+  - **Note:** The last 4 parameters (PPR and PID) are optional for backward compatibility.
 
 #### Motor Control Commands
 
@@ -102,28 +110,29 @@ The interaction between the backend and the Arduino firmware follows these stand
 - **`e` (Request Encoder Position):**
 
   - **Format:** `e`
-  - **Action:** Returns current encoder position.
+  - **Action:** Returns current encoder position immediately.
   - **Response:** `EP:<position>` (e.g., `EP:12345`)
 
 - **`r` (Reset Encoder Position):**
   - **Format:** `r`
-  - **Action:** Resets encoder position to 0.
-  - **Response:** `Encoder reset`
+  - **Action:** Resets encoder position to 0 (uses `noInterrupts()` for atomic operation).
+  - **Response:** `ER:0`
 
 #### Jet Commands
 
 - **`j` (Fire Jet Immediately):**
 
   - **Format:** `j<JET_NUM>` (e.g., `j2`)
-  - **Action:** Fires the specified jet immediately (for testing/manual control).
+  - **Action:** Fires the specified jet immediately (for testing/manual control). Jet remains HIGH for the configured `JET_FIRE_TIMES[jet]` duration.
   - **Response:** `Jet fire: <JET_NUM>`
 
 - **`q` (Queue Jet at Position):**
 
   - **Format:** `q<JET_NUM>,<POSITION>` (e.g., `q2,14800`)
-  - **Action:** Queues a jet to fire when encoder position reaches the specified value.
-  - **Response:** `JQ:<JET_NUM>,<POSITION>` (e.g., `JQ:2,14800`)
-  - **Error:** `Buffer full` if pending jets buffer is at capacity.
+  - **Action:** Queues a jet to fire when encoder position reaches the specified value. The Arduino will fire the jet instantly when `encoderPosition >= position`.
+  - **Response:** `JQ:<JET_NUM>,<POSITION>` (e.g., `JQ:2,14800`) - confirms jet was queued
+  - **On Fire:** `JF:<JET_NUM>,<ACTUAL_POSITION>` - sent when jet actually fires
+  - **Error:** `Error: Jet buffer full` if pending jets buffer (16 slots) is at capacity.
 
 - **`b` (Buffer Status):**
   - **Format:** `b`
@@ -132,24 +141,28 @@ The interaction between the backend and the Arduino firmware follows these stand
 
 ### 3.3. Responses (Arduino to Backend)
 
-| Response                   | Format                     | Description                                 |
-| -------------------------- | -------------------------- | ------------------------------------------- |
-| `Ready`                    | `Ready`                    | Sent on successful boot                     |
-| `Settings updated`         | `Settings updated`         | Settings command accepted                   |
-| `Settings not initialized` | `Settings not initialized` | Command rejected, send settings first       |
-| `EP:<pos>`                 | `EP:12345`                 | Encoder position (periodic or on request)   |
-| `JF:<jet>,<pos>`           | `JF:2,14803`               | Jet fired confirmation with actual position |
-| `JQ:<jet>,<pos>`           | `JQ:2,14800`               | Jet queued confirmation                     |
-| `BS:<count>,<cap>`         | `BS:3,16`                  | Buffer status (active count, capacity)      |
-| `Error: ...`               | `Error: ...`               | For malformed commands or errors            |
+| Response                   | Format                     | Description                                                              |
+| -------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `Ready`                    | `Ready`                    | Sent on successful boot (twice: once for Ready, once for setup complete) |
+| `Settings updated`         | `Settings updated`         | Settings command accepted                                                |
+| `Settings not initialized` | `Settings not initialized` | Command rejected, send settings first                                    |
+| `EP:<pos>`                 | `EP:12345`                 | Encoder position (periodic every 100ms or on `e` request)                |
+| `ER:0`                     | `ER:0`                     | Encoder reset confirmation                                               |
+| `JF:<jet>,<pos>`           | `JF:2,14803`               | Jet fired confirmation with actual encoder position                      |
+| `JQ:<jet>,<pos>`           | `JQ:2,14800`               | Jet queued confirmation                                                  |
+| `BS:<count>,<cap>`         | `BS:3,16`                  | Buffer status (active count, capacity=16)                                |
+| `Jet fire: <jet>`          | `Jet fire: 2`              | Immediate jet fire confirmation (from `j` command)                       |
+| `Error: Jet buffer full`   | `Error: Jet buffer full`   | Pending jets buffer at capacity                                          |
+| `Error: ...`               | `Error: ...`               | For malformed commands or other errors                                   |
 
 ### 3.4. Position Reporting
 
 The Arduino periodically sends encoder position updates to the server:
 
-- **Interval:** Configurable (typically every 5-10 encoder ticks or ~100ms)
-- **Format:** `EP:<position>`
+- **Interval:** Every 100ms (defined by `POSITION_REPORT_INTERVAL`)
+- **Format:** `EP:<position>` (e.g., `EP:12345`)
 - **Purpose:** Allows server to track conveyor position for scheduling decisions
+- **Thread Safety:** Uses `noInterrupts()`/`interrupts()` around 32-bit position read since AVR doesn't have atomic 32-bit reads
 
 ## 4. Architecture Notes
 

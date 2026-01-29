@@ -8,12 +8,35 @@ import { serialPortNameEnumSchema } from './serialPort.type';
 // ============================================================================
 
 export const positionCalibrationSchema = z.object({
-  /** Encoder position at camera center (pixel 0) */
+  /**
+   * @deprecated Use cameraWidthInTicks and left-edge-based jetEncoderOffsets instead.
+   * This field recorded encoder position at camera center - the new system uses
+   * camera left edge as the zero reference point.
+   */
   cameraEncoderOffset: z.coerce.number().default(0),
   /** Encoder counts per camera pixel (typically negative since camera is upstream) */
   countsPerPixel: z.coerce.number().default(1),
-  /** Encoder position offset from detection to each jet (indexed by sorter) */
-  jetEncoderOffsets: z.array(z.coerce.number()).default([1000, 1000, 1000, 1000]),
+  /**
+   * Width of camera view in encoder ticks (from left edge to right edge).
+   * Used for pixel-to-tick translation: pixelTicks = (pixelX / cameraWidthPixels) * cameraWidthInTicks
+   * A value of 0 indicates uncalibrated.
+   */
+  cameraWidthInTicks: z.coerce.number().default(0),
+  /**
+   * Camera resolution width in pixels.
+   * Used together with cameraWidthInTicks to calculate the pixel-to-tick ratio.
+   * This should match the actual video capture width used during detection.
+   */
+  cameraWidthPixels: z.coerce.number().default(1280),
+  /**
+   * Encoder tick distance from camera LEFT EDGE to each air jet.
+   * Array indices 0-3 correspond to Jets A-D (sorters 0-3).
+   * These offsets are measured during calibration by:
+   * 1. Resetting encoder to 0 with part at camera left edge
+   * 2. Moving part to each jet and recording the encoder position
+   * Default is [0,0,0,0] to indicate uncalibrated state.
+   */
+  jetEncoderOffsets: z.array(z.coerce.number()).default([0, 0, 0, 0]),
   /** Encoder counts for part to fall from jet to sorter position */
   fallTimeInCounts: z.coerce.number().default(24),
   /** How far ahead (in encoder counts) to send jet commands to Arduino */

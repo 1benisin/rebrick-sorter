@@ -25,7 +25,8 @@ export interface SocketManagerConfig extends ComponentConfig {
   // Phase 7: Encoder calibration handlers
   onResetEncoder: () => void;
   onRecordCameraPosition: () => void;
-  onRecordJetPosition: (data: { sorter: number }) => void;
+  onRecordCameraWidth: (data: { widthInTicks: number; cameraWidthPixels?: number }) => void;
+  onRecordJetPosition: (data: { sorter: number; offsetFromLeftEdge: number }) => void;
 }
 
 export class SocketManager extends BaseComponent {
@@ -75,6 +76,7 @@ export class SocketManager extends BaseComponent {
     // Phase 7: Encoder calibration events
     this.socket.on(FrontToBackEvents.RESET_ENCODER, this.handlers.onResetEncoder);
     this.socket.on(FrontToBackEvents.RECORD_CAMERA_POSITION, this.handlers.onRecordCameraPosition);
+    this.socket.on(FrontToBackEvents.RECORD_CAMERA_WIDTH, this.handlers.onRecordCameraWidth);
     this.socket.on(FrontToBackEvents.RECORD_JET_POSITION, this.handlers.onRecordJetPosition);
 
     this.socket.on('disconnect', () => {
@@ -208,7 +210,7 @@ export class SocketManager extends BaseComponent {
    * Emits when a calibration point has been recorded.
    */
   public emitCalibrationPointRecorded(
-    type: 'camera' | 'jet',
+    type: 'camera' | 'cameraWidth' | 'jet',
     position: number,
     success: boolean,
     sorter?: number,

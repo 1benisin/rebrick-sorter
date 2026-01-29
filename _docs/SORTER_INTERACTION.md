@@ -50,14 +50,16 @@ Before accurate movement, the sorter must establish a known zero position via th
 - **Trigger:** `a` command from backend
 - **States (`HomingState`):**
 
-  1. `HOMING_START`: Initiates sequence
-  2. `HOMING_Y_BACKWARD`: Y-axis moves until endstop triggered
-  3. `HOMING_X_BACKWARD`: X-axis moves until endstop triggered
-  4. After endstop hit, backs off by `HOMING_BACKOFF_STEPS`, zeros position
-  5. `HOMING_WAIT_FOR_OFFSET`: Moves to configured `X_OFFSET` and `Y_OFFSET`
-  6. `HOMING_COMPLETE`: Ready for normal operation
+  1. `HOMING_START`: Initiates sequence, begins Y-axis homing
+  2. `HOMING_Y_BACKWARD`: Y-axis runs backward at `HOMING_SPEED` until Y endstop (`Y_STOP_PIN`) is triggered (reads LOW with debounce). On trigger: stops motor, backs off by `HOMING_BACKOFF_STEPS` (100 steps), zeros Y position, then starts X-axis homing.
+  3. `HOMING_X_BACKWARD`: X-axis runs backward at `HOMING_SPEED` until X endstop (`X_STOP_PIN`) is triggered. On trigger: stops motor, backs off, zeros X position.
+  4. `HOMING_WAIT_FOR_OFFSET`: Both axes move to configured offsets (`X_OFFSET`, `Y_OFFSET`) at normal `SPEED`. This positions the sorter at bin 1.
+  5. `HOMING_COMPLETE`: Ready for normal operation. Resets `curBin` to 0 (will be updated on first move). Transitions to `NOT_HOMING`.
+  6. `HOMING_ERROR`: Entered on timeout. Motors stopped. Only `a` command accepted to retry.
 
-- **Safety:** 30-second timeout per axis. Timeout triggers `HOMING_ERROR` state.
+- **Safety:** 30-second timeout (`HOMING_TIMEOUT_MS`) per axis. Timeout triggers `HOMING_ERROR` state with error message.
+- **Debouncing:** Endstop checks use a 5ms delay for debounce.
+- **Commands During Homing:** All commands except `a` (retry) are rejected with `"Busy: Homing in progress."`
 
 ### 3.3. Move Complete Detection
 
@@ -81,14 +83,24 @@ The Arduino monitors stepper motor completion and sends `MC: <bin>` when the mov
 - **`s` (Settings Update):**
 
   - **Format:** `s,<GRID_DIMENSION>,<X_OFFSET>,<Y_OFFSET>,<X_STEPS_TO_LAST>,<Y_STEPS_TO_LAST>,<ACCELERATION>,<HOMING_SPEED>,<SPEED>,<ROW_MAJOR_ORDER>`
-  - **Action:** Configures grid parameters, calculates `stepsPerBin`
+  - **Parameters:**
+    - `GRID_DIMENSION`: Size of bin grid (e.g., 12 for 12×12 = 144 bins)
+    - `X_OFFSET`, `Y_OFFSET`: Steps from home position to first bin center
+    - `X_STEPS_TO_LAST`, `Y_STEPS_TO_LAST`: Steps from first bin to last bin on each axis
+    - `ACCELERATION`: Stepper acceleration in steps/s²
+    - `HOMING_SPEED`: Speed for homing movements (µs/step, higher = slower)
+    - `SPEED`: Normal move speed (µs/step, higher = slower)
+    - `ROW_MAJOR_ORDER`: 1 for row-major (rows first), 0 for column-major
+  - **Action:** Configures grid parameters, calculates `xStepsPerBin` and `yStepsPerBin`, updates stepper acceleration/speed, resets all state (homing, movement), stops any ongoing movement, activates stepper drivers with a 1-step move.
   - **Response:** `Settings updated`
+  - **Note:** Requires re-homing after settings change since position reference may have changed.
 
 - **`m` (Move to Bin):**
 
-  - **Format:** `m<BIN>` (e.g., `<m045>`) - zero-padded 3-digit bin
-  - **Action:** Non-blocking move to specified bin
-  - **Response:** `MC: <BIN>` when move completes
+  - **Format:** `m<BIN>` (e.g., `<m045>`) - **3-digit zero-padded** bin number (001-144 for 12x12 grid)
+  - **Action:** Non-blocking move to specified bin. Arduino parses exactly 3 characters after 'm'. Bin number is clamped to valid range (1 to `GRID_DIMENSION²`).
+  - **Response:** `MC: <BIN>` when move completes (e.g., `MC: 45`)
+  - **Note:** If already at the target bin, `MC: <BIN>` is sent immediately without movement
 
 - **`h` (Move to Home/Center):**
 
