@@ -59,6 +59,16 @@ The key services are:
   5. Emits `SORT_PART` event via SocketService with `initialTime` and `initialPosition`
 - **`SortProcessControllerService`** (in `SorterService.ts`): The central orchestrator. It runs the main processing loop (~500ms interval) coordinating detection, tracking, and classification. Manages `DetectionPairGroup` tracking to follow parts across frames.
 
+### 4.3. Calibration Components
+
+- **`JetCalibrationPanel`** (`components/buttons/JetCalibrationPanel.tsx`): Interactive calibration workflow for measuring encoder distances. Provides:
+  - Start/Stop calibration buttons (encoder reset to 0 on start)
+  - Mark Camera Width button (measures left edge to right edge in encoder ticks)
+  - Mark Jet A/B/C/D buttons (measures distance from camera left edge to each air jet)
+  - Live encoder position display during calibration
+  - Validation warnings (e.g., jet offset should be greater than camera width)
+  - Confirmation display showing recorded values
+
 ### 4.2. Global State Management with Zustand
 
 For global state that needs to be accessed by multiple components and services, the application uses Zustand. It is lightweight and avoids the need for wrapping the entire app in context providers.
@@ -92,6 +102,10 @@ The frontend communicates with several other systems, each with a distinct proto
     - `initialTime`: Timestamp when part was detected
     - `bin`: Target bin number
     - `sorter`: Which sorter (0-3)
+  - **Calibration Events (Client -> Server):**
+    - `RESET_ENCODER`: Resets encoder position to 0 (start of calibration)
+    - `RECORD_CAMERA_WIDTH`: Records camera width in ticks (`{ widthInTicks, cameraWidthPixels? }`)
+    - `RECORD_JET_POSITION`: Records jet offset from camera left edge (`{ sorter, offsetFromLeftEdge }`)
   - **Server -> Client:** The backend streams status updates:
     - `ENCODER_POSITION_UPDATE`: Current conveyor encoder position with velocity (`{ position, timestamp, velocity }`)
     - `BUFFER_STATUS_UPDATE`: Arduino's pending jets buffer status (`{ count, capacity }`)
@@ -103,6 +117,8 @@ The frontend communicates with several other systems, each with a distinct proto
     - `CONVEYOR_SPEED_UPDATE`: Current conveyor speed
     - `LIST_SERIAL_PORTS_SUCCESS`: Available serial ports list
     - `COMPONENT_STATUS_UPDATE`: Individual component status changes
+    - `ENCODER_RESET_COMPLETE`: Confirmation when encoder reset completes (`{ success, position }`)
+    - `CALIBRATION_POINT_RECORDED`: Confirmation when calibration point is saved (`{ type, position, sorter?, success }`)
 
 ### 5.2. Frontend <-> Firebase
 

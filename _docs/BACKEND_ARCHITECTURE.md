@@ -193,14 +193,20 @@ Once complete, the server listens for HTTP and WebSocket connections.
 
 ### 5.2. Position Translation
 
-1. Get current encoder position from `ConveyorManager`
-2. Calculate time elapsed since detection
-3. Interpolate encoder position at detection time
-4. Apply pixel-to-encoder calibration:
+The `PositionTranslator` class handles pixel-to-encoder conversion using the calibrated camera width and jet offsets:
+
+1. Get encoder position at detection time by interpolating backwards from current position
+2. Convert pixel position to ticks from camera left edge:
    ```typescript
-   detectionEncoderPos = interpolatedPos + pixelPosition * countsPerPixel;
-   jetPosition = detectionEncoderPos + cameraToJetOffset[sorter];
+   partTicksFromLeftEdge = (pixelX / cameraWidthPixels) * cameraWidthInTicks;
    ```
+3. Calculate remaining distance to jet (from left-edge-based calibration):
+   ```typescript
+   remainingTicks = jetEncoderOffsets[sorter] - partTicksFromLeftEdge;
+   jetPosition = encoderAtDetection + remainingTicks;
+   ```
+
+This approach works correctly regardless of where in the camera frame the part is detected, as long as the camera width and jet offsets are calibrated.
 
 ### 5.3. Sorter Availability Check
 
@@ -396,9 +402,11 @@ interface Settings {
 
   // Position calibration (encoder-based scheduling)
   positionCalibration: {
-    cameraEncoderOffset: number; // Encoder position at camera center
-    countsPerPixel: number; // Encoder counts per camera pixel
-    jetEncoderOffsets: number[]; // Per-sorter jet position offsets
+    cameraEncoderOffset: number; // @deprecated - use cameraWidthInTicks instead
+    countsPerPixel: number; // @deprecated - replaced by cameraWidthInTicks/cameraWidthPixels ratio
+    cameraWidthInTicks: number; // Width of camera view in encoder ticks (left edge to right edge)
+    cameraWidthPixels: number; // Camera resolution width in pixels (default 1280)
+    jetEncoderOffsets: number[]; // Encoder tick distance from camera LEFT EDGE to each jet
     fallTimeInCounts: number; // Time for part to fall from jet to sorter
     jetLeadCounts: number; // How far ahead to send jet commands
   };

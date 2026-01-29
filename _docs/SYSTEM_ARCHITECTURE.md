@@ -188,8 +188,9 @@ The system uses **encoder position** as the source of truth for part location. T
 1. **Detection:** Frontend detects part at pixel position, sends `SORT_PART` to server with timestamp.
 2. **Translation:** `PositionTranslator` converts pixel position to encoder position using calibration data:
    - Interpolates encoder position at detection time based on current position and velocity
-   - Applies `cameraEncoderOffset` and `countsPerPixel` calibration values
-3. **Jet Position:** `jetPosition = detectionEncoderPos + jetEncoderOffsets[sorter]`
+   - Converts pixel position to ticks: `partTicksFromLeftEdge = (pixelX / cameraWidthPixels) * cameraWidthInTicks`
+   - Calculates remaining distance to jet: `remainingTicks = jetEncoderOffsets[sorter] - partTicksFromLeftEdge`
+3. **Jet Position:** `jetPosition = encoderAtDetection + remainingTicks`
 4. **Required-By Position:** `requiredByPosition = jetPosition - fallTimeInCounts` (sorter must arrive before this)
 5. **Sorter Availability Check:** `SorterStateManager.canSorterReachBin()` determines:
    - When the sorter will be free (after current + scheduled moves)
@@ -207,13 +208,17 @@ Stored in `settings.positionCalibration`:
 
 ```typescript
 {
-  cameraEncoderOffset: number;   // Encoder position at camera detection point
-  countsPerPixel: number;        // Encoder counts per camera pixel (may be negative)
-  jetEncoderOffsets: number[];   // Per-sorter offset from detection to jet position
+  cameraEncoderOffset: number;   // @deprecated - use cameraWidthInTicks instead
+  countsPerPixel: number;        // @deprecated - replaced by cameraWidthInTicks/cameraWidthPixels ratio
+  cameraWidthInTicks: number;    // Width of camera view in encoder ticks (left edge to right edge)
+  cameraWidthPixels: number;     // Camera resolution width in pixels (default 1280)
+  jetEncoderOffsets: number[];   // Encoder tick distance from camera LEFT EDGE to each jet (indices 0-3 = Jets A-D)
   fallTimeInCounts: number;      // Encoder counts for part to fall from jet to sorter
   jetLeadCounts: number;         // How far ahead to send jet commands to Arduino (default 100)
 }
 ```
+
+**Calibration workflow:** The new jet calibration panel resets the encoder to 0 at the camera left edge, then measures distances to the camera right edge (for `cameraWidthInTicks`) and to each air jet (for `jetEncoderOffsets`).
 
 ### 6.3. Sorter Availability
 
