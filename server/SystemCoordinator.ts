@@ -160,6 +160,10 @@ export class SystemCoordinator {
    * Uses position triggers instead of setTimeout for jet firing and sorter moves.
    */
   private handleEncoderSortPart(data: SortPartDto): void {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SystemCoordinator.ts:handleEncoderSortPart',message:'Received sort part request',data:{partId:data.partId,initialPosition:data.initialPosition,initialTime:data.initialTime,sorter:data.sorter,bin:data.bin,currentEncoderPos:this.conveyorManager.getCurrentEncoderPosition()},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+
     // Build encoder part (returns null if sorter unavailable)
     const encoderPart = this.buildEncoderPart(data);
 

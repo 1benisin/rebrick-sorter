@@ -809,20 +809,97 @@ export class ConveyorManager extends BaseComponent {
   private processPositionActions(currentPosition: number): void {
     // Only process if encoder scheduling is enabled
     const settings = this.settingsManager.getSettings();
+    // #region agent log
     if (!settings?.useEncoderScheduling) {
+      // Log only occasionally to avoid spam (every 5 seconds)
+      if (!this._lastEncoderSkipLog || Date.now() - this._lastEncoderSkipLog > 5000) {
+        this._lastEncoderSkipLog = Date.now();
+        fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: 'ConveyorManager.ts:processPositionActions',
+            message: 'Encoder scheduling disabled',
+            data: { useEncoderScheduling: settings?.useEncoderScheduling, hasSettings: !!settings },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            hypothesisId: 'A',
+          }),
+        }).catch(() => {});
+      }
       return;
     }
+    // #endregion
 
     // Don't process actions if encoder data is stale
     if (this.isEncoderDataStale()) {
       console.warn('[ENCODER_ACTION] Skipping action processing - encoder data is stale');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'ConveyorManager.ts:processPositionActions',
+          message: 'Encoder data stale',
+          data: { currentPosition, lastUpdateTime: this.lastEncoderUpdateTime, now: Date.now() },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'B',
+        }),
+      }).catch(() => {});
+      // #endregion
       return;
     }
 
     const { jetsToQueue, movesToSend } = this.getActionableParts(currentPosition);
 
+    // #region agent log
+    if (this.encoderPartQueue.length > 0) {
+      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'ConveyorManager.ts:processPositionActions',
+          message: 'Checking actionable parts',
+          data: {
+            currentPosition,
+            queueLength: this.encoderPartQueue.length,
+            jetsToQueueCount: jetsToQueue.length,
+            movesToSendCount: movesToSend.length,
+            firstPart: this.encoderPartQueue[0]
+              ? {
+                  partId: this.encoderPartQueue[0].partId,
+                  jetPosition: this.encoderPartQueue[0].jetPosition,
+                  jetCommandSent: this.encoderPartQueue[0].jetCommandSent,
+                  jet: this.encoderPartQueue[0].jet,
+                  threshold: this.encoderPartQueue[0].jetPosition - this.JET_LEAD_COUNTS,
+                }
+              : null,
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'C',
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
+
     // Send jet queue commands to Arduino
     for (const part of jetsToQueue) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'ConveyorManager.ts:processPositionActions',
+          message: 'About to queue jet fire',
+          data: { partId: part.partId, jet: part.jet, jetPosition: part.jetPosition, currentPosition },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'D',
+        }),
+      }).catch(() => {});
+      // #endregion
       this.queueJetFire(part);
       part.jetCommandSent = true;
     }
@@ -834,6 +911,7 @@ export class ConveyorManager extends BaseComponent {
       part.status = 'moving';
     }
   }
+  private _lastEncoderSkipLog?: number;
 
   /**
    * Queues a jet fire command with the Arduino.
@@ -843,6 +921,26 @@ export class ConveyorManager extends BaseComponent {
   private queueJetFire(part: EncoderPart): void {
     // Send queue jet command: q<jet>,<position>
     const command = `q${part.jet},${part.jetPosition}`;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'ConveyorManager.ts:queueJetFire',
+        message: 'Sending jet queue command to Arduino',
+        data: {
+          command,
+          partId: part.partId,
+          jet: part.jet,
+          jetPosition: part.jetPosition,
+          currentEncoderPos: this.currentEncoderPosition,
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        hypothesisId: 'D',
+      }),
+    }).catch(() => {});
+    // #endregion
     this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, command);
     console.log(`[JET_QUEUE] Queued jet ${part.jet} at position ${part.jetPosition} for part ${part.partId}`);
   }
