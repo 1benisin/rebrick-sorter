@@ -1,4 +1,4 @@
-// components/buttons/EncoderCalibrationButton.tsx
+// components/buttons/EncoderDiagnosticsButton.tsx
 
 'use client';
 
@@ -19,21 +19,22 @@ const RESULT_DISPLAY_MS = 3000;
 /** Sorter labels for display */
 const SORTER_LABELS = ['A', 'B', 'C', 'D'];
 
-/** Loading state type for tracking which operation is in progress */
-type LoadingState = 'reset' | 'camera' | `jet-${number}` | null;
-
 /** Result state with success/error status */
 interface ResultState {
   message: string;
   isError: boolean;
 }
 
-const EncoderCalibrationButton = () => {
+/**
+ * EncoderDiagnosticsButton provides encoder diagnostics and reset functionality.
+ * For calibrating jet positions, use JetCalibrationPanel instead.
+ */
+const EncoderDiagnosticsButton = () => {
   const { socket } = useSocket();
   const { settings } = useSettings();
   const [isOpen, setIsOpen] = useState(false);
   const [lastResult, setLastResult] = useState<ResultState | null>(null);
-  const [loadingState, setLoadingState] = useState<LoadingState>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Ref to track timeout for cleanup
   const resultTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -74,7 +75,7 @@ const EncoderCalibrationButton = () => {
     }
 
     setLastResult({ message, isError });
-    setLoadingState(null);
+    setIsResetting(false);
 
     // Set new timeout to clear result
     resultTimeoutRef.current = setTimeout(() => {
@@ -92,7 +93,7 @@ const EncoderCalibrationButton = () => {
     };
   }, []);
 
-  // Listen for calibration response events
+  // Listen for encoder reset response
   useEffect(() => {
     if (!socket) return;
 
@@ -104,57 +105,27 @@ const EncoderCalibrationButton = () => {
       }
     };
 
-    const handleCalibrationPointRecorded = (data: EventPayloads[BackToFrontEvents.CALIBRATION_POINT_RECORDED]) => {
-      if (data.success) {
-        if (data.type === 'camera') {
-          setResultWithTimeout(`Camera position recorded: ${data.position}`, false);
-        } else {
-          setResultWithTimeout(`Jet ${SORTER_LABELS[data.sorter ?? 0]} position recorded: ${data.position}`, false);
-        }
-      } else {
-        setResultWithTimeout(`Failed to record ${data.type} position`, true);
-      }
-    };
-
     socket.on(BackToFrontEvents.ENCODER_RESET_COMPLETE, handleEncoderResetComplete);
-    socket.on(BackToFrontEvents.CALIBRATION_POINT_RECORDED, handleCalibrationPointRecorded);
 
     return () => {
       socket.off(BackToFrontEvents.ENCODER_RESET_COMPLETE, handleEncoderResetComplete);
-      socket.off(BackToFrontEvents.CALIBRATION_POINT_RECORDED, handleCalibrationPointRecorded);
     };
   }, [socket, setResultWithTimeout]);
 
   const handleResetEncoder = () => {
-    if (!socket || loadingState) return;
-    setLoadingState('reset');
+    if (!socket || isResetting) return;
+    setIsResetting(true);
     socket.emit(AllEvents.RESET_ENCODER);
-  };
-
-  const handleRecordCameraPosition = () => {
-    if (!socket || loadingState) return;
-    setLoadingState('camera');
-    socket.emit(AllEvents.RECORD_CAMERA_POSITION);
-  };
-
-  const handleRecordJetPosition = (sorter: number) => {
-    if (!socket || loadingState) return;
-    setLoadingState(`jet-${sorter}`);
-    socket.emit(AllEvents.RECORD_JET_POSITION, { sorter });
   };
 
   // Get current calibration values from settings
   const positionCalibration = settings?.positionCalibration;
 
-  // Helper to check if a specific button is loading
-  const isButtonLoading = (state: LoadingState) => loadingState === state;
-  const isAnyLoading = loadingState !== null;
-
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
-          Encoder Calibration
+          Encoder Diagnostics
           <span className="text-xs text-gray-500">{isOpen ? '▲' : '▼'}</span>
         </Button>
       </CollapsibleTrigger>
@@ -177,13 +148,8 @@ const EncoderCalibrationButton = () => {
         )}
 
         {/* Reset Encoder Button */}
-        <Button
-          onClick={handleResetEncoder}
-          variant="destructive"
-          className="w-full"
-          disabled={!socket || isAnyLoading}
-        >
-          {isButtonLoading('reset') ? (
+        <Button onClick={handleResetEncoder} variant="destructive" className="w-full" disabled={!socket || isResetting}>
+          {isResetting ? (
             <span className="flex items-center gap-2">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               Resetting...
@@ -193,67 +159,34 @@ const EncoderCalibrationButton = () => {
           )}
         </Button>
 
-        {/* Camera Position Calibration */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">Camera Offset:</span>
-            <span className="font-mono text-xs">{positionCalibration?.cameraEncoderOffset ?? 0}</span>
-          </div>
-          <Button
-            onClick={handleRecordCameraPosition}
-            className="w-full bg-blue-500 hover:bg-blue-600"
-            disabled={!socket || isAnyLoading}
-          >
-            {isButtonLoading('camera') ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Recording...
-              </span>
-            ) : (
-              'Mark Camera Position'
-            )}
-          </Button>
-        </div>
+        {/* Calibration Values Display (Read-only) */}
+        <div className="space-y-2 border-t pt-2">
+          <span className="text-xs font-medium text-gray-500">Current Calibration Values:</span>
 
-        {/* Jet Position Calibration */}
-        <div className="space-y-2">
-          <span className="text-sm font-medium text-gray-600">Jet Positions:</span>
-          <div className="grid grid-cols-2 gap-2">
+          {/* Camera calibration */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Camera Width:</span>
+              <span className="font-mono">{positionCalibration?.cameraWidthInTicks ?? 0} ticks</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Camera Pixels:</span>
+              <span className="font-mono">{positionCalibration?.cameraWidthPixels ?? 1280}</span>
+            </div>
+          </div>
+
+          {/* Jet offsets */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
             {SORTER_LABELS.map((label, index) => (
-              <div key={index} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Jet {label}:</span>
-                  <span className="font-mono">{positionCalibration?.jetEncoderOffsets?.[index] ?? 0}</span>
-                </div>
-                <Button
-                  onClick={() => handleRecordJetPosition(index)}
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  disabled={!socket || isAnyLoading}
-                >
-                  {isButtonLoading(`jet-${index}`) ? (
-                    <span className="flex items-center gap-2">
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-600 border-t-transparent" />
-                      ...
-                    </span>
-                  ) : (
-                    `Mark Jet ${label}`
-                  )}
-                </Button>
+              <div key={index} className="flex justify-between">
+                <span className="text-gray-500">Jet {label}:</span>
+                <span className="font-mono">{positionCalibration?.jetEncoderOffsets?.[index] ?? 0}</span>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Additional Calibration Values Display */}
-        <div className="space-y-1 border-t pt-2">
-          <span className="text-xs font-medium text-gray-500">Other Calibration Values:</span>
+          {/* Other calibration values */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Counts/Pixel:</span>
-              <span className="font-mono">{positionCalibration?.countsPerPixel ?? 1}</span>
-            </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Fall Time:</span>
               <span className="font-mono">{positionCalibration?.fallTimeInCounts ?? 24}</span>
@@ -269,4 +202,4 @@ const EncoderCalibrationButton = () => {
   );
 };
 
-export default EncoderCalibrationButton;
+export default EncoderDiagnosticsButton;

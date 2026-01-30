@@ -8,9 +8,8 @@ import StatusIndicator from '@/components/StatusIndicator';
 import ConveyorButton from '@/components/buttons/ConveyorButton';
 import HomeSorterButton from '@/components/buttons/HomeSorterButton';
 import { sortProcessStore } from '@/stores/sortProcessStore';
-import SorterPositionDisplay from '@/components/SorterPositionDisplay';
 import EncoderStatusDisplay from '@/components/EncoderStatusDisplay';
-import EncoderCalibrationButton from '@/components/buttons/EncoderCalibrationButton';
+import JetCalibrationPanel from '@/components/buttons/JetCalibrationPanel';
 
 const SortPage = () => {
   const ppmCount = sortProcessStore((state) => state.ppmCount);
@@ -18,21 +17,24 @@ const SortPage = () => {
     <div>
       {/* <StatusIndicator /> */}
       <div className="grid grid-cols-6">
-        <div className="flex flex-col">
+        {/* Left column - controls only */}
+        <div className="flex flex-col gap-2">
           <SorterControllerButton />
           <ConveyorButton />
           <HomeSorterButton />
-          <SorterPositionDisplay />
-          <EncoderStatusDisplay />
-          <EncoderCalibrationButton />
           <div>{`${ppmCount} PPM (last 10min)`}</div>
         </div>
+
+        {/* Center - dual video */}
         <div className="col-span-3 w-full">
           <DualVideo />
         </div>
 
-        <div className="col-span-2 grid-cols-1 gap-1" id="video-capture-container">
-          {/* I want to inject detection images here */}
+        {/* Right column - encoder display above video capture */}
+        <div className="col-span-2 flex flex-col gap-2">
+          <EncoderStatusDisplay />
+          <JetCalibrationPanel />
+          <div id="video-capture-container">{/* Detection images injected here */}</div>
         </div>
       </div>
       <div className="w-full">

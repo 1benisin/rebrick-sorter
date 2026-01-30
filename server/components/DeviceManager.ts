@@ -125,7 +125,7 @@ export class DeviceManager extends BaseComponent {
       console.log('Stopped periodic port scanning.');
     }
 
-    for (const [deviceName, deviceInfo] of this.devices) {
+    for (const [deviceName, deviceInfo] of Array.from(this.devices)) {
       try {
         await new Promise<void>((resolve, reject) => {
           deviceInfo.device.close((err: Error | null) => {

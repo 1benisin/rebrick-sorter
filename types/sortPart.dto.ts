@@ -25,6 +25,13 @@ export const sortPartSchema = z.object({
    */
   initialPosition: z.number(),
 
+  /**
+   * Camera width in pixels at the time of detection (optional).
+   * Used to verify consistency with calibration settings.
+   * If provided and differs from calibration, a warning will be logged.
+   */
+  cameraWidthPixels: z.number().optional(),
+
   /** Destination bin number determined by classifier */
   bin: z.number(),
 

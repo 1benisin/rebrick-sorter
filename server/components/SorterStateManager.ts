@@ -174,13 +174,13 @@ export class SorterStateManager extends BaseComponent {
     this.settingsManager.unregisterSettingsUpdateCallback(this.boundReinitialize);
 
     // Unregister all sorter data callbacks
-    for (const [deviceName, callback] of this.boundHandleSorterData) {
+    for (const [deviceName, callback] of Array.from(this.boundHandleSorterData)) {
       this.deviceManager.unregisterDeviceDataCallback(deviceName);
     }
     this.boundHandleSorterData.clear();
 
     // Unregister all sorter reconnect callbacks
-    for (const [deviceName, callback] of this.boundHandleReconnect) {
+    for (const [deviceName, callback] of Array.from(this.boundHandleReconnect)) {
       this.deviceManager.unregisterDeviceReconnectCallback(deviceName);
     }
     this.boundHandleReconnect.clear();
@@ -613,7 +613,7 @@ export class SorterStateManager extends BaseComponent {
    * Clears all scheduled moves for all sorters.
    */
   public clearAllScheduledMoves(): void {
-    for (const [sorterNum] of this.sorterStates) {
+    for (const [sorterNum] of Array.from(this.sorterStates)) {
       this.clearScheduledMoves(sorterNum);
     }
   }
