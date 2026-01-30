@@ -422,6 +422,11 @@ export class DeviceManager extends BaseComponent {
       console.error(`\x1b[33mNo device info found for port ${deviceName}\x1b[0m`);
       return;
     }
+    // Skip logging frequent encoder position reports
+    if (!data.startsWith('EP:')) {
+      console.log(`\x1b[35m[RX <- ${deviceName}]\x1b[0m Received data: ${data}`);
+    }
+
     // Handle handshake/acknowledgment protocol
     if (data.trim() === 'Ready') {
       if (!this.awaitingSettingsAck.get(deviceName)) {

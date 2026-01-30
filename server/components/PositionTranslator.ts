@@ -84,6 +84,10 @@ export class PositionTranslator {
     // Add cameraEncoderOffset to account for camera position relative to encoder zero
     const encoderPosition = positionAtDetection + pixelX * calibration.countsPerPixel + calibration.cameraEncoderOffset;
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PositionTranslator.ts:pixelToEncoderPosition',message:'Detection position calculation',data:{pixelX,detectionTime,snapshotPosition:snapshot.position,snapshotTimestamp:snapshot.timestamp,snapshotVelocity:snapshot.velocity,timeSinceDetection,positionAtDetection,cameraEncoderOffset:calibration.cameraEncoderOffset,countsPerPixel:calibration.countsPerPixel,finalEncoderPosition:Math.round(encoderPosition)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+
     return Math.round(encoderPosition);
   }
 
@@ -155,6 +159,10 @@ export class PositionTranslator {
 
     // Get the jet offset for this sorter (default to first offset if out of range)
     const jetOffset = calibration.jetEncoderOffsets[sorter] ?? calibration.jetEncoderOffsets[0] ?? 1000;
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PositionTranslator.ts:calculateJetPosition',message:'Jet position calculation',data:{detectionEncoderPos,sorter,jetOffset,allJetOffsets:calibration.jetEncoderOffsets,resultJetPosition:detectionEncoderPos+jetOffset},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
 
     return detectionEncoderPos + jetOffset;
   }
