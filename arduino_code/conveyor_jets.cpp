@@ -33,10 +33,15 @@ PID conveyorPid(&pidInput, &pidOutput, &pidSetpoint, pidKp, pidKi, pidKd, DIRECT
 int pulsesPerRevolution = 20; // Default pulses per revolution for the encoder wheel
 
 volatile long pulseCount = 0; // Incremented by encoder interrupt
+volatile int32_t encoderPosition = 0; // Persistent position counter (never auto-resets)
 int currentRPM = 0;           // Calculated current RPM
 static float filteredRPM = 0.0; // Smoothed RPM value
 unsigned long lastSpeedUpdateTime = 0;
 #define SPEED_UPDATE_INTERVAL 300 // PID and speed update interval in ms (balanced response)
+
+// --- Position Reporting Configuration ---
+#define POSITION_REPORT_INTERVAL 100  // Report position every 100ms
+unsigned long lastPositionReportTime = 0;
 
 // --- Conveyor Motor Speed Variables ---
 int maxConveyorRPM = 60;      // Maximum allowed RPM (from settings)
@@ -55,6 +60,16 @@ const int PWM_SLEW_STEP = 3;      // Allow faster PWM changes for responsiveness
 
 // --- Controller State ---
 static int lastCommandedPWM = 0;       // Last PWM actually written
+
+// --- Pending Jets Buffer for Position-Triggered Firing ---
+struct PendingJet {
+  uint32_t position;  // Fire when encoder >= this
+  uint8_t jet;        // Which jet (0-3)
+  bool active;        // Is this slot in use
+};
+
+#define PENDING_JETS_CAPACITY 16
+PendingJet pendingJets[PENDING_JETS_CAPACITY];
 
 // --- Function Prototypes ---
 void countPulse();
@@ -81,6 +96,11 @@ void setup()
   conveyorPid.SetOutputLimits(CONV_MIN_PWM, CONV_MAX_PWM);
   conveyorPid.SetSampleTime(SPEED_UPDATE_INTERVAL);
   conveyorPid.SetMode(AUTOMATIC);
+
+  // Initialize pending jets buffer
+  for (int i = 0; i < PENDING_JETS_CAPACITY; i++) {
+    pendingJets[i].active = false;
+  }
 
   // Auto-enable settings to allow on/off and speed commands without explicit settings
   settingsInitialized = true;
@@ -254,6 +274,60 @@ void processMessage(char *message) {
       break;
     }
 
+    case 'e': { // Request encoder position
+      Serial.print("EP:");
+      Serial.println(getEncoderPosition());
+      break;
+    }
+
+    case 'r': { // Reset encoder position
+      noInterrupts();
+      encoderPosition = 0;
+      interrupts();
+      Serial.println("ER:0");
+      break;
+    }
+
+    case 'q': { // Queue jet at position: q<jet>,<position>
+      // Parse: "q2,14800" -> jet=2, position=14800
+      int jet = message[1] - '0';
+      if (jet < 0 || jet > 3) {
+        Serial.println("Error: Invalid jet number");
+        break;
+      }
+      
+      // Find comma and parse position
+      char* commaPos = strchr(message + 2, ',');
+      if (commaPos == NULL) {
+        Serial.println("Error: Invalid queue format");
+        break;
+      }
+      
+      uint32_t position = strtoul(commaPos + 1, NULL, 10);
+      
+      if (addPendingJet(jet, position)) {
+        Serial.print("JQ:");
+        Serial.print(jet);
+        Serial.print(",");
+        Serial.println(position);
+      } else {
+        Serial.println("Error: Jet buffer full");
+      }
+      break;
+    }
+
+    case 'b': { // Buffer status
+      int activeCount = 0;
+      for (int i = 0; i < PENDING_JETS_CAPACITY; i++) {
+        if (pendingJets[i].active) activeCount++;
+      }
+      Serial.print("BS:");
+      Serial.print(activeCount);
+      Serial.print(",");
+      Serial.println(PENDING_JETS_CAPACITY);
+      break;
+    }
+
     default: {
       Serial.println("no matching serial communication");
       break;
@@ -358,6 +432,8 @@ void loop() {
     Serial.print(targetRPM);
     Serial.print(", currentRPM: ");
     Serial.print(currentRPM);
+    Serial.print(", encoderPos: ");
+    Serial.print(getEncoderPosition());
     Serial.print(", error: ");
     Serial.print(targetRPM - currentRPM);
     Serial.print(", pwmValue: ");
@@ -365,6 +441,16 @@ void loop() {
     Serial.print(", pidOut: ");
     Serial.println((int)pidOutput);
   }
+
+  // --- Periodic Position Reporting ---
+  if (now - lastPositionReportTime >= POSITION_REPORT_INTERVAL) {
+    lastPositionReportTime = now;
+    Serial.print("EP:");
+    Serial.println(getEncoderPosition());
+  }
+
+  // --- Process Pending Jets ---
+  processPendingJets();
 
   // Check if any jets need to be turned off
   for(int i = 0; i < 4; i++) {
@@ -377,7 +463,16 @@ void loop() {
 
 // --- Interrupt Service Routine for Encoder ---
 void countPulse() {
-  pulseCount++;
+  pulseCount++;       // For RPM calculation (reset periodically)
+  encoderPosition++;  // Persistent position (never auto-reset)
+}
+
+// Thread-safe read of encoder position (32-bit reads are not atomic on AVR)
+int32_t getEncoderPosition() {
+  noInterrupts();
+  int32_t pos = encoderPosition;
+  interrupts();
+  return pos;
 }
 
 int getJetPin(int jetNumber) {
@@ -390,4 +485,47 @@ int getJetPin(int jetNumber) {
   }
 }
 
-// No longer using custom step controller
+// Add a jet to the pending buffer. Returns true on success, false if buffer full.
+bool addPendingJet(uint8_t jet, uint32_t position) {
+  for (int i = 0; i < PENDING_JETS_CAPACITY; i++) {
+    if (!pendingJets[i].active) {
+      pendingJets[i].jet = jet;
+      pendingJets[i].position = position;
+      pendingJets[i].active = true;
+      return true;
+    }
+  }
+  return false;  // Buffer full
+}
+
+// Check pending jets and fire any that have reached their position
+void processPendingJets() {
+  int32_t currentPos = getEncoderPosition();
+  for (int i = 0; i < PENDING_JETS_CAPACITY; i++) {
+    if (pendingJets[i].active && currentPos >= (int32_t)pendingJets[i].position) {
+      uint8_t jet = pendingJets[i].jet;
+      if (jet < 4) {
+        // Only fire if jet is not already active
+        if (!jetActive[jet]) {
+          int jetPin = getJetPin(jet);
+          digitalWrite(jetPin, HIGH);
+          jetActive[jet] = true;
+          jetEndTime[jet] = millis() + JET_FIRE_TIMES[jet];
+
+          // Send confirmation with actual position
+          Serial.print("JF:");
+          Serial.print(jet);
+          Serial.print(",");
+          Serial.println(currentPos);
+        } else {
+          // Jet already active - log but don't overwrite timing
+          Serial.print("JF:"); // Still confirm firing happened
+          Serial.print(jet);
+          Serial.print(",");
+          Serial.println(currentPos);
+        }
+      }
+      pendingJets[i].active = false;
+    }
+  }
+}

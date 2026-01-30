@@ -59,6 +59,35 @@ class SocketService implements Service {
     this.socket.on(AllEvents.PART_SORTED, () => {
       sortProcessStore.getState().handlePartSorted();
     });
+
+    // Encoder position tracking (Phase 5)
+    this.socket.on(
+      AllEvents.ENCODER_POSITION_UPDATE,
+      (data: { position: number; timestamp: number; velocity: number }) => {
+        sortProcessStore.getState().setEncoderState(data.position, data.timestamp, data.velocity);
+      },
+    );
+
+    // Buffer status for pending jets (Phase 5)
+    this.socket.on(AllEvents.BUFFER_STATUS_UPDATE, (data: { count: number; capacity: number }) => {
+      sortProcessStore.getState().setBufferStatus(data.count, data.capacity);
+    });
+
+    // Encoder part lifecycle events (Phase 4)
+    this.socket.on(AllEvents.ENCODER_PART_SCHEDULED, (data: EventPayloads[typeof AllEvents.ENCODER_PART_SCHEDULED]) => {
+      console.log('[SOCKET] Part scheduled:', data.partId);
+      // Store could track scheduled parts if needed
+    });
+
+    this.socket.on(AllEvents.ENCODER_PART_SORTED, (data: EventPayloads[typeof AllEvents.ENCODER_PART_SORTED]) => {
+      console.log('[SOCKET] Part sorted:', data.partId);
+      sortProcessStore.getState().handlePartSorted();
+    });
+
+    this.socket.on(AllEvents.ENCODER_PART_SKIPPED, (data: EventPayloads[typeof AllEvents.ENCODER_PART_SKIPPED]) => {
+      console.log('[SOCKET] Part skipped:', data.partId, data.reason);
+      // Could add alertStore notification for skipped parts
+    });
   }
 
   public getStatus(): ServiceState {

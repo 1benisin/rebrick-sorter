@@ -19,25 +19,32 @@ The Arduino code is built around two independent, non-blocking state machines th
 This function controls the vibratory motor. Its goal is to move one part to the end of the channel and then pause until that part is clear.
 
 - **States (`FeederState`):**
-  - `start_moving`: Turns the feeder motor on to the speed defined by `FEEDER_VIBRATION_SPEED`.
-  - `moving`: The feeder runs until either the part sensor detects an object (`distance < 50`) or a maximum time (`FEEDER_LONG_MOVE_TIME`) elapses. This prevents the feeder from running indefinitely if no parts are flowing. Once stopped, it transitions to `paused`.
+  - `start_moving`: Initiates a new movement cycle. Records the current time and immediately transitions to `ramp_up_move`.
+  - `ramp_up_move`: **Soft start phase.** Gradually ramps motor speed from `RAMP_START_SPEED` (60) to `FEEDER_VIBRATION_SPEED` over `RAMP_UP_DURATION` (1000ms). This prevents mechanical stress and part displacement from sudden starts. If a part is detected or timeout occurs during ramp-up, transitions directly to `paused`. Otherwise, transitions to `moving` when ramp completes.
+  - `moving`: The feeder runs at full speed until either the part sensor detects an object (`distance < 20`) or a maximum time (`FEEDER_LONG_MOVE_TIME`) elapses. This prevents the feeder from running indefinitely if no parts are flowing. Once stopped, it transitions to `paused`.
   - `paused`: The feeder waits for a configurable duration (`FEEDER_PAUSE_TIME`). After the pause, it checks the sensor again. If a part is still present, it initiates a `short_move`. If no part is detected, it assumes the part has moved onto the conveyor and goes back to `start_moving` to fetch the next one.
-  - `short_move`: A very brief vibration (`FEEDER_SHORT_MOVE_TIME`) designed to nudge a waiting part forward without pulling the entire line of parts with it.
+  - `short_move`: A very brief vibration (`FEEDER_SHORT_MOVE_TIME`) designed to nudge a waiting part forward without pulling the entire line of parts with it. Runs at full `FEEDER_VIBRATION_SPEED` without ramp-up.
 
 ### 2.2. `checkHopper()` - The Hopper Agitation State Machine
 
 This function controls the agitation cycle of the main hopper. Instead of running on a fixed timer, its cycle is triggered by the cumulative run-time of the vibratory feeder (`totalFeederVibrationTime`), which serves as a proxy for how many parts have been processed.
 
 - **States (`HopperState`):**
-  - `waiting_top`: The default idle state. It continuously checks if `totalFeederVibrationTime` has exceeded the `HOPPER_CYCLE_INTERVAL`.
-  - `moving_down`: When the cycle interval is reached, the stepper motor begins moving the hopper mechanism down to its lowest point. This movement is stopped either by the motor completing its steps or by a physical limit switch (`STOP_PIN`) being triggered.
-  - `waiting_bottom`: A brief, hardcoded pause (`hopperBottomWaitTime`) at the bottom of the stroke.
-  - `moving_up`: The stepper motor moves the mechanism back to its starting (top) position, completing the agitation cycle and resetting for the next one.
+
+  - `waiting_top`: The default idle state. It continuously checks if `totalFeederVibrationTime >= HOPPER_CYCLE_INTERVAL`. When triggered, it resets `totalFeederVibrationTime` to 0 and initiates the down movement.
+  - `moving_down`: The stepper motor moves the hopper mechanism down using `hopperStepper->move(-hopperFullStrokeSteps-20)`. Movement stops when either the physical limit switch (`STOP_PIN`) reads LOW or the motor finishes its commanded steps. On stop, calls `forceStopAndNewPosition(0)` to zero the position.
+  - `waiting_bottom`: A brief pause at the bottom (`hopperBottomWaitTime = 10ms`). This allows the parts to settle before returning.
+  - `moving_up`: The stepper motor moves back up using `hopperStepper->move(hopperFullStrokeSteps)`. When the motor stops running, transitions back to `waiting_top`.
+
+- **Debug Output:** When `HOPPER_DEBUG` is enabled, prints vibration time progress every 5 seconds in `waiting_top` state.
 
 ### 2.3. Safety and Reliability
 
-- **Watchdog Timer:** The `setup()` function initializes an 8-second watchdog timer. The main `loop()` must call `wdt_reset()` periodically. If the code freezes or gets stuck, the watchdog will automatically reboot the Arduino, preventing a total system stall. Upon reboot, it sends a `"SYSTEM RESET: Watchdog timer initiated system reset."` message to the backend for logging.
-- **Non-Blocking Sensor Reads:** The code uses a state machine (`processSensorReading`) to read from the I2C distance sensor without using `delay()`, ensuring the main loop is never blocked waiting for sensor data.
+- **Watchdog Timer:** The `setup()` function initializes a **2-second** hardware watchdog timer (`WDTO_2S`). The main `loop()` must call `wdt_reset()` every iteration. If the code freezes or gets stuck (e.g., I2C lockup), the watchdog will automatically hard-reset the Arduino. The watchdog is disabled briefly at startup to prevent reset loops if recovering from a WDT reset.
+- **Non-Blocking Sensor Reads:** The code uses a state machine (`processSensorReading`) with states `IDLE`, `REQUEST_SENT`, and `WAITING_FOR_READING` to read from the I2C distance sensor without using `delay()`. Includes a 50ms timeout (`SENSOR_READ_TIMEOUT_MS`) to prevent hangs.
+- **I2C Bus Recovery:** If I2C communication fails, the `I2C_ClearBus()` function performs proper bus recovery per I2C spec: generates up to 9 clock pulses on SCL to release any slave holding SDA low, then sends a STOP condition. This handles cases where a ToF sensor gets stuck mid-transaction.
+- **Fail-Safe Motor Stop:** On any I2C error, the feeder motor is immediately stopped and state transitions to `paused` to prevent runaway vibration.
+- **Speed Limiting:** The `MAX_FEEDER_SPEED` value is latched from the first settings message received after boot. All subsequent speed updates are clamped to this maximum, providing a hardware-side safeguard against accidental over-speed commands.
 
 ## 3. Backend <-> Arduino Communication Protocol
 
@@ -58,8 +65,17 @@ The `processMessage()` function parses incoming commands based on the first char
 - **`s` (Settings Update):** This is the most critical command. It must be sent by the backend before any other command will be accepted.
 
   - **Format:** `s,<HOPPER_CYCLE_INTERVAL>,<HOPPER_CYCLE_STEPS>,<FEEDER_VIBRATION_SPEED>,<FEEDER_STOP_DELAY>,<FEEDER_PAUSE_TIME>,<FEEDER_SHORT_MOVE_TIME>,<FEEDER_LONG_MOVE_TIME>`
+  - **Parameters:**
+    - `HOPPER_CYCLE_INTERVAL`: Feeder vibration time before hopper cycle triggers
+    - `HOPPER_CYCLE_STEPS`: Stepper motor steps for full hopper stroke
+    - `FEEDER_VIBRATION_SPEED`: PWM value (0-255) for feeder motor
+    - `FEEDER_STOP_DELAY`: Delay before stopping after part detection
+    - `FEEDER_PAUSE_TIME`: Duration to pause between movements
+    - `FEEDER_SHORT_MOVE_TIME`: Duration of short nudge movements
+    - `FEEDER_LONG_MOVE_TIME`: Maximum continuous run time
   - **Action:** The `processSettings()` function parses the 7 integer values and updates the corresponding variables in the firmware. It also resets all state machines to their initial states.
-  - **Response:** `"Settings updated successfully"` on success, or an error message.
+  - **Speed Latching:** On the **first** settings message after boot, `MAX_FEEDER_SPEED` is set to the provided `FEEDER_VIBRATION_SPEED`. All subsequent settings updates will clamp the speed to this latched maximum using `min(values[2], MAX_FEEDER_SPEED)`. This prevents accidental over-speed commands.
+  - **Response:** `"Settings updated"` on success, or `"Error: Not enough settings provided"` if fewer than 7 values are received.
 
 - **`p` (Pause Time Update):** A specialized command to dynamically adjust the feeder's pause time.
 
@@ -74,12 +90,29 @@ The `processMessage()` function parses incoming commands based on the first char
 
 The Arduino sends simple newline-terminated strings back to the backend server.
 
-- `"Ready"`: Sent once at the very end of the `setup()` function. The backend should wait for this message before sending any commands.
-- `"Settings not initialized"`: Sent if any command other than `s` is received before the initial settings have been successfully loaded.
-- `"Settings updated successfully"`: Confirmation of a successful `s` command.
-- `"Error: ..."`: Sent if a command is malformed (e.g., wrong format, missing values).
-- Debug Messages: If `HOPPER_DEBUG` or `FEEDER_DEBUG` are enabled in the firmware, additional diagnostic messages will be sent (e.g., `"HOPPER: Starting new cycle..."`).
-- Watchdog Reset Message: Informs the backend that the device has recovered from a frozen state.
+| Response                                   | Description                                                                                  |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `Ready`                                    | Sent once at the end of `setup()`. Backend should wait for this before sending commands.     |
+| `Settings not initialized`                 | Command rejected because `s` hasn't been received yet (only sent if `SYSTEM_DEBUG` is true). |
+| `Settings updated`                         | Confirmation of successful `s` command.                                                      |
+| `Error: Not enough settings provided`      | Settings command had fewer than 7 values.                                                    |
+| `Error: Invalid message format`            | Settings command format was malformed.                                                       |
+| `Error: Invalid pause time message format` | Pause time command format was malformed.                                                     |
+
+**Debug Messages (when `*_DEBUG` flags are true):**
+
+- `HOPPER: Starting new cycle...` - Hopper cycle triggered
+- `HopperSTATE: -> <state>` - Hopper state transitions
+- `FeederSTATE: -> <state>` - Feeder state transitions
+- `SENSOR: Part detected in front of sensor` - Part detected (distance < 20)
+- `HEARTBEAT: Main loop is alive.` - Every 5 seconds when `SYSTEM_DEBUG` is true
+
+**I2C Error Messages:**
+
+- `ERROR: I2C end transmission failed (endResult: X)` - I2C communication error
+- `ERROR: I2C requestFrom failed. Attempting I2C recovery.` - I2C read failed
+- `ERROR: Sensor read timeout. Attempting I2C recovery.` - Sensor read timed out
+- `WARN: I2C SDA stuck low. Attempting bus recovery...` - Bus recovery initiated
 
 ---
 

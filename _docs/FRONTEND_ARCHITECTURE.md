@@ -47,19 +47,47 @@ The most important architectural pattern is the use of a **service layer** on th
 
 The key services are:
 
-- **`SettingsService`**: Manages fetching and saving application settings from/to Firebase Firestore.
-- **`SocketService`**: Manages the persistent WebSocket connection to the Node.js backend.
+- **`SettingsService`**: Manages fetching and saving application settings from/to Firebase Firestore. Uses real-time `onSnapshot` listeners for instant propagation of settings changes.
+- **`SocketService`**: Manages the persistent WebSocket connection to the Node.js backend. Sets up event listeners for encoder position updates, buffer status, and part lifecycle events. Updates `sortProcessStore` with encoder state.
 - **`VideoCaptureService`**: Handles access to the webcam video streams and provides a method for capturing frames.
-- **`DetectorService`**: Loads the local TensorFlow.js model and performs object detection on captured video frames.
-- **`ClassifierService`**: Manages the multi-step process of classifying a detected part, interacting with the Brickognize API (via a proxy), and looking up part data.
-- **`SortProcessControllerService`** (in `SorterService.ts`): The central orchestrator. It runs the main processing loop, coordinating the detector, classifier, and state updates.
+- **`DetectorService`**: Loads the local TensorFlow.js model (`public/detection-model/`) and performs object detection on captured video frames.
+- **`ClassifierService`**: Manages the multi-step process of classifying a detected part:
+  1. Sends cropped images to Brickognize API (via `/api/brickognize` proxy)
+  2. Combines results from both camera views
+  3. Looks up bin assignment from catalog data (loaded from Firebase Storage on init)
+  4. Logs classification results and images to Firebase Firestore/Storage
+  5. Emits `SORT_PART` event via SocketService with `initialTime` and `initialPosition`
+- **`SortProcessControllerService`** (in `SorterService.ts`): The central orchestrator. It runs the main processing loop (~500ms interval) coordinating detection, tracking, and classification. Manages `DetectionPairGroup` tracking to follow parts across frames.
+
+### 4.3. Calibration Components
+
+- **`JetCalibrationPanel`** (`components/buttons/JetCalibrationPanel.tsx`): Interactive calibration workflow for measuring encoder distances. Provides:
+  - Start/Stop calibration buttons (encoder reset to 0 on start)
+  - Mark Camera Width button (measures left edge to right edge in encoder ticks)
+  - Mark Jet A/B/C/D buttons (measures distance from camera left edge to each air jet)
+  - Live encoder position display during calibration
+  - Validation warnings (e.g., jet offset should be greater than camera width)
+  - Confirmation display showing recorded values
+  - **Batched saves:** All calibration values are stored locally during calibration and saved to Firebase in a single write when "Stop Calibration" is clicked (reduces unnecessary device reconfigurations)
+  - **Tooltip instructions:** Includes guidance about using the physical motor driver switch and not moving the conveyor backwards during calibration
 
 ### 4.2. Global State Management with Zustand
 
 For global state that needs to be accessed by multiple components and services, the application uses Zustand. It is lightweight and avoids the need for wrapping the entire app in context providers.
 
-- **`sortProcessStore`**: The main store, which tracks the entire state of the sorting pipeline. This includes the list of detected part groups, conveyor speed, process status (`isRunning`), etc. Services and components can subscribe to this store to react to state changes.
-- **`alertStore`**: A simpler store for managing a global queue of alerts to be displayed to the user.
+- **`sortProcessStore`**: The main store, which tracks the entire state of the sorting pipeline:
+  - `isRunning`: Whether the sort process loop is active
+  - `conveyorSpeed`: Current conveyor speed in pixels/ms
+  - `conveyorSpeedLog`: Historical speed changes for position prediction
+  - `detectionPairGroups`: Tracked part groups with detection history
+  - `videoCaptureDimensions`: Camera frame dimensions
+  - `serialPorts`: Available serial ports from backend
+  - **Encoder State (Phase 5):**
+    - `encoderPosition`: Current encoder position from server
+    - `encoderTimestamp`: When position was last updated
+    - `encoderVelocity`: Current smoothed velocity (counts/ms)
+    - `bufferCount` / `bufferCapacity`: Arduino pending jets buffer status
+- **`alertStore`**: A simpler store for managing a global queue of alerts to be displayed to the user via `AlertDisplay` component.
 
 ## 5. Communication and Data Flow
 
@@ -68,10 +96,32 @@ The frontend communicates with several other systems, each with a distinct proto
 ### 5.1. Frontend <-> Backend (Node.js Server)
 
 - **Protocol:** WebSockets, managed by `socket.io-client`.
-- **Manager:** `SocketService.ts`.
+- **Manager:** `SocketService.ts` (singleton instance exported as default).
 - **Flow:** This is the primary channel for real-time control and status.
-  - **Client -> Server:** The frontend emits events to control hardware. The most important is `SORT_PART`, which sends classified part data to the backend to be physically sorted. Other commands include manual controls for the conveyor, jets, etc.
-  - **Server -> Client:** The backend streams status updates, such as hardware state (`INIT_HARDWARE_SUCCESS`), conveyor speed updates (`CONVEYOR_SPEED_UPDATE`), and confirmations (`PART_SORTED`).
+  - **Client -> Server:** The frontend emits events to control hardware. The most important is `SORT_PART`, which sends classified part data to the backend to be physically sorted. The payload includes:
+    - `partId`: Unique identifier
+    - `initialPosition`: X position in camera frame (pixels)
+    - `initialTime`: Timestamp when part was detected
+    - `bin`: Target bin number
+    - `sorter`: Which sorter (0-3)
+  - **Calibration Events (Client -> Server):**
+    - `RESET_ENCODER`: Resets encoder position to 0 (start of calibration)
+    - `SAVE_CALIBRATION_DATA`: Batched save of all calibration data when calibration ends (`{ cameraWidthInTicks, cameraWidthPixels?, jetEncoderOffsets: [number, number, number, number] }`)
+    - `RECORD_CAMERA_WIDTH`: _(Legacy - individual save)_ Records camera width in ticks (`{ widthInTicks, cameraWidthPixels? }`)
+    - `RECORD_JET_POSITION`: _(Legacy - individual save)_ Records jet offset from camera left edge (`{ sorter, offsetFromLeftEdge }`)
+  - **Server -> Client:** The backend streams status updates:
+    - `ENCODER_POSITION_UPDATE`: Current conveyor encoder position with velocity (`{ position, timestamp, velocity }`)
+    - `BUFFER_STATUS_UPDATE`: Arduino's pending jets buffer status (`{ count, capacity }`)
+    - `ENCODER_PART_SCHEDULED`: Part has been scheduled for sorting (encoder-based)
+    - `ENCODER_PART_SORTED`: Part was successfully sorted (jet fired)
+    - `ENCODER_PART_SKIPPED`: Part couldn't be sorted with reason (`{ partId, reason, sorter, bin }`)
+    - `PART_SORTED`: Legacy confirmation when a part is sorted (time-based)
+    - `PART_SKIPPED`: Legacy notification when a part couldn't be sorted
+    - `CONVEYOR_SPEED_UPDATE`: Current conveyor speed
+    - `LIST_SERIAL_PORTS_SUCCESS`: Available serial ports list
+    - `COMPONENT_STATUS_UPDATE`: Individual component status changes
+    - `ENCODER_RESET_COMPLETE`: Confirmation when encoder reset completes (`{ success, position }`)
+    - `CALIBRATION_POINT_RECORDED`: Confirmation when calibration point is saved (`{ type, position, sorter?, success }`)
 
 ### 5.2. Frontend <-> Firebase
 
@@ -137,5 +187,15 @@ sequenceDiagram
 6.  **Proxy to Brickognize:** The `ClassifierService` sends these images, one by one, to the `/api/brickognize` proxy, which gets the classification result from the external Brickognize service.
 7.  **Data Enrichment:** The `ClassifierService` combines the results from both views, assigns a final score, and if the score is high enough, it looks up the part's assigned bin and sorter location from the catalog data it loaded from Firebase.
 8.  **Logging:** The classification result and image are saved to Firestore and Firebase Storage for logging.
-9.  **Hand-off to Backend:** Finally, the `ClassifierService` calls `SocketService.emit()` to send a `SORT_PART` event to the main Node.js backend server. This payload contains everything the backend needs to execute the physical sort: the Part ID, its exact position and time of classification, and the target bin/sorter.
-10. **Physical Sort:** The frontend's direct involvement in this part's journey is now complete. The backend takes over to schedule the air jet firing and sorter positioning.
+9.  **Hand-off to Backend:** Finally, the `ClassifierService` calls `SocketService.emit()` to send a `SORT_PART` event to the main Node.js backend server. This payload contains:
+    - `partId`: Unique identifier
+    - `initialPosition`: X coordinate in camera frame (pixels)
+    - `initialTime`: Detection timestamp (ms since epoch)
+    - `bin`: Target bin number
+    - `sorter`: Which sorter (0-3)
+10. **Physical Sort:** The frontend's direct involvement in this part's journey is now complete. The backend:
+    - Translates pixel position to encoder position using `PositionTranslator`
+    - Checks if the target sorter can reach the bin in time via `SorterStateManager.canSorterReachBin()`
+    - If available: creates `EncoderPart`, inserts into queue, schedules jet and move commands at appropriate encoder positions
+    - If unavailable: skips the part with reason and sends `ENCODER_PART_SKIPPED` event back to frontend
+    - On jet fire: sends `ENCODER_PART_SORTED` event back to frontend

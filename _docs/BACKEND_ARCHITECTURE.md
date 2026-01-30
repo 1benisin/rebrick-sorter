@@ -2,138 +2,490 @@
 
 ## 1. Overview
 
-This document provides a detailed technical deep-dive into the backend system of the Rebrick Sorter. It is intended to be a comprehensive guide for developers and a rich context for AI-assisted development. The backend is a Node.js application that serves as the central nervous system for the entire sorting operation, orchestrating hardware control, real-time communication, and the core sorting logic.
+This document provides a detailed technical deep-dive into the backend system of the Rebrick Sorter. The backend is a Node.js application that serves as the central nervous system for the entire sorting operation, orchestrating hardware control, real-time communication, and the core sorting logic.
+
+**Core Principle:** The backend is the "brain" that makes all coordination decisions. Arduinos are "muscles" that execute with precise timing.
 
 ## 2. Core Philosophy & Design
 
-The backend is built on a component-based architecture, promoting separation of concerns and modularity.
+### 2.1. Component-Based Architecture
 
-- **Component-Based Architecture:** The system is divided into distinct, manageable components (often called "Managers"), each with a single, well-defined responsibility (e.g., `DeviceManager`, `SettingsManager`). All components extend a `BaseComponent` class, which defines a common lifecycle (`initialize`, `deinitialize`, `reinitialize`) and status management (`UNINITIALIZED`, `INITIALIZING`, `READY`, `ERROR`).
-- **Centralized Coordination:** The `SystemCoordinator` class acts as the central orchestrator. It instantiates all other components and wires them together, defining the flow of information and control. It exposes high-level methods that are triggered by events from the frontend.
-- **Eager Initialization:** As of the current design, the entire backend system initializes eagerly when the server starts (`server.ts`). The `SystemCoordinator.initializeComponents()` method is called once upon startup, preparing all hardware connections and services before any client connects. This ensures the system is immediately ready for operation.
-- **State Management:** The backend is the single source of truth for the physical state of the machine. This includes the current speed of the conveyor, the position of each sorter, and a queue of all parts currently in transit on the conveyor belt.
+The system is divided into distinct, manageable components (Managers), each with a single, well-defined responsibility. All components extend a `BaseComponent` class with a common lifecycle (`initialize`, `deinitialize`, `reinitialize`) and status management (`UNINITIALIZED`, `INITIALIZING`, `READY`, `ERROR`).
+
+### 2.2. Server-Centric Coordination
+
+All scheduling intelligence lives on the server:
+
+- **Server decides:** When jets fire, when sorters move, which parts to skip
+- **Arduinos execute:** Fire jets at positions, move to bins, report completions
+
+This provides debuggability (all state visible), flexibility (no Arduino reflashing for logic changes), and precision (Arduinos handle time-critical execution).
+
+### 2.3. Position-Based Scheduling
+
+The system uses **encoder position** as the source of truth for part location:
+
+- Parts are tracked by encoder position, not time
+- Actions trigger when encoder crosses thresholds, not on setTimeout
+- Speed changes don't require recalculating schedules
+
+### 2.4. State Management
+
+The backend is the single source of truth for:
+
+- Current encoder position (synced from Arduino)
+- Scheduled parts queue (with encoder-based positions)
+- All 4 sorter states (current bin, scheduled moves)
 
 ## 3. System Startup and Initialization
 
-The application's entry point is `server.ts`. The startup sequence is as follows:
+The application's entry point is `server.ts`. The startup sequence:
 
-1.  **Environment Setup:** The `.env.local` file is loaded.
-2.  **Next.js Server:** A standard Next.js application server is prepared.
-3.  **HTTP & Socket.IO Server:** A Node.js `httpServer` is created to handle requests for the Next.js app. A `Socket.IO` server is then attached to this HTTP server to handle WebSocket connections.
-4.  **SystemCoordinator Instantiation:** A single instance of `SystemCoordinator` is created. In its constructor, it instantiates all its child components (`SocketManager`, `SettingsManager`, `DeviceManager`, etc.), injecting dependencies as needed. For example, `DeviceManager` receives an instance of `SocketManager` and `SettingsManager` to communicate status and retrieve configuration.
-5.  **Component Initialization:** `systemCoordinator.initializeComponents()` is called. This triggers the `initialize()` method on each component in a specific, dependent order:
-    1.  `SocketManager`: Becomes ready to handle connections.
-    2.  `SettingsManager`: Fetches initial settings from Firebase and subscribes to real-time updates. This step is critical as all subsequent components depend on these settings.
-    3.  `DeviceManager`: Connects to all Arduino hardware specified in the settings.
-    4.  `SpeedManager`: Initializes with default speed values from settings.
-    5.  `SorterManager`: Initializes sorter configurations (grid dimensions, travel times) from settings.
-    6.  `ConveyorManager`: Initializes its state based on settings.
+1. **Environment Setup:** Load `.env.local`
+2. **Next.js Server:** Prepare Next.js application server
+3. **HTTP & Socket.IO Server:** Create HTTP server, attach Socket.IO for WebSockets
+4. **SystemCoordinator Instantiation:** Create single instance, inject dependencies
+5. **Component Initialization:** Initialize in dependent order:
+   1. `SocketManager`: Ready for connections
+   2. `SettingsManager`: Fetch settings from Firebase
+   3. `DeviceManager`: Connect to Arduino hardware
+   4. `SorterStateManager`: Initialize sorter tracking
+   5. `ConveyorManager`: Initialize encoder tracking and part queue
 
-Once this process completes, the server begins listening for HTTP and WebSocket connections, fully ready to operate.
+Once complete, the server listens for HTTP and WebSocket connections.
 
 ## 4. Component Deep Dive
 
 ### 4.1. `SystemCoordinator`
 
-- **Purpose:** The master controller. It ties all other components together and implements the primary business logic for the sorting process.
+- **Purpose:** Master controller that ties all components together.
 - **Key Methods:**
-  - `initializeComponents()`: Manages the system startup sequence.
-  - `handleSortPart(data: SortPartDto)`: The entry point for the entire sorting process for a single part.
-  - `buildPart(data: SortPartDto)`: A crucial factory method that takes raw part data and calculates all necessary timing and position information for its journey.
-- **Interactions:** Directly calls methods on all other manager components.
+  - `initializeComponents()`: Manages system startup
+  - `handleSortPart(data: SortPartDto)`: Entry point for sorting a part
+  - `translatePixelToEncoder()`: Converts frontend pixel position to encoder position
+  - `handleSaveCalibrationData()`: Batched save of all calibration data (camera width + jet offsets) in a single Firebase write
+- **Interactions:** Coordinates all manager components
 
 ### 4.2. `SettingsManager`
 
-- **Purpose:** Manages all system configuration.
-- **State:** Holds the current `settings` object (`SettingsType`).
+- **Purpose:** Manages all system configuration
+- **State:** Current `settings` object
 - **Interactions:**
-  - Connects to Google Firebase Firestore (`/settings/dev-user`).
-  - Uses a real-time `onSnapshot` listener to detect any changes in the settings document.
-  - Maintains a list of callback functions. When settings change, it notifies all registered components (like `DeviceManager`, `ConveyorManager`) so they can reconfigure themselves.
+  - Connects to Firebase Firestore
+  - Real-time `onSnapshot` listener for changes
+  - Notifies components on settings updates
 - **Key Methods:**
-  - `getSettings()`: Returns the current settings.
-  - `registerSettingsUpdateCallback()`: Allows other components to listen for configuration changes.
+  - `getSettings()`: Returns current settings
+  - `registerSettingsUpdateCallback()`: Subscribe to settings changes
+  - `unregisterSettingsUpdateCallback()`: Unsubscribe from settings changes
+  - `updateSettings()`: Partial update settings in Firebase
 
 ### 4.3. `DeviceManager`
 
-- **Purpose:** The hardware abstraction layer. It is the only component that communicates directly with the Arduino devices.
-- **State:** A `Map` of all connected devices, mapping a `DeviceName` enum to a `DeviceInfo` object containing the `SerialPort` instance and configuration.
-- **Interactions:**
-  - Receives settings from `SettingsManager` to know which serial ports to connect to.
-  - Sends status updates (e.g., `READY`, `ERROR`) to the frontend via `SocketManager`.
+- **Purpose:** Hardware abstraction layer for Arduino communication
+- **State:** Map of connected devices (`DeviceName` → `DeviceInfo`)
 - **Key Logic:**
-  - **Connection:** Opens `SerialPort` connections to each Arduino. For development, it can use `SerialPortMock`.
-  - **Initialization:** When an Arduino sends a `Ready` message, the `DeviceManager` replies with a configuration string (e.g., `s,100,200,50...`) tailored to that device type.
-  - **Command Sending:** Provides a `sendCommand` method that formats messages with start/end markers (`<command,data>`) and writes them to the serial port.
-  - **Resilience:** Implements robust error handling for device disconnects. It features an automatic reconnection mechanism with exponential backoff and a maximum number of retries. It also periodically scans for disconnected devices that should be connected and attempts to re-establish communication.
+  - Opens `SerialPort` connections to each Arduino
+  - Sends initialization settings when Arduino sends `Ready`
+  - Formats commands with `<>` markers
+  - Parses responses and routes to appropriate handlers
+  - Automatic reconnection with exponential backoff
 
 ### 4.4. `SocketManager`
 
-- **Purpose:** Manages all real-time communication with the frontend client.
-- **Interactions:** It is primarily an event hub.
-  - **Frontend -> Backend:** Listens for events defined in `FrontToBackEvents` (e.g., `SORT_PART`, `CONVEYOR_ON_OFF`). When an event is received, it calls the corresponding handler method on `SystemCoordinator`.
-  - **Backend -> Frontend:** Exposes methods for other components to send messages to the frontend, defined in `BackToFrontEvents` (e.g., `emitComponentStatusUpdate`, `emitPartSorted`).
-- **State:** Holds the active `socket` instance for the connected client.
+- **Purpose:** Real-time communication with frontend
+- **Interactions:**
+  - **Frontend → Backend:** `SORT_PART`, `SAVE_CALIBRATION_DATA`, manual control commands
+  - **Backend → Frontend:** `ENCODER_POSITION`, `PART_SORTED`, `PART_SKIPPED`, `CALIBRATION_POINT_RECORDED`, status updates
+- **State:** Active socket instance
 
-### 4.5. `SpeedManager`
+### 4.5. `SorterStateManager`
 
-- **Purpose:** Manages the speed of the conveyor belt.
-- **State:**
-  - `defaultSpeed`: The normal operating speed in pixels/millisecond.
-  - `currentSpeed`: The current speed, which may be temporarily adjusted.
-- **Key Logic:**
-  - **Speed Conversion:** This is the only place that converts the internal speed representation (pixels/ms, used for physics calculations) to the hardware representation (RPM, for the Arduino).
-  - `scheduleConveyorSpeedChange()`: Creates a `setTimeout` to change the conveyor speed at a precise future time. It sends the command via `DeviceManager` and updates the internal state. It also dynamically adjusts the `hopper_feeder` pause time based on the new speed to maintain a consistent flow of parts.
-  - `computeSlowDownPercent()`: Calculates how much the conveyor needs to slow down to meet a delayed arrival time for a part.
+- **Purpose:** Centralized tracking of all 4 sorter states
+- **State (per sorter):**
 
-### 4.6. `SorterManager`
+  ```typescript
+  interface SorterState {
+    currentBin: number; // Confirmed bin position from MC: response
+    isMoving: boolean; // True between move command sent and MC: received
+    targetBin: number | null; // Bin being moved to, null if not moving
+    lastMoveCompletePosition: number; // Encoder position when last move completed
+    moveStartPosition: number; // Encoder position when current move started
+    scheduledMoves: ScheduledMove[]; // Queue of upcoming moves
+  }
 
-- **Purpose:** Manages the state and movement of the 2D sorter mechanisms.
-- **State:**
-  - `currentPositions`: An array holding the last known bin position for each sorter.
-  - `travelTimes`: A 2D array containing pre-calculated travel times between different bin locations. This is an optimization to avoid complex physics calculations in real-time.
+  interface ScheduledMove {
+    partId: string; // Unique identifier for the part
+    bin: number; // Target bin number
+    triggerPosition: number; // Encoder position to send move command
+    expectedCompletePosition: number; // Estimated completion position
+  }
+  ```
+
 - **Key Methods:**
-  - `moveSorter()`: Sends a command to the Arduino to move a sorter to a specific bin.
-  - `getTravelTimeBetweenBins()`: Looks up the time required to move from one bin to another. This is a critical input for the `SystemCoordinator`'s scheduling logic.
-  - `scheduleSorterMove()`: Creates a `setTimeout` to execute a sorter move at a precise future time.
+  - `canSorterReachBin(sorterNum, targetBin, requiredByPosition)`: Check if sorter can reach a bin by deadline
+  - `calculateLeadCounts(sorterNum, fromBin, toBin)`: Encoder counts needed for move
+  - `scheduleMove(sorterNum, bin, partId, triggerPosition)`: Add move to sorter's queue
+  - `markMoveStarted(sorterNum, targetBin)`: Called when move command is sent
+  - `getEffectiveFromBin(sorterNum)`: Get the bin sorter will be at before starting a new move
+  - `clearAllScheduledMoves()`: Clear all scheduled moves (for reset)
 
-### 4.7. `ConveyorManager`
+### 4.6. `ConveyorManager`
 
-- **Purpose:** The heart of the part-handling logic. It tracks every part on the conveyor and orchestrates all actions related to them.
+- **Purpose:** Encoder position tracking, part queue management, and jet command dispatch
 - **State:**
-  - `partQueue`: A time-sorted array of `Part` objects. This is the central data structure for the sorting process. Each object contains all timing, position, and action information for one LEGO piece.
-  - `speedLog`: A log of past speed changes, used for accurate position calculations.
+  ```typescript
+  currentEncoderPosition: number;   // Latest from Arduino EP: messages
+  lastEncoderUpdateTime: number;    // Timestamp for interpolation
+  encoderVelocity: number;          // Counts per millisecond (smoothed via EMA)
+  partQueue: Part[];                // Legacy time-based parts
+  encoderPartQueue: EncoderPart[];  // Position-based parts (sorted by jetPosition)
+  ```
+- **Constants:**
+  - `JET_LEAD_COUNTS = 100`: How far ahead to send jet queue commands
+  - `VELOCITY_SMOOTHING_ALPHA = 0.3`: EMA smoothing factor
+  - `MAX_INTERPOLATION_MS = 500`: Max extrapolation time
+  - `STALE_DATA_THRESHOLD_MS = 1000`: When encoder data is considered stale
+- **Key Methods:**
+  - `getInterpolatedPosition()`: Estimate current position between updates
+  - `getCurrentEncoderPosition()`: Raw position without interpolation
+  - `getEncoderVelocity()`: Current smoothed velocity
+  - `isEncoderDataStale()`: Check if encoder data is too old
+  - `insertEncoderPart(part)`: Add part to position-based queue
+  - `getActionableParts(position)`: Get parts ready for jet/move commands
+  - `resetEncoderPosition()`: Reset encoder to zero (sends `r` command)
+  - `requestEncoderPosition()`: Request position from Arduino (Promise-based)
+- **Message Handling:**
+  - `EP:<position>`: Encoder position update
+  - `JF:<jet>,<position>`: Jet fired confirmation
+  - `JQ:<jet>,<position>`: Jet queued confirmation
+  - `BS:<count>,<capacity>`: Buffer status
+  - `ER:0`: Encoder reset confirmation
+
+### 4.7. `SorterManager`
+
+- **Purpose:** Interface for sorter Arduino commands
+- **Key Methods:**
+  - `moveSorter()`: Send `m<bin>` command
+  - `homeSorter()`: Send `a` command
+  - `handleMoveComplete()`: Parse `MC:` responses, update SorterStateManager
+
+### 4.8. `SpeedManager`
+
+- **Purpose:** Manages conveyor belt speed
+- **State:** `defaultSpeed`, `currentSpeed`
 - **Key Logic:**
-  - `insertPart()`: This method inserts a new part into the `partQueue`, ensuring the queue remains sorted by the part's default arrival time. This is the primary entry point for adding a part to the system.
-  - `schedulePartActions()`: For a given part, it schedules all necessary future actions by creating timeouts for the sorter move (`SorterManager.scheduleSorterMove`), the jet fire (`scheduleJetFire`), and the conveyor speed change (`SpeedManager.scheduleConveyorSpeedChange`).
-  - `updateAllFutureParts()`: This is the most complex piece of logic. If a newly inserted part requires a slowdown (because the sorter needs more time to move), it creates a "traffic jam". This method cancels the scheduled actions for all subsequent parts in the queue, rebuilds them using the new timeline, and re-inserts them into the queue. This ensures the entire system adapts dynamically to delays.
-  - `findTimeAfterDistance()`: A sophisticated prediction function. Given a start time and a distance, it calculates the arrival time by accounting for all historical speed changes (`speedLog`) and all scheduled future speed changes (from the `partQueue` and any pending return to default speed).
+  - Converts internal speed (pixels/ms) to hardware (RPM)
+  - Sends speed commands via DeviceManager
 
 ## 5. The Sorting Process: A Backend Walkthrough
 
-This section details the journey of a single part from the moment it's classified by the frontend to the moment it's sorted.
+### 5.1. Part Reception
 
-1.  **Event Reception:** The `SocketManager` receives a `SORT_PART` event, which includes the `partId`, `initialTime`, `initialPosition`, `bin`, and `sorter`. It calls `SystemCoordinator.handleSortPart()`.
-2.  **Part Building:** The `SystemCoordinator.buildPart()` method is called. This is a pure calculation step:
-    - It gets the sorter's jet position from `ConveyorManager`.
-    - It calculates the `defaultArrivalTime` assuming a constant, default conveyor speed.
-    - It uses `ConveyorManager.findTimeAfterDistance()` to predict the _actual_ `jetTime`, accounting for any current speed variations.
-    - It asks `SorterManager` for the `travelTimeFromPreviousBin` for the required sorter movement.
-    - It calculates the `moveTime`—the latest possible moment the sorter can _start_ moving to arrive just in time.
-    - It calculates the `arrivalTimeDelay`, which is the amount of time the conveyor must be slowed down if the required sorter move is longer than the available time. This is a critical calculation to prevent parts from arriving at the jet before the sorter is in position.
-    - It creates the final `Part` object with all these calculated properties.
-3.  **Handling Delays:** Back in `handleSortPart`, if `part.arrivalTimeDelay` is greater than zero:
-    - The system calculates the new, slower `conveyorSpeed` required to absorb the delay.
-    - It checks if this new speed is within the hardware's capabilities (above `minConveyorRPM`). If not, the part is skipped.
-    - The part's `moveTime` and `jetTime` are pushed back by the delay amount.
-4.  **Insertion & Scheduling:** The `SystemCoordinator` calls `conveyorManager.insertPart(part)`.
-    - The `ConveyorManager` finds the correct place for the part in its `partQueue`.
-    - It calls `schedulePartActions()`, which sets three critical `setTimeout` calls:
-      - `SorterManager.scheduleSorterMove()`: To move the sorter gantry.
-      - `scheduleJetFire()`: To fire the air jet.
-      - `SpeedManager.scheduleConveyorSpeedChange()`: To set the conveyor speed for the _next_ part in the queue.
-5.  **Dynamic Rescheduling:** If the newly inserted part created a delay (`arrivalTimeDelay > 0`), the `ConveyorManager` identifies a "collision". It triggers `updateAllFutureParts()`. This method iterates through all subsequent parts, cancels their previously scheduled timeouts, and re-runs the `buildPart` -> `insertPart` logic for each one, creating a cascading update that ensures all timings remain perfectly synchronized.
-6.  **Execution:** As time progresses, the `setTimeout` functions execute, calling the respective managers (`DeviceManager`, `SorterManager`) to send the final commands to the Arduino hardware at the precise, calculated milliseconds.
-7.  **Cleanup:** When a jet fires for a part, that part is marked as `completed`, an event is sent to the frontend, and it is removed from the `partQueue`.
+1. `SocketManager` receives `SORT_PART` event with:
 
-This dynamic, forward-looking scheduling system allows the backend to manage a high-throughput stream of parts, adapting in real-time to the physical constraints of the hardware.
+   - `partId`: Unique identifier
+   - `pixelPosition`: X position in camera frame
+   - `detectionTime`: Timestamp when detected
+   - `bin`: Target bin number
+   - `sorter`: Which sorter (0-3)
+
+2. Calls `SystemCoordinator.handleSortPart()`
+
+### 5.2. Position Translation
+
+The `PositionTranslator` class handles pixel-to-encoder conversion using the calibrated camera width and jet offsets:
+
+1. Get encoder position at detection time by interpolating backwards from current position
+2. Convert pixel position to ticks from camera left edge:
+   ```typescript
+   partTicksFromLeftEdge = (pixelX / cameraWidthPixels) * cameraWidthInTicks;
+   ```
+3. Calculate remaining distance to jet (from left-edge-based calibration):
+   ```typescript
+   remainingTicks = jetEncoderOffsets[sorter] - partTicksFromLeftEdge;
+   jetPosition = encoderAtDetection + remainingTicks;
+   ```
+
+This approach works correctly regardless of where in the camera frame the part is detected, as long as the camera width and jet offsets are calibrated.
+
+### 5.3. Sorter Availability Check
+
+1. Call `SorterStateManager.canSorterReachBin(sorter, bin, deadline)`
+2. Calculate deadline: `jetPosition - fallTimeInCounts`
+3. Check sorter's current state and scheduled moves
+4. Calculate when sorter will be free
+5. Calculate travel time to target bin (from travel time matrix)
+6. Determine if sorter can arrive before deadline
+
+### 5.4. Scheduling Decision
+
+**If sorter available:**
+
+1. Calculate `moveTriggerPosition` (when to send move command)
+2. Create `EncoderPart` object:
+   ```typescript
+   {
+     partId,
+     detectionEncoderPos,
+     jetPosition,
+     moveTriggerPosition,
+     jet: sorter,  // jet index matches sorter
+     sorter,
+     bin,
+     jetCommandSent: false,
+     moveCommandSent: false,
+     status: 'scheduled'
+   }
+   ```
+3. Insert into `ConveyorManager.partQueue` (sorted by jetPosition)
+4. Add to `SorterStateManager.scheduleMove()`
+
+**If sorter unavailable:**
+
+1. Log skip reason
+2. Emit `PART_SKIPPED` to frontend
+3. Do not add to queue (no commands sent, part falls off conveyor)
+
+### 5.5. Command Execution
+
+The `ConveyorManager` runs a position-check loop on each encoder update via `processPositionActions()`:
+
+```typescript
+processPositionActions(currentPosition: number) {
+  // Only process if encoder scheduling is enabled
+  if (!settings.useEncoderScheduling) return;
+
+  // Skip if encoder data is stale
+  if (this.isEncoderDataStale()) return;
+
+  const { jetsToQueue, movesToSend } = this.getActionableParts(currentPosition);
+
+  // Send jet queue commands to Arduino (position-triggered)
+  for (const part of jetsToQueue) {
+    // Command format: q<jet>,<position>
+    this.deviceManager.sendCommand(
+      DeviceName.CONVEYOR_JETS,
+      `q${part.jet},${part.jetPosition}`
+    );
+    part.jetCommandSent = true;
+  }
+
+  // Send move commands to sorters
+  for (const part of movesToSend) {
+    this.sorterManager.moveSorter(part.sorter, part.bin);
+    this.sorterStateManager.markMoveStarted(part.sorter, part.bin);
+    part.moveCommandSent = true;
+    part.status = 'moving';
+  }
+}
+
+// Jet commands are sent when position reaches: jetPosition - JET_LEAD_COUNTS (100)
+// Move commands are sent when position reaches: moveTriggerPosition
+```
+
+**Arduino Responses:**
+
+- `JQ:<jet>,<position>`: Confirms jet was queued successfully
+- `JF:<jet>,<position>`: Confirms jet actually fired at that position
+- `Error: Jet buffer full`: Arduino's pending jets buffer (16 slots) is full
+
+### 5.6. Confirmation Handling
+
+**Jet Fired (`JF:<jet>,<position>`):**
+
+1. Find matching part in queue
+2. Mark as `sorted`
+3. Emit `PART_SORTED` to frontend
+4. Remove from queue
+
+**Move Complete (`MC:<bin>`):**
+
+1. `SorterStateManager` updates sorter state
+2. Removes from scheduled moves queue
+3. Enables next scheduled move
+
+## 6. Position vs Time: Key Differences
+
+### 6.1. Old Time-Based Approach
+
+```typescript
+// Calculate when jet should fire
+const jetTime = this.findTimeAfterDistance(initialTime, distance);
+const moveTime = jetTime - travelTime;
+
+// Schedule with setTimeout
+setTimeout(() => fireJet(), jetTime - Date.now());
+setTimeout(() => moveSorter(), moveTime - Date.now());
+```
+
+**Problems:**
+
+- Clock drift between server and Arduino
+- Speed changes require recalculating all timeouts
+- Hard to debug timing issues
+
+### 6.2. New Position-Based Approach
+
+```typescript
+// Calculate where jet should fire
+const jetPosition = detectionEncoderPos + cameraToJetOffset;
+const moveTriggerPosition = previousMoveCompletePosition;
+
+// Add to queue, check position on each encoder update
+if (currentPos >= jetPosition - LEAD_COUNTS) {
+  sendJetCommand(jet, jetPosition);
+}
+```
+
+**Benefits:**
+
+- Position is absolute, doesn't drift
+- Speed-independent (position always correct)
+- Observable and loggable
+
+## 7. Error Handling
+
+### 7.1. Part Skip Scenarios
+
+| Scenario               | Handling                               |
+| ---------------------- | -------------------------------------- |
+| Sorter unavailable     | Skip part, log reason, notify frontend |
+| Parts too close        | Skip later parts, prioritize earlier   |
+| Classification failure | Don't schedule (no bin assigned)       |
+
+### 7.2. Hardware Errors
+
+| Error              | Recovery                                |
+| ------------------ | --------------------------------------- |
+| Arduino disconnect | Auto-reconnect with exponential backoff |
+| Arduino reset      | Re-send settings on `Ready` message     |
+| Serial timeout     | Retry command, log warning              |
+
+### 7.3. State Recovery
+
+If server restarts:
+
+- Encoder position re-syncs from Arduino
+- Sorter positions re-sync from `MC:` queries
+- In-flight parts may be lost (acceptable for LEGO sorting)
+
+## 8. Configuration
+
+Settings stored in Firebase Firestore (defined via Zod schema in `types/settings.type.ts`):
+
+```typescript
+interface Settings {
+  // Serial ports
+  conveyorJetsSerialPort: string;
+  hopperFeederSerialPort: string;
+
+  // Conveyor settings
+  conveyorSpeed: number; // pixels per millisecond (for time-based)
+  maxConveyorRPM: number;
+  minConveyorRPM: number;
+  constantConveyorSpeed: boolean; // If true, skip parts rather than slow down
+  conveyorPulsesPerRevolution: number; // Encoder PPR
+
+  // PID tuning for conveyor motor
+  conveyorKp: number;
+  conveyorKi: number;
+  conveyorKd: number;
+
+  // Hopper/Feeder settings
+  feederVibrationSpeed: number;
+  feederStopDelay: number;
+  feederPauseTime: number;
+  feederShortMoveTime: number;
+  feederLongMoveTime: number;
+  hopperCycleInterval: number;
+  hopperCycleSteps: number;
+
+  // Position calibration (encoder-based scheduling)
+  positionCalibration: {
+    cameraEncoderOffset: number; // @deprecated - use cameraWidthInTicks instead
+    countsPerPixel: number; // @deprecated - replaced by cameraWidthInTicks/cameraWidthPixels ratio
+    cameraWidthInTicks: number; // Width of camera view in encoder ticks (left edge to right edge)
+    cameraWidthPixels: number; // Camera resolution width in pixels (default 1280)
+    jetEncoderOffsets: number[]; // Encoder tick distance from camera LEFT EDGE to each jet
+    fallTimeInCounts: number; // Time for part to fall from jet to sorter
+    jetLeadCounts: number; // How far ahead to send jet commands
+  };
+
+  // Feature flag
+  useEncoderScheduling: boolean; // Use position-based instead of time-based
+
+  // Per-sorter settings
+  sorters: SorterSettings[];
+
+  // Detection/Classification
+  detectDistanceThreshold: number;
+  classificationThresholdPercentage: number;
+
+  // Video settings
+  camera1VerticalPositionPercentage: number;
+  camera2VerticalPositionPercentage: number;
+  videoStreamId1: string;
+  videoStreamId2: string;
+}
+
+interface SorterSettings {
+  name: string;
+  serialPort: string;
+  jetPositionStart: number;
+  jetDuration: number;
+  maxPartDimensions: { width: number; height: number };
+  gridDimension: number; // e.g., 12 for 12x12 bin grid
+  xOffset: number;
+  yOffset: number;
+  xStepsToLast: number;
+  yStepsToLast: number;
+  acceleration: number;
+  homingSpeed: number;
+  speed: number;
+  rowMajorOrder: boolean;
+}
+```
+
+Changes propagate via Firestore `onSnapshot` listeners, triggering component reinitialization.
+
+## 9. Performance Considerations
+
+### 9.1. Encoder Update Frequency
+
+- Arduino reports position every 5-10 ticks (~2-4 times/second)
+- Server interpolates between updates
+- Higher frequency not needed (parts travel slowly)
+
+### 9.2. Part Queue Size
+
+- Typical max: 50-100 parts in transit
+- Memory: ~200 bytes per part
+- Processing: O(n) scan on each position update
+
+### 9.3. Serial Communication
+
+- Baud rate: 115200
+- Message size: ~10-20 bytes
+- Traffic: <1% of bandwidth
+- Latency: 1-5ms round trip
+
+## 10. Testing Strategy
+
+### 10.1. Unit Tests
+
+- Position translation accuracy
+- Sorter availability logic
+- Lead time calculations
+
+### 10.2. Integration Tests
+
+- Single part flow: detect → schedule → fire
+- Multiple parts: ordering and skip logic
+- Sorter coordination: concurrent moves
+
+### 10.3. Hardware-in-Loop Tests
+
+- Encoder position tracking accuracy
+- Jet timing precision
+- Recovery from disconnects

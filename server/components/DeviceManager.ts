@@ -25,6 +25,10 @@ export class DeviceManager extends BaseComponent {
   private awaitingSettingsAck: Map<DeviceName, boolean> = new Map();
   private settingsAckTimeouts: Map<DeviceName, NodeJS.Timeout> = new Map();
   private readonly SETTINGS_ACK_TIMEOUT_MS = 5000;
+  // Device data callbacks for external components to receive device messages
+  private deviceDataCallbacks: Map<DeviceName, (data: string) => void> = new Map();
+  // Device reconnect callbacks for external components to handle reconnection events
+  private deviceReconnectCallbacks: Map<DeviceName, () => void> = new Map();
 
   constructor(config: DeviceManagerConfig) {
     super('DeviceManager');
@@ -121,7 +125,7 @@ export class DeviceManager extends BaseComponent {
       console.log('Stopped periodic port scanning.');
     }
 
-    for (const [deviceName, deviceInfo] of this.devices) {
+    for (const [deviceName, deviceInfo] of Array.from(this.devices)) {
       try {
         await new Promise<void>((resolve, reject) => {
           deviceInfo.device.close((err: Error | null) => {
@@ -418,7 +422,10 @@ export class DeviceManager extends BaseComponent {
       console.error(`\x1b[33mNo device info found for port ${deviceName}\x1b[0m`);
       return;
     }
-    console.log(`\x1b[35m[RX <- ${deviceName}]\x1b[0m Received data: ${data}`);
+    // Skip logging frequent encoder position reports
+    if (!data.startsWith('EP:')) {
+      console.log(`\x1b[35m[RX <- ${deviceName}]\x1b[0m Received data: ${data}`);
+    }
 
     // Handle handshake/acknowledgment protocol
     if (data.trim() === 'Ready') {
@@ -473,6 +480,12 @@ export class DeviceManager extends BaseComponent {
         }
         this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.READY, null);
         console.log(`\x1b[32m[${deviceName}] Settings acknowledged. Device is READY.\x1b[0m`);
+
+        // Invoke reconnect callback if registered (for state sync after reconnect)
+        const reconnectCallback = this.deviceReconnectCallbacks.get(deviceName);
+        if (reconnectCallback) {
+          reconnectCallback();
+        }
       } else {
         console.log(`\x1b[33m[${deviceName}] Received settings ack, but was not awaiting it.\x1b[0m`);
       }
@@ -492,6 +505,12 @@ export class DeviceManager extends BaseComponent {
       }
       return;
     }
+
+    // Invoke registered callback for this device (for messages not handled above)
+    const callback = this.deviceDataCallbacks.get(deviceName);
+    if (callback) {
+      callback(data);
+    }
   }
 
   public sendCommand(deviceName: DeviceName, command: string, data?: number): void {
@@ -510,6 +529,22 @@ export class DeviceManager extends BaseComponent {
         this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, err.message);
       }
     });
+  }
+
+  public registerDeviceDataCallback(deviceName: DeviceName, callback: (data: string) => void): void {
+    this.deviceDataCallbacks.set(deviceName, callback);
+  }
+
+  public unregisterDeviceDataCallback(deviceName: DeviceName): void {
+    this.deviceDataCallbacks.delete(deviceName);
+  }
+
+  public registerDeviceReconnectCallback(deviceName: DeviceName, callback: () => void): void {
+    this.deviceReconnectCallbacks.set(deviceName, callback);
+  }
+
+  public unregisterDeviceReconnectCallback(deviceName: DeviceName): void {
+    this.deviceReconnectCallbacks.delete(deviceName);
   }
 
   public updateFeederPauseTime(pauseTime: number): void {

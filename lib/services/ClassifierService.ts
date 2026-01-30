@@ -267,6 +267,8 @@ class ClassifierService implements Service {
         initialTime,
         bin: resolvedPosition.bin,
         sorter: resolvedPosition.sorter,
+        // Include camera width for server-side validation against calibration
+        cameraWidthPixels: videoCaptureDimensions.width > 0 ? videoCaptureDimensions.width : undefined,
       };
 
       const socketService = serviceManager.getService(ServiceName.SOCKET);

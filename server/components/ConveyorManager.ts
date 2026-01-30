@@ -2,12 +2,15 @@ import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent
 import { DeviceManager } from './DeviceManager';
 import { SocketManager } from './SocketManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
-import { Part } from '../../types/part.type';
+import { Part, EncoderPart } from '../../types/part.type';
 import { SettingsManager } from './SettingsManager';
 import { SpeedManager } from './SpeedManager';
 import { SorterManager } from './SorterManager';
 import { DeviceName } from '../../types/deviceName.type';
 import { SortPartDto } from '../../types/sortPart.dto';
+
+// Forward declaration to avoid circular dependency
+import type { SorterStateManager } from './SorterStateManager';
 
 interface ReturnToDefaultSpeed {
   time: number;
@@ -22,6 +25,8 @@ export interface ConveyorManagerConfig extends ComponentConfig {
   speedManager: SpeedManager;
   sorterManager: SorterManager;
   buildPart: (part: SortPartDto) => Part;
+  /** Optional - set via setSorterStateManager() due to circular dependency */
+  sorterStateManager?: SorterStateManager;
 }
 
 export class ConveyorManager extends BaseComponent {
@@ -30,6 +35,7 @@ export class ConveyorManager extends BaseComponent {
   private settingsManager: SettingsManager;
   private speedManager: SpeedManager;
   private sorterManager: SorterManager;
+  private sorterStateManager: SorterStateManager | null = null;
   private buildPart: (part: SortPartDto) => Part;
   private jetPositionsStart: number[] = [];
   private jetDurations: number[] = [];
@@ -37,6 +43,68 @@ export class ConveyorManager extends BaseComponent {
   private speedLog: { time: number; speed: number }[] = [];
   private isRecalculating: boolean = false;
   private returnToDefaultConveyorSpeed: ReturnToDefaultSpeed | null = null;
+
+  // --- Encoder-Based Part Queue (Phase 4) ---
+
+  /**
+   * Queue of parts being tracked for position-based scheduling.
+   * Sorted by jetPosition (ascending) for efficient action processing.
+   */
+  private encoderPartQueue: EncoderPart[] = [];
+
+  /**
+   * How many encoder counts before the jet position to send the jet queue command.
+   * This gives the Arduino time to receive and queue the command.
+   */
+  private readonly JET_LEAD_COUNTS = 100;
+  // --- Encoder Position Tracking State (Phase 2) ---
+
+  /**
+   * Current encoder position in ticks (counts).
+   * Updated from Arduino EP: messages at ~10Hz.
+   */
+  private currentEncoderPosition: number = 0;
+
+  /**
+   * Timestamp (ms since epoch) of the last encoder position update.
+   * Used for velocity calculation and interpolation.
+   */
+  private lastEncoderUpdateTime: number = 0;
+
+  /**
+   * Encoder velocity in counts per millisecond.
+   * Smoothed using exponential moving average (alpha = 0.3).
+   */
+  private encoderVelocity: number = 0;
+
+  // --- Encoder Constants ---
+
+  /** Large negative position delta threshold that indicates Arduino counter overflow/wrap-around */
+  private readonly OVERFLOW_THRESHOLD = 1000000;
+
+  /** Exponential moving average smoothing factor for velocity (lower = more smoothing) */
+  private readonly VELOCITY_SMOOTHING_ALPHA = 0.3;
+
+  /** Velocity threshold in counts/ms - below this, velocity is considered 0 (conveyor stopped) */
+  private readonly VELOCITY_STOP_THRESHOLD = 0.001;
+
+  /** Maximum time in ms to extrapolate position beyond last update */
+  private readonly MAX_INTERPOLATION_MS = 500;
+
+  /** Time in ms after which encoder data is considered stale */
+  private readonly STALE_DATA_THRESHOLD_MS = 1000;
+
+  // Bound callback references (to enable proper unregistration)
+  private boundReinitialize: () => Promise<void>;
+  private boundHandleConveyorData: (data: string) => void;
+  private boundHandleReconnect: () => void;
+
+  // Pending position request for Promise-based API
+  private pendingPositionRequest: {
+    resolve: (position: number) => void;
+    reject: (error: Error) => void;
+    timeout: NodeJS.Timeout;
+  } | null = null;
 
   constructor(config: ConveyorManagerConfig) {
     super('ConveyorManager');
@@ -46,6 +114,11 @@ export class ConveyorManager extends BaseComponent {
     this.speedManager = config.speedManager;
     this.sorterManager = config.sorterManager;
     this.buildPart = config.buildPart;
+
+    // Bind callbacks once in constructor to ensure same reference for register/unregister
+    this.boundReinitialize = this.reinitialize.bind(this);
+    this.boundHandleConveyorData = this.handleConveyorData.bind(this);
+    this.boundHandleReconnect = this.handleReconnect.bind(this);
   }
 
   public async initialize(): Promise<void> {
@@ -63,9 +136,21 @@ export class ConveyorManager extends BaseComponent {
       this.jetDurations = settings.sorters.map((sorter) => sorter.jetDuration);
       this.partQueue = [];
       this.speedLog = [];
+      this.encoderPartQueue = []; // Clear encoder queue (Phase 4)
+
+      // Reset encoder state
+      this.currentEncoderPosition = 0;
+      this.lastEncoderUpdateTime = 0;
+      this.encoderVelocity = 0;
+
+      // Register for conveyor data callbacks (encoder messages)
+      this.deviceManager.registerDeviceDataCallback(DeviceName.CONVEYOR_JETS, this.boundHandleConveyorData);
+
+      // Register for device reconnect callbacks (encoder state recovery)
+      this.deviceManager.registerDeviceReconnectCallback(DeviceName.CONVEYOR_JETS, this.boundHandleReconnect);
 
       // Register for settings updates
-      this.settingsManager.registerSettingsUpdateCallback(this.reinitialize.bind(this));
+      this.settingsManager.registerSettingsUpdateCallback(this.boundReinitialize);
 
       this.setStatus(ComponentStatus.READY);
     } catch (error) {
@@ -79,8 +164,12 @@ export class ConveyorManager extends BaseComponent {
   }
 
   public async deinitialize(): Promise<void> {
-    // Unregister settings callback
-    this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
+    // Unregister device data callback
+    this.deviceManager.unregisterDeviceDataCallback(DeviceName.CONVEYOR_JETS);
+    // Unregister device reconnect callback
+    this.deviceManager.unregisterDeviceReconnectCallback(DeviceName.CONVEYOR_JETS);
+    // Unregister settings callback (using same bound reference as registration)
+    this.settingsManager.unregisterSettingsUpdateCallback(this.boundReinitialize);
     // clear all part actions
     this.partQueue.forEach((part) => {
       if (part.moveRef) clearTimeout(part.moveRef);
@@ -93,6 +182,7 @@ export class ConveyorManager extends BaseComponent {
     }
     this.partQueue = [];
     this.speedLog = [];
+    this.encoderPartQueue = []; // Clear encoder queue (Phase 4)
 
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
@@ -395,6 +485,524 @@ export class ConveyorManager extends BaseComponent {
 
   public getPartQueue(): Part[] {
     return this.partQueue;
+  }
+
+  // --- Encoder Position Tracking Methods (Phase 2) ---
+
+  private handleReconnect(): void {
+    console.log('\x1b[32m[ENCODER] Conveyor reconnected, syncing encoder state\x1b[0m');
+    // Clear stale data
+    this.encoderVelocity = 0;
+    this.lastEncoderUpdateTime = 0;
+    // Request current position from Arduino
+    this.requestEncoderPosition()
+      .then((position) => {
+        console.log(`\x1b[32m[ENCODER] Synced position after reconnect: ${position}\x1b[0m`);
+      })
+      .catch((err) => {
+        console.error('\x1b[33m[ENCODER] Failed to sync position after reconnect:\x1b[0m', err);
+      });
+  }
+
+  private handleConveyorData(data: string): void {
+    if (data.startsWith('EP:')) {
+      // Encoder position report: EP:<position>
+      const position = parseInt(data.substring(3), 10);
+      if (!isNaN(position)) {
+        this.updateEncoderPosition(position);
+
+        // Resolve pending position request if one exists
+        if (this.pendingPositionRequest) {
+          clearTimeout(this.pendingPositionRequest.timeout);
+          this.pendingPositionRequest.resolve(position);
+          this.pendingPositionRequest = null;
+        }
+      }
+    } else if (data.startsWith('JF:')) {
+      // Jet fired confirmation: JF:<jet>,<position>
+      const parts = data.substring(3).split(',');
+      if (parts.length === 2) {
+        const jet = parseInt(parts[0], 10);
+        const position = parseInt(parts[1], 10);
+        if (!isNaN(jet) && !isNaN(position)) {
+          this.handleJetFired(jet, position);
+        }
+      }
+    } else if (data.startsWith('JQ:')) {
+      // Jet queued confirmation: JQ:<jet>,<position>
+      const parts = data.substring(3).split(',');
+      if (parts.length === 2) {
+        const jet = parseInt(parts[0], 10);
+        const position = parseInt(parts[1], 10);
+        console.log(`\x1b[32m[ENCODER] Jet ${jet} queued at position ${position}\x1b[0m`);
+
+        // Verify the queued jet matches a pending part
+        const matchingPart = this.encoderPartQueue.find(
+          (p) => p.jet === jet && p.jetPosition === position && p.jetCommandSent,
+        );
+        if (!matchingPart) {
+          console.warn(`[ENCODER] JQ confirmation for unknown jet/position: ${jet}/${position}`);
+        }
+      }
+    } else if (data.startsWith('BS:')) {
+      // Buffer status: BS:<count>,<capacity>
+      const parts = data.substring(3).split(',');
+      if (parts.length === 2) {
+        const count = parseInt(parts[0], 10);
+        const capacity = parseInt(parts[1], 10);
+        if (!isNaN(count) && !isNaN(capacity)) {
+          this.socketManager.emitBufferStatusUpdate(count, capacity);
+        }
+      }
+    } else if (data.startsWith('ER:')) {
+      // Encoder reset confirmation: ER:0
+      console.log(`\x1b[32m[ENCODER] Encoder reset confirmed: ${data}\x1b[0m`);
+    } else if (data.includes('Error: Jet buffer full')) {
+      // Arduino buffer is full - log warning
+      console.error('\x1b[31m[ENCODER] Arduino jet buffer full - commands may be lost\x1b[0m');
+      // Could emit event to frontend to display warning
+    }
+  }
+
+  /**
+   * Updates the encoder position and calculates smoothed velocity.
+   * Handles overflow detection and applies exponential moving average smoothing.
+   * @param position - The new encoder position in ticks (counts)
+   */
+  private updateEncoderPosition(position: number): void {
+    // Runtime validation - guard against invalid data
+    if (typeof position !== 'number' || isNaN(position)) {
+      console.error('\x1b[31m[ENCODER] Invalid position received:\x1b[0m', position);
+      return;
+    }
+
+    const now = Date.now();
+    const elapsed = now - this.lastEncoderUpdateTime;
+
+    // Calculate velocity from position delta (only if we have a previous update)
+    if (this.lastEncoderUpdateTime > 0 && elapsed > 0) {
+      const delta = position - this.currentEncoderPosition;
+
+      // Detect overflow: large negative delta indicates Arduino wrapped around
+      if (delta < -this.OVERFLOW_THRESHOLD) {
+        console.warn('\x1b[33m[ENCODER] Position overflow detected, resetting velocity\x1b[0m');
+        this.encoderVelocity = 0;
+        // Don't calculate velocity from wrap-around delta
+      } else {
+        const instantVelocity = delta / elapsed; // counts per millisecond
+        // Apply exponential moving average smoothing
+        this.encoderVelocity =
+          this.VELOCITY_SMOOTHING_ALPHA * instantVelocity + (1 - this.VELOCITY_SMOOTHING_ALPHA) * this.encoderVelocity;
+
+        // Reset to 0 if velocity is negligible (conveyor stopped)
+        if (Math.abs(this.encoderVelocity) < this.VELOCITY_STOP_THRESHOLD) {
+          this.encoderVelocity = 0;
+        }
+      }
+    }
+
+    this.currentEncoderPosition = position;
+    this.lastEncoderUpdateTime = now;
+
+    // Process position-based actions for encoder scheduling (Phase 4)
+    this.processPositionActions(position);
+
+    // Broadcast to frontend
+    this.socketManager.emitEncoderPositionUpdate(position, now, this.encoderVelocity);
+  }
+
+  /**
+   * Handles a jet fired confirmation from the Arduino.
+   * Updates the part status and removes it from the queue.
+   * @param jet - The jet number that fired (0-3)
+   * @param position - The encoder position when the jet fired
+   */
+  private handleJetFired(jet: number, position: number): void {
+    console.log(`\x1b[32m[ENCODER] Jet ${jet} fired at encoder position ${position}\x1b[0m`);
+
+    // Check if encoder scheduling is enabled
+    const settings = this.settingsManager.getSettings();
+    if (!settings?.useEncoderScheduling) {
+      return;
+    }
+
+    // Find the part in the encoder queue that matches this jet and hasn't been sorted yet
+    const part = this.encoderPartQueue.find((p) => p.jet === jet && p.status !== 'sorted');
+
+    if (part) {
+      // Update part status
+      part.status = 'sorted';
+
+      // Remove from queue
+      this.removeEncoderPart(part.partId);
+
+      // Emit sorted event to frontend
+      this.socketManager.emitEncoderPartSorted(part);
+
+      console.log(`\x1b[32m[JET_FIRED] Jet ${jet} at position ${position} sorted part ${part.partId}\x1b[0m`);
+    } else {
+      console.warn(`[JET_FIRED] No matching part found for jet ${jet} at position ${position}`);
+    }
+  }
+
+  /**
+   * Returns the interpolated encoder position based on last known position and velocity.
+   * Interpolation is capped at MAX_INTERPOLATION_MS to prevent runaway extrapolation.
+   * @returns Estimated current encoder position in ticks (counts)
+   */
+  public getInterpolatedPosition(): number {
+    if (this.lastEncoderUpdateTime === 0) {
+      return this.currentEncoderPosition;
+    }
+    const elapsed = Date.now() - this.lastEncoderUpdateTime;
+    // Cap interpolation to avoid runaway extrapolation
+    const cappedElapsed = Math.min(elapsed, this.MAX_INTERPOLATION_MS);
+    return Math.round(this.currentEncoderPosition + cappedElapsed * this.encoderVelocity);
+  }
+
+  /**
+   * Checks if the encoder data is stale (older than STALE_DATA_THRESHOLD_MS).
+   * @returns true if data is stale or no data has been received, false otherwise
+   */
+  public isEncoderDataStale(): boolean {
+    if (this.lastEncoderUpdateTime === 0) {
+      return true;
+    }
+    return Date.now() - this.lastEncoderUpdateTime > this.STALE_DATA_THRESHOLD_MS;
+  }
+
+  /**
+   * Returns the last known encoder position without interpolation.
+   * @returns Last reported encoder position in ticks (counts)
+   */
+  public getCurrentEncoderPosition(): number {
+    return this.currentEncoderPosition;
+  }
+
+  /**
+   * Returns the current smoothed encoder velocity.
+   * @returns Velocity in counts per millisecond (smoothed via EMA)
+   */
+  public getEncoderVelocity(): number {
+    return this.encoderVelocity;
+  }
+
+  /**
+   * Returns a snapshot of the current encoder state.
+   * Useful for position translation with accurate timestamp.
+   * @returns Object containing position, timestamp, and velocity
+   */
+  public getEncoderSnapshot(): { position: number; timestamp: number; velocity: number } {
+    return {
+      position: this.currentEncoderPosition,
+      timestamp: this.lastEncoderUpdateTime,
+      velocity: this.encoderVelocity,
+    };
+  }
+
+  // ============================================================================
+  // Encoder-Based Part Queue Methods (Phase 4)
+  // ============================================================================
+
+  /**
+   * Inserts a part into the encoder part queue, maintaining sort order by jetPosition.
+   * @param part - The EncoderPart to insert
+   */
+  public insertEncoderPart(part: EncoderPart): void {
+    // Find insertion index to maintain jetPosition order (ascending)
+    const insertIndex = this.encoderPartQueue.findIndex((p) => p.jetPosition > part.jetPosition);
+
+    if (insertIndex === -1) {
+      this.encoderPartQueue.push(part);
+    } else {
+      this.encoderPartQueue.splice(insertIndex, 0, part);
+    }
+
+    console.log(
+      `[ENCODER_QUEUE] Added part ${part.partId} at jetPos ${part.jetPosition}, ` +
+        `queue size: ${this.encoderPartQueue.length}`,
+    );
+  }
+
+  /**
+   * Removes a part from the encoder part queue by partId.
+   * @param partId - The ID of the part to remove
+   * @returns The removed part, or null if not found
+   */
+  public removeEncoderPart(partId: string): EncoderPart | null {
+    const index = this.encoderPartQueue.findIndex((p) => p.partId === partId);
+    if (index !== -1) {
+      const removed = this.encoderPartQueue.splice(index, 1)[0];
+      console.log(`[ENCODER_QUEUE] Removed part ${partId}, queue size: ${this.encoderPartQueue.length}`);
+      return removed;
+    }
+    return null;
+  }
+
+  /**
+   * Gets parts that are ready for action based on current encoder position.
+   * @param currentPosition - Current encoder position
+   * @returns Object containing arrays of parts ready for jet queuing and move sending
+   */
+  public getActionableParts(currentPosition: number): {
+    jetsToQueue: EncoderPart[];
+    movesToSend: EncoderPart[];
+  } {
+    const jetsToQueue: EncoderPart[] = [];
+    const movesToSend: EncoderPart[] = [];
+
+    for (const part of this.encoderPartQueue) {
+      // Skip parts that have been marked as skipped
+      if (part.status === 'skipped') {
+        continue;
+      }
+
+      // Check if jet command should be sent (position is within lead distance of jet)
+      if (!part.jetCommandSent && currentPosition >= part.jetPosition - this.JET_LEAD_COUNTS) {
+        jetsToQueue.push(part);
+      }
+
+      // Check if move command should be sent
+      if (!part.moveCommandSent && currentPosition >= part.moveTriggerPosition) {
+        movesToSend.push(part);
+      }
+    }
+
+    return { jetsToQueue, movesToSend };
+  }
+
+  /**
+   * Gets the current encoder part queue.
+   * @returns Array of EncoderParts in the queue
+   */
+  public getEncoderPartQueue(): EncoderPart[] {
+    return this.encoderPartQueue;
+  }
+
+  /**
+   * Clears all encoder parts from the queue.
+   * Used for reset/reinitialization.
+   */
+  public clearEncoderPartQueue(): void {
+    const count = this.encoderPartQueue.length;
+    this.encoderPartQueue = [];
+    console.log(`[ENCODER_QUEUE] Cleared ${count} parts from queue`);
+  }
+
+  /**
+   * Sets the SorterStateManager reference.
+   * Called after construction to avoid circular dependency.
+   */
+  public setSorterStateManager(sorterStateManager: SorterStateManager): void {
+    this.sorterStateManager = sorterStateManager;
+  }
+
+  // ============================================================================
+  // Position-Based Action Loop (Phase 4)
+  // ============================================================================
+
+  /**
+   * Processes position-based actions for the encoder part queue.
+   * Called on each encoder position update to trigger jet queuing and move commands.
+   * @param currentPosition - Current encoder position
+   */
+  private processPositionActions(currentPosition: number): void {
+    // Only process if encoder scheduling is enabled
+    const settings = this.settingsManager.getSettings();
+    // #region agent log
+    if (!settings?.useEncoderScheduling) {
+      // Log only occasionally to avoid spam (every 5 seconds)
+      if (!this._lastEncoderSkipLog || Date.now() - this._lastEncoderSkipLog > 5000) {
+        this._lastEncoderSkipLog = Date.now();
+        fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: 'ConveyorManager.ts:processPositionActions',
+            message: 'Encoder scheduling disabled',
+            data: { useEncoderScheduling: settings?.useEncoderScheduling, hasSettings: !!settings },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            hypothesisId: 'A',
+          }),
+        }).catch(() => {});
+      }
+      return;
+    }
+    // #endregion
+
+    // Don't process actions if encoder data is stale
+    if (this.isEncoderDataStale()) {
+      console.warn('[ENCODER_ACTION] Skipping action processing - encoder data is stale');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'ConveyorManager.ts:processPositionActions',
+          message: 'Encoder data stale',
+          data: { currentPosition, lastUpdateTime: this.lastEncoderUpdateTime, now: Date.now() },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'B',
+        }),
+      }).catch(() => {});
+      // #endregion
+      return;
+    }
+
+    const { jetsToQueue, movesToSend } = this.getActionableParts(currentPosition);
+
+    // #region agent log
+    if (this.encoderPartQueue.length > 0) {
+      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'ConveyorManager.ts:processPositionActions',
+          message: 'Checking actionable parts',
+          data: {
+            currentPosition,
+            queueLength: this.encoderPartQueue.length,
+            jetsToQueueCount: jetsToQueue.length,
+            movesToSendCount: movesToSend.length,
+            firstPart: this.encoderPartQueue[0]
+              ? {
+                  partId: this.encoderPartQueue[0].partId,
+                  jetPosition: this.encoderPartQueue[0].jetPosition,
+                  jetCommandSent: this.encoderPartQueue[0].jetCommandSent,
+                  jet: this.encoderPartQueue[0].jet,
+                  threshold: this.encoderPartQueue[0].jetPosition - this.JET_LEAD_COUNTS,
+                }
+              : null,
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'C',
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
+
+    // Send jet queue commands to Arduino
+    for (const part of jetsToQueue) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'ConveyorManager.ts:processPositionActions',
+          message: 'About to queue jet fire',
+          data: { partId: part.partId, jet: part.jet, jetPosition: part.jetPosition, currentPosition },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'D',
+        }),
+      }).catch(() => {});
+      // #endregion
+      this.queueJetFire(part);
+      part.jetCommandSent = true;
+    }
+
+    // Send move commands to sorters
+    for (const part of movesToSend) {
+      this.sendMoveCommand(part);
+      part.moveCommandSent = true;
+      part.status = 'moving';
+    }
+  }
+  private _lastEncoderSkipLog?: number;
+
+  /**
+   * Queues a jet fire command with the Arduino.
+   * Sends the position-triggered jet command.
+   * @param part - The EncoderPart for which to queue the jet
+   */
+  private queueJetFire(part: EncoderPart): void {
+    // Send queue jet command: q<jet>,<position>
+    const command = `q${part.jet},${part.jetPosition}`;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'ConveyorManager.ts:queueJetFire',
+        message: 'Sending jet queue command to Arduino',
+        data: {
+          command,
+          partId: part.partId,
+          jet: part.jet,
+          jetPosition: part.jetPosition,
+          currentEncoderPos: this.currentEncoderPosition,
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        hypothesisId: 'D',
+      }),
+    }).catch(() => {});
+    // #endregion
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, command);
+    console.log(`[JET_QUEUE] Queued jet ${part.jet} at position ${part.jetPosition} for part ${part.partId}`);
+  }
+
+  /**
+   * Sends a move command to the sorter.
+   * @param part - The EncoderPart for which to send the move
+   */
+  private sendMoveCommand(part: EncoderPart): void {
+    if (!this.sorterStateManager) {
+      console.error('[ENCODER_ACTION] Cannot send move command - SorterStateManager not set');
+      return;
+    }
+
+    // Send move command to sorter
+    this.sorterManager.moveSorter(part.sorter, part.bin);
+
+    // Mark move started in SorterStateManager
+    this.sorterStateManager.markMoveStarted(part.sorter, part.bin);
+
+    console.log(`[ENCODER_MOVE] Sent move to bin ${part.bin} on sorter ${part.sorter} for part ${part.partId}`);
+  }
+
+  /**
+   * Requests the current encoder position from the Arduino.
+   * @returns Promise that resolves with the encoder position in ticks
+   * @throws Error if a request is already pending or times out after 1000ms
+   */
+  public requestEncoderPosition(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      // Check if a request is already pending
+      if (this.pendingPositionRequest) {
+        reject(new Error('Position request already pending'));
+        return;
+      }
+
+      // Set up timeout for the request
+      const timeout = setTimeout(() => {
+        if (this.pendingPositionRequest) {
+          this.pendingPositionRequest = null;
+          reject(new Error('Position request timed out'));
+        }
+      }, 1000);
+
+      // Store the pending request
+      this.pendingPositionRequest = { resolve, reject, timeout };
+
+      // Send the request command
+      this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, 'e');
+    });
+  }
+
+  /**
+   * Resets the encoder position to zero on both Arduino and server.
+   * Local state is reset immediately; Arduino will confirm with ER:0.
+   */
+  public resetEncoderPosition(): void {
+    this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, 'r');
+    // Reset local state immediately (Arduino will confirm with ER:0)
+    this.currentEncoderPosition = 0;
+    this.lastEncoderUpdateTime = Date.now();
+    this.encoderVelocity = 0;
   }
 
   protected notifyStatusChange(): void {

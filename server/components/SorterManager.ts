@@ -21,11 +21,17 @@ export class SorterManager extends BaseComponent {
   private binPositions: { x: number; y: number }[][] = [];
   private currentPositions: number[] = [];
 
+  /** Bound callback for settings updates (prevents memory leak) */
+  private boundReinitialize: () => Promise<void>;
+
   constructor(config: SorterManagerConfig) {
     super('SorterManager');
     this.deviceManager = config.deviceManager;
     this.socketManager = config.socketManager;
     this.settingsManager = config.settingsManager;
+
+    // Bind callback once in constructor to ensure same reference for register/unregister
+    this.boundReinitialize = this.reinitialize.bind(this);
   }
 
   private generateBinPositions(gridDimensions: number[]): { x: number; y: number }[][] {
@@ -74,7 +80,7 @@ export class SorterManager extends BaseComponent {
       this.binPositions = this.generateBinPositions(this.gridDimensions);
 
       // Register for settings updates
-      this.settingsManager.registerSettingsUpdateCallback(this.reinitialize.bind(this));
+      this.settingsManager.registerSettingsUpdateCallback(this.boundReinitialize);
       this.setStatus(ComponentStatus.READY);
     } catch (error) {
       this.setError(error instanceof Error ? error.message : 'Unknown error initializing sorter manager');
@@ -87,8 +93,8 @@ export class SorterManager extends BaseComponent {
   }
 
   public async deinitialize(): Promise<void> {
-    // Unregister settings callback
-    this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
+    // Unregister settings callback (using same bound reference as registration)
+    this.settingsManager.unregisterSettingsUpdateCallback(this.boundReinitialize);
     this.currentPositions = [];
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
