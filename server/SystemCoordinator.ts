@@ -40,6 +40,7 @@ export class SystemCoordinator {
       onRecordCameraPosition: this.handleRecordCameraPosition.bind(this),
       onRecordCameraWidth: this.handleRecordCameraWidth.bind(this),
       onRecordJetPosition: this.handleRecordJetPosition.bind(this),
+      onSaveCalibrationData: this.handleSaveCalibrationData.bind(this),
     });
 
     this.settingsManager = new SettingsManager(this.socketManager);
@@ -629,6 +630,60 @@ export class SystemCoordinator {
     } catch (error) {
       console.error('[CALIBRATION] Error recording jet position:', error);
       this.socketManager.emitCalibrationPointRecorded('jet', 0, false, data.sorter);
+    }
+  }
+
+  /**
+   * Handles batched calibration data save from frontend.
+   * Saves all calibration values (camera width + jet positions) in a single Firebase write.
+   * This reduces settings update cascades from 5 to 1.
+   */
+  private async handleSaveCalibrationData(data: {
+    cameraWidthInTicks: number;
+    cameraWidthPixels?: number;
+    jetEncoderOffsets: [number, number, number, number];
+  }): Promise<void> {
+    try {
+      const { cameraWidthInTicks, cameraWidthPixels, jetEncoderOffsets } = data;
+
+      console.log('[CALIBRATION] Saving all calibration data at once');
+      console.log(`[CALIBRATION] Camera width: ${cameraWidthInTicks} ticks`);
+      console.log(`[CALIBRATION] Jet offsets: [${jetEncoderOffsets.join(', ')}]`);
+
+      // Validate camera width
+      if (cameraWidthInTicks <= 0) {
+        throw new Error(`Invalid camera width: ${cameraWidthInTicks} (must be positive)`);
+      }
+
+      const currentSettings = this.settingsManager.getSettings();
+      if (!currentSettings) {
+        throw new Error('Settings not available');
+      }
+
+      // Validate jet offsets - warn if any are less than camera width
+      jetEncoderOffsets.forEach((offset, index) => {
+        if (offset > 0 && offset <= cameraWidthInTicks) {
+          console.warn(
+            `[CALIBRATION] Warning: Jet ${index} offset (${offset}) ` +
+              `is not greater than camera width (${cameraWidthInTicks}). This may cause timing issues.`,
+          );
+        }
+      });
+
+      await this.settingsManager.updateSettings({
+        positionCalibration: {
+          ...currentSettings.positionCalibration,
+          cameraWidthInTicks,
+          ...(cameraWidthPixels && cameraWidthPixels > 0 && { cameraWidthPixels }),
+          jetEncoderOffsets,
+        },
+      });
+
+      this.socketManager.emitCalibrationPointRecorded('cameraWidth', cameraWidthInTicks, true);
+      console.log('[CALIBRATION] All calibration data saved successfully');
+    } catch (error) {
+      console.error('[CALIBRATION] Error saving calibration data:', error);
+      this.socketManager.emitCalibrationPointRecorded('cameraWidth', 0, false);
     }
   }
 }

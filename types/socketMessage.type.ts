@@ -18,6 +18,8 @@ export enum FrontToBackEvents {
   RECORD_JET_POSITION = 'record-jet-position',
   /** Record camera view width in encoder ticks (left edge to right edge) */
   RECORD_CAMERA_WIDTH = 'record-camera-width',
+  /** Save all calibration data at once (camera width + jet positions) */
+  SAVE_CALIBRATION_DATA = 'save-calibration-data',
 }
 
 export enum BackToFrontEvents {
@@ -82,6 +84,15 @@ export interface EventPayloads {
     widthInTicks: number;
     /** Optional: Camera resolution width in pixels (auto-synced from video capture) */
     cameraWidthPixels?: number;
+  };
+  /** Save all calibration data at once (batched save on calibration end) */
+  [FrontToBackEvents.SAVE_CALIBRATION_DATA]: {
+    /** Camera view width in encoder ticks */
+    cameraWidthInTicks: number;
+    /** Optional: Camera resolution width in pixels */
+    cameraWidthPixels?: number;
+    /** Encoder tick offsets from camera left edge to each jet [0-3] */
+    jetEncoderOffsets: [number, number, number, number];
   };
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.SORT_PART_SUCCESS]: { success: boolean };

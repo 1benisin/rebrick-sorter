@@ -27,6 +27,11 @@ export interface SocketManagerConfig extends ComponentConfig {
   onRecordCameraPosition: () => void;
   onRecordCameraWidth: (data: { widthInTicks: number; cameraWidthPixels?: number }) => void;
   onRecordJetPosition: (data: { sorter: number; offsetFromLeftEdge: number }) => void;
+  onSaveCalibrationData: (data: {
+    cameraWidthInTicks: number;
+    cameraWidthPixels?: number;
+    jetEncoderOffsets: [number, number, number, number];
+  }) => Promise<void>;
 }
 
 export class SocketManager extends BaseComponent {
@@ -78,6 +83,7 @@ export class SocketManager extends BaseComponent {
     this.socket.on(FrontToBackEvents.RECORD_CAMERA_POSITION, this.handlers.onRecordCameraPosition);
     this.socket.on(FrontToBackEvents.RECORD_CAMERA_WIDTH, this.handlers.onRecordCameraWidth);
     this.socket.on(FrontToBackEvents.RECORD_JET_POSITION, this.handlers.onRecordJetPosition);
+    this.socket.on(FrontToBackEvents.SAVE_CALIBRATION_DATA, this.handlers.onSaveCalibrationData);
 
     this.socket.on('disconnect', () => {
       this.setStatus(ComponentStatus.UNINITIALIZED);

@@ -60,73 +60,69 @@ This is the primary calibration workflow for accurate part sorting. It measures:
 
 1. [ ] Place a LEGO part on the conveyor
 2. [ ] Position it aligned with the **left edge** of the camera view
-3. [ ] Use the motor driver forward button to move the conveyor
-4. [ ] Stop when part reaches the **right edge** of camera view
-5. [ ] Click "Mark Camera Width"
-6. [ ] Verify: Button shows green checkmark with tick count (e.g., "✓ Camera Width / 150 ticks")
-7. [ ] Verify: Jet buttons become enabled
-8. [ ] Verify: Value saved to Firebase (check console or Firebase console)
+3. [ ] Use the **physical switch on the motor driver** to move the conveyor forward
+4. [ ] **Important:** Do NOT move the conveyor backwards during calibration
+5. [ ] Stop when part reaches the **right edge** of camera view
+6. [ ] Click "Mark Camera Width"
+7. [ ] Verify: Button shows green checkmark with tick count (e.g., "✓ Camera Width / 150 ticks")
+8. [ ] Verify: Jet buttons become enabled
+9. [ ] Note: Value is stored locally until "Stop Calibration" is clicked (batched save)
 
-**Expected Server Logs:**
+**Expected Behavior:**
 
-```
-[CALIBRATION] Recording camera width: <ticks> ticks
-[CALIBRATION] Camera width recorded successfully: <ticks> ticks
-```
-
-**Expected Socket Events:**
-
-- `CALIBRATION_POINT_RECORDED` with `{ type: 'cameraWidth', position: <ticks>, success: true }`
-
-**Firebase Verification:**
-
-- `positionCalibration.cameraWidthInTicks` should equal recorded value
-- `positionCalibration.cameraWidthPixels` should match video capture width
+- Value stored in local React state (not saved to Firebase yet)
+- No server logs or socket events until calibration ends
 
 #### Jet Position Recording
 
 Repeat for each jet (A, B, C, D):
 
-1. [ ] Continue moving conveyor forward from camera position
+1. [ ] Continue moving conveyor **forward only** from camera position
 2. [ ] Stop when part is centered under Jet A nozzle
 3. [ ] Click "Jet A" button
 4. [ ] Verify: Button shows green with offset value (e.g., "✓ Jet A / 500 ticks")
 5. [ ] Verify: Offset value > camera width (warning appears if not)
 6. [ ] Repeat for Jets B, C, D
 
-**Expected Server Logs:**
+**Expected Behavior:**
 
-```
-[CALIBRATION] Recording jet 0: <offset> ticks from camera left edge
-[CALIBRATION] Jet 0 recorded successfully: <offset> ticks from left edge
-```
-
-**Validation Warning (if offset ≤ camera width):**
-
-```
-[CALIBRATION] Warning: Jet 0 offset (<offset>) is not greater than camera width (<width>). This may cause timing issues.
-```
-
-**Expected Socket Events:**
-
-- `CALIBRATION_POINT_RECORDED` with `{ type: 'jet', position: <offset>, sorter: <0-3>, success: true }`
-
-**Firebase Verification:**
-
-- `positionCalibration.jetEncoderOffsets[<sorter>]` should equal recorded value
+- Values stored in local React state (not saved to Firebase yet)
+- Validation warning shown in UI if offset ≤ camera width
+- No server logs or socket events until calibration ends
 
 #### Stop Calibration
 
 1. [ ] Click "Stop Calibration"
-2. [ ] Verify: Confirmation message shows all recorded values
-3. [ ] Verify: Confirmation auto-dismisses after 5 seconds
-4. [ ] Verify: Status indicator shows "✓ Done" briefly
+2. [ ] Verify: All calibration data saved to Firebase in single write
+3. [ ] Verify: Confirmation message shows all recorded values
+4. [ ] Verify: Confirmation auto-dismisses after 5 seconds
+5. [ ] Verify: Status indicator shows "✓ Done" briefly
+
+**Expected Server Logs:**
+
+```
+[CALIBRATION] Saving all calibration data at once
+[CALIBRATION] Camera width: <ticks> ticks
+[CALIBRATION] Jet offsets: [<offset0>, <offset1>, <offset2>, <offset3>]
+[CALIBRATION] All calibration data saved successfully
+```
+
+**Expected Socket Events:**
+
+- `SAVE_CALIBRATION_DATA` sent from frontend with `{ cameraWidthInTicks, cameraWidthPixels?, jetEncoderOffsets }`
+- `CALIBRATION_POINT_RECORDED` response with `{ type: 'cameraWidth', position: <ticks>, success: true }`
+
+**Firebase Verification:**
+
+- `positionCalibration.cameraWidthInTicks` should equal recorded camera width value
+- `positionCalibration.cameraWidthPixels` should match video capture width
+- `positionCalibration.jetEncoderOffsets[0-3]` should equal recorded jet offset values
 
 #### Re-marking During Calibration
 
 - [ ] Camera Width can be re-marked by clicking the button again
 - [ ] Jet positions can be re-marked by clicking the respective button
-- [ ] Values are saved to Firebase immediately on each mark
+- [ ] Values are stored locally and only saved when "Stop Calibration" is clicked (batched save)
 
 ---
 
@@ -439,9 +435,11 @@ yarn test:coverage
 
 ### Calibration Values Not Saving
 
-1. Check Firebase connection in browser console
-2. Verify user ID matches between client and server
-3. Check for validation errors in settings schema
+1. Ensure you clicked "Stop Calibration" to trigger the batched save
+2. Check Firebase connection in browser console
+3. Verify user ID matches between client and server
+4. Check for validation errors in settings schema
+5. Check server logs for `[CALIBRATION] Error saving calibration data:` messages
 
 ### Parts Always Skipped
 

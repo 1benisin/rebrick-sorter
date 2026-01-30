@@ -63,6 +63,7 @@ Once complete, the server listens for HTTP and WebSocket connections.
   - `initializeComponents()`: Manages system startup
   - `handleSortPart(data: SortPartDto)`: Entry point for sorting a part
   - `translatePixelToEncoder()`: Converts frontend pixel position to encoder position
+  - `handleSaveCalibrationData()`: Batched save of all calibration data (camera width + jet offsets) in a single Firebase write
 - **Interactions:** Coordinates all manager components
 
 ### 4.2. `SettingsManager`
@@ -94,8 +95,8 @@ Once complete, the server listens for HTTP and WebSocket connections.
 
 - **Purpose:** Real-time communication with frontend
 - **Interactions:**
-  - **Frontend → Backend:** `SORT_PART`, manual control commands
-  - **Backend → Frontend:** `ENCODER_POSITION`, `PART_SORTED`, `PART_SKIPPED`, status updates
+  - **Frontend → Backend:** `SORT_PART`, `SAVE_CALIBRATION_DATA`, manual control commands
+  - **Backend → Frontend:** `ENCODER_POSITION`, `PART_SORTED`, `PART_SKIPPED`, `CALIBRATION_POINT_RECORDED`, status updates
 - **State:** Active socket instance
 
 ### 4.5. `SorterStateManager`

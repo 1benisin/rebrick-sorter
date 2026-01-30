@@ -140,6 +140,7 @@ Real-time bidirectional communication via Socket.IO.
 **Frontend → Backend:**
 
 - `SORT_PART`: Classified part data (pixelPos, timestamp, bin, sorter)
+- `SAVE_CALIBRATION_DATA`: Batched calibration data (cameraWidthInTicks, jetEncoderOffsets)
 - Manual control commands (conveyor on/off, jet fire, etc.)
 
 **Backend → Frontend:**
@@ -147,6 +148,7 @@ Real-time bidirectional communication via Socket.IO.
 - `ENCODER_POSITION`: Current conveyor position for visualization
 - `PART_SORTED`: Confirmation when part sorted
 - `PART_SKIPPED`: Notification when part couldn't be sorted
+- `CALIBRATION_POINT_RECORDED`: Confirmation when calibration data is saved
 - Hardware status updates
 
 ### 5.2. Backend ↔ Hardware (Serial USB)
@@ -218,7 +220,7 @@ Stored in `settings.positionCalibration`:
 }
 ```
 
-**Calibration workflow:** The new jet calibration panel resets the encoder to 0 at the camera left edge, then measures distances to the camera right edge (for `cameraWidthInTicks`) and to each air jet (for `jetEncoderOffsets`).
+**Calibration workflow:** The jet calibration panel resets the encoder to 0 at the camera left edge, then measures distances to the camera right edge (for `cameraWidthInTicks`) and to each air jet (for `jetEncoderOffsets`). Calibration values are stored locally during the process and saved to Firebase in a single batched write when "Stop Calibration" is clicked, minimizing device reconfiguration cascades.
 
 ### 6.3. Sorter Availability
 

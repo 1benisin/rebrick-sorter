@@ -68,6 +68,8 @@ The key services are:
   - Live encoder position display during calibration
   - Validation warnings (e.g., jet offset should be greater than camera width)
   - Confirmation display showing recorded values
+  - **Batched saves:** All calibration values are stored locally during calibration and saved to Firebase in a single write when "Stop Calibration" is clicked (reduces unnecessary device reconfigurations)
+  - **Tooltip instructions:** Includes guidance about using the physical motor driver switch and not moving the conveyor backwards during calibration
 
 ### 4.2. Global State Management with Zustand
 
@@ -104,8 +106,9 @@ The frontend communicates with several other systems, each with a distinct proto
     - `sorter`: Which sorter (0-3)
   - **Calibration Events (Client -> Server):**
     - `RESET_ENCODER`: Resets encoder position to 0 (start of calibration)
-    - `RECORD_CAMERA_WIDTH`: Records camera width in ticks (`{ widthInTicks, cameraWidthPixels? }`)
-    - `RECORD_JET_POSITION`: Records jet offset from camera left edge (`{ sorter, offsetFromLeftEdge }`)
+    - `SAVE_CALIBRATION_DATA`: Batched save of all calibration data when calibration ends (`{ cameraWidthInTicks, cameraWidthPixels?, jetEncoderOffsets: [number, number, number, number] }`)
+    - `RECORD_CAMERA_WIDTH`: _(Legacy - individual save)_ Records camera width in ticks (`{ widthInTicks, cameraWidthPixels? }`)
+    - `RECORD_JET_POSITION`: _(Legacy - individual save)_ Records jet offset from camera left edge (`{ sorter, offsetFromLeftEdge }`)
   - **Server -> Client:** The backend streams status updates:
     - `ENCODER_POSITION_UPDATE`: Current conveyor encoder position with velocity (`{ position, timestamp, velocity }`)
     - `BUFFER_STATUS_UPDATE`: Arduino's pending jets buffer status (`{ count, capacity }`)

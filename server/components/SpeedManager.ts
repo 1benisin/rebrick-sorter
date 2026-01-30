@@ -21,11 +21,17 @@ export class SpeedManager extends BaseComponent {
   // Current speed in pixels per millisecond
   private currentSpeed: number = 0;
 
+  /** Bound callback for settings updates (prevents memory leak from creating new function on each bind) */
+  private boundReinitialize: () => Promise<void>;
+
   constructor(config: SpeedManagerConfig) {
     super('SpeedManager');
     this.deviceManager = config.deviceManager;
     this.socketManager = config.socketManager;
     this.settingsManager = config.settingsManager;
+
+    // Create bound callback once in constructor to ensure same reference for register/unregister
+    this.boundReinitialize = this.reinitialize.bind(this);
   }
 
   public async initialize(): Promise<void> {
@@ -43,7 +49,7 @@ export class SpeedManager extends BaseComponent {
       this.currentSpeed = this.defaultSpeed;
 
       // Register for settings updates
-      this.settingsManager.registerSettingsUpdateCallback(this.reinitialize.bind(this));
+      this.settingsManager.registerSettingsUpdateCallback(this.boundReinitialize);
 
       this.setStatus(ComponentStatus.READY);
     } catch (error) {
@@ -57,8 +63,8 @@ export class SpeedManager extends BaseComponent {
   }
 
   public async deinitialize(): Promise<void> {
-    // Unregister settings callback
-    this.settingsManager.unregisterSettingsUpdateCallback(this.reinitialize.bind(this));
+    // Unregister settings callback using same bound reference as registration
+    this.settingsManager.unregisterSettingsUpdateCallback(this.boundReinitialize);
     this.defaultSpeed = 0;
     this.currentSpeed = 0;
     this.setStatus(ComponentStatus.UNINITIALIZED);

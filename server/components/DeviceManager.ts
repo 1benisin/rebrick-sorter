@@ -125,7 +125,7 @@ export class DeviceManager extends BaseComponent {
       console.log('Stopped periodic port scanning.');
     }
 
-    for (const [deviceName, deviceInfo] of this.devices) {
+    for (const [deviceName, deviceInfo] of Array.from(this.devices)) {
       try {
         await new Promise<void>((resolve, reject) => {
           deviceInfo.device.close((err: Error | null) => {
@@ -422,8 +422,6 @@ export class DeviceManager extends BaseComponent {
       console.error(`\x1b[33mNo device info found for port ${deviceName}\x1b[0m`);
       return;
     }
-    console.log(`\x1b[35m[RX <- ${deviceName}]\x1b[0m Received data: ${data}`);
-
     // Handle handshake/acknowledgment protocol
     if (data.trim() === 'Ready') {
       if (!this.awaitingSettingsAck.get(deviceName)) {
