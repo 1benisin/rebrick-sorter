@@ -28,8 +28,8 @@ This folder contains technical documentation for the Rebrick Sorter project. Use
 
 ## Key Types and Locations
 
-- **SortPartDto:** `types/sortPart.dto.ts` — `partId`, `initialPosition`, `initialTime`, `encoderAtDetection`, `bin`, `sorter`
+- **SortPartDto:** `types/sortPart.dto.ts` — `partId`, `initialPosition`, `initialTime`, `encoderAtDetection`, `bin`, `sorter`, `cameraWidthPixels?`
 - **ImageCaptureType:** `types/imageCapture.d.ts` — `imageBitmaps`, `timestamp`, `encoderAtCapture`
 - **Detection:** `types/types.ts` — `encoderAtDetection`, `centroid`, `timestamp`, etc.
-- **Settings / positionCalibration:** `types/settings.type.ts` — `cameraWidthInTicks`, `cameraWidthPixels`, `jetEncoderOffsets`, `fallTimeInCounts`, `jetLeadCounts`
+- **Settings / positionCalibration:** `types/settings.type.ts` — `cameraWidthInTicks`, `cameraWidthPixels`, `jetEncoderOffsets`, `fallTimeInCounts`, `jetLeadCounts`, `sorterRestBufferInCounts`
 - **EncoderPart:** `types/part.type.ts` — server-side part with `jetPosition`, `moveTriggerPosition`, etc.

@@ -33,8 +33,9 @@ export class PositionTranslator {
         cameraWidthInTicks: 0,
         cameraWidthPixels: 1280,
         jetEncoderOffsets: [1000, 1000, 1000, 1000],
-        fallTimeInCounts: 24,
+        fallTimeInCounts: 5,
         jetLeadCounts: 100,
+        sorterRestBufferInCounts: 85,
       };
     }
     return settings.positionCalibration;
@@ -137,14 +138,18 @@ export class PositionTranslator {
 
   /**
    * Calculates the encoder position by which a sorter must be in position.
-   * This is the jet position minus the fall time in counts.
+   * This is the jet position plus the fall time in counts.
+   *
+   * The jet fires at jetPosition, then the part falls for fallTimeInCounts
+   * before landing in the sorter bin. The sorter must be in position
+   * by the time the part lands.
    *
    * @param jetPosition - Encoder position where the jet fires
-   * @returns Encoder position by which the sorter must be ready
+   * @returns Encoder position by which the sorter must be ready (when part lands)
    */
   public calculateRequiredByPosition(jetPosition: number): number {
     const calibration = this.getCalibration();
-    return jetPosition - calibration.fallTimeInCounts;
+    return jetPosition + calibration.fallTimeInCounts;
   }
 
   /**

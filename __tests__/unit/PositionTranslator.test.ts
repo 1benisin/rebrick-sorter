@@ -273,16 +273,17 @@ describe('PositionTranslator', () => {
   });
 
   describe('calculateRequiredByPosition', () => {
-    it('subtracts fallTimeInCounts from jetPosition', () => {
+    it('adds fallTimeInCounts to jetPosition (sorter must be ready when part lands)', () => {
       const mockSettings = createMockSettingsManager({
-        fallTimeInCounts: 24,
+        fallTimeInCounts: 5,
       });
       const mockConveyor = createMockConveyorManager();
       const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
 
       const requiredBy = translator.calculateRequiredByPosition(1000);
 
-      expect(requiredBy).toBe(976); // 1000 - 24
+      // Jet fires at 1000, part falls for 5 counts, lands at 1005
+      expect(requiredBy).toBe(1005); // 1000 + 5
     });
 
     it('handles different fallTimeInCounts values', () => {
@@ -294,7 +295,8 @@ describe('PositionTranslator', () => {
 
       const requiredBy = translator.calculateRequiredByPosition(1000);
 
-      expect(requiredBy).toBe(950); // 1000 - 50
+      // Jet fires at 1000, part falls for 50 counts, lands at 1050
+      expect(requiredBy).toBe(1050); // 1000 + 50
     });
   });
 

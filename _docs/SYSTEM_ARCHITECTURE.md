@@ -43,7 +43,7 @@ The primary function of the system is to identify and sort LEGO parts into desig
 │  1. Camera captures frame                                                    │
 │  2. TensorFlow.js detects part at pixel position                            │
 │  3. Brickognize API classifies part → bin assignment                        │
-│  4. Sends SORT_PART(pixelPos, timestamp, encoderAtDetection, bin, sorter)   │
+│  4. Sends SORT_PART(initialPosition, initialTime, encoderAtDetection, bin, sorter)   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -196,12 +196,9 @@ The system uses **encoder position only** for scheduling. Time-based scheduling,
    - Converts pixel position to ticks: `partTicksFromLeftEdge = (pixelX / cameraWidthPixels) * cameraWidthInTicks`
    - Calculates remaining distance to jet: `remainingTicks = jetEncoderOffsets[sorter] - partTicksFromLeftEdge`
 3. **Jet Position:** `jetPosition = encoderAtDetection + remainingTicks`
-4. **Required-By Position:** `requiredByPosition = jetPosition - fallTimeInCounts` (sorter must arrive before this)
-5. **Sorter Availability Check:** `SorterStateManager.canSorterReachBin()` determines:
-   - When the sorter will be free (after current + scheduled moves)
-   - How many encoder counts to travel from effective position to target bin
-   - Whether it can arrive before the deadline
-6. **Scheduling:** If available, creates `EncoderPart` with `jetPosition` and `moveTriggerPosition`, inserts into sorted queue.
+4. **Required-By Position:** `requiredByPosition = jetPosition + fallTimeInCounts` (sorter must be in position when part lands)
+5. **Sorter Availability Check:** `SorterStateManager.canSorterReachBin(sorter, bin, requiredByPosition)` returns `AvailabilityResult` (available, triggerPosition, reason?). It uses free position after buffer (`sorterRestBufferInCounts`), lead counts (travel time × velocity), and skip/schedule rules to compute the trigger position or skip.
+6. **Scheduling:** If available, creates `EncoderPart` with `jetPosition` and `moveTriggerPosition` = `availability.triggerPosition`, inserts into sorted queue.
 7. **Execution:** On each encoder update, `ConveyorManager.processPositionActions()`:
    - Sends jet queue commands (`q<jet>,<position>`) when `position >= jetPosition - JET_LEAD_COUNTS`
    - Sends sorter move commands when `position >= moveTriggerPosition`
@@ -220,6 +217,7 @@ Stored in `settings.positionCalibration`:
   jetEncoderOffsets: number[];   // Encoder tick distance from camera LEFT EDGE to each jet (indices 0-3 = Jets A-D)
   fallTimeInCounts: number;      // Encoder counts for part to fall from jet to sorter
   jetLeadCounts: number;         // How far ahead to send jet commands to Arduino (default 100)
+  sorterRestBufferInCounts: number; // Encoder counts sorter must remain idle after move before next move (default 20)
 }
 ```
 
@@ -227,13 +225,12 @@ Stored in `settings.positionCalibration`:
 
 ### 6.3. Sorter Availability
 
-Before scheduling a part, the server checks:
+Before scheduling a part, the server calls `canSorterReachBin(sorter, bin, requiredByPosition)` where `requiredByPosition = jetPosition + fallTimeInCounts`. The check:
 
-1. Where is the sorter now? (current bin)
-2. What moves are already scheduled? (pending queue)
-3. When will the sorter be free? (in encoder counts)
-4. How long to reach target bin? (travel time → encoder counts)
-5. Can it arrive before the part? (deadline = jetPosition - fallTime)
+1. Computes when the sorter is free *after* the rest buffer (`freePositionAfterBuffer`).
+2. Computes lead counts (travel time in ms × encoder velocity).
+3. Skip rule: if `requiredByPosition - leadCounts < freePositionAfterBuffer`, the part is skipped.
+4. Schedule rule: `triggerPosition = max(freePositionAfterBuffer, requiredByPosition - leadCounts)` (just-in-time).
 
 If the sorter can't make it, the part is **skipped** (no jet fires, falls off conveyor end).
 

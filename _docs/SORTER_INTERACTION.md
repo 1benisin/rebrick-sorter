@@ -138,10 +138,11 @@ The server maintains state for each of the 4 sorters:
 
 ```typescript
 interface SorterState {
-  currentBin: number; // Where sorter is now
-  isMoving: boolean; // Currently in motion
-  targetBin: number | null; // Where it's heading
-  lastMoveCompletePosition: number; // Encoder position when move finished
+  currentBin: number; // Confirmed bin from MC: response
+  isMoving: boolean; // True between move command sent and MC: received
+  targetBin: number | null; // Bin being moved to
+  lastMoveCompletePosition: number; // Encoder position when last move completed
+  moveStartPosition: number; // Encoder position when current move started
   scheduledMoves: ScheduledMove[]; // Queue of upcoming moves
 }
 
@@ -155,59 +156,61 @@ interface ScheduledMove {
 
 ### 5.2. Availability Check
 
-Before scheduling a part, the server checks:
+Before scheduling a part, the server calls `canSorterReachBin(sorterNum, targetBin, requiredByPosition)`, which returns an `AvailabilityResult`:
 
 ```typescript
+interface AvailabilityResult {
+  available: boolean;
+  triggerPosition: number;  // Encoder position at which to send move command
+  reason?: string;          // For logging when unavailable
+}
+
 canSorterReachBin(
   sorterNum: number,
   targetBin: number,
-  deadline: number  // Encoder position by which sorter must arrive
-): boolean {
-  // 1. When will sorter be free? (after current + scheduled moves)
-  // 2. From that position, how long to reach targetBin?
-  // 3. Will it arrive before deadline?
+  requiredByPosition: number  // Encoder position by which sorter must arrive (e.g. jetPosition + fallTimeInCounts)
+): AvailabilityResult {
+  // 1. freePositionAfterBuffer = when sorter is free + sorterRestBufferInCounts
+  // 2. leadCounts = travel time (ms) × encoder velocity (counts/ms)
+  // 3. earliestMoveStartPosition = requiredByPosition - leadCounts
+  // 4. Skip if earliestMoveStartPosition < freePositionAfterBuffer
+  // 5. If available: triggerPosition = max(freePositionAfterBuffer, earliestMoveStartPosition)
 }
 ```
 
-### 5.3. Travel Time Matrix
+The **sorter rest buffer** (`sorterRestBufferInCounts`) is the encoder counts the sorter must remain idle after a move completes before starting the next move (ensures the previous part has cleared the tube).
 
-The server stores pre-calculated travel times between bins:
+### 5.3. Travel Time and Lead Counts
 
-```typescript
-travelTimes[sorterNum][fromBin][toBin] = milliseconds;
-```
-
-This is converted to encoder counts using current conveyor velocity.
+The server gets travel time in milliseconds between bins from `SorterManager` (per-sorter, from bin to bin). This is converted to encoder counts via `calculateLeadCounts(sorterNum, fromBin, toBin)` using current conveyor velocity (or a default when conveyor is stopped).
 
 ## 6. Timing Considerations
 
 ### 6.1. Move Command Timing
 
-The server sends the move command when encoder reaches `triggerPosition`:
+The server sends the move command when encoder reaches `triggerPosition`. The trigger position is computed as just-in-time:
 
 ```
-triggerPosition = previousMoveCompletePosition
+freePositionAfterBuffer = when sorter is free + sorterRestBufferInCounts
+earliestMoveStartPosition = requiredByPosition - leadCounts
+triggerPosition = max(freePositionAfterBuffer, earliestMoveStartPosition)
 ```
 
-For the first move, or when sorter is idle:
+So the move is sent as late as possible while still respecting the rest buffer and arriving by `requiredByPosition`.
+
+### 6.2. Required-By Position
+
+The sorter must be in position before the part lands:
 
 ```
-triggerPosition = currentEncoderPosition (send immediately)
+requiredByPosition = jetPosition + fallTimeInCounts
 ```
 
-### 6.2. Part Deadline
-
-The sorter must be in position before the part falls:
-
-```
-deadline = jetPosition - fallTimeInCounts
-```
-
-Where `fallTimeInCounts` is the time for a part to fall from conveyor to funnel, converted to encoder counts.
+Where `fallTimeInCounts` is the encoder counts for the part to fall from jet to sorter. The jet fires at `jetPosition`; the part lands at encoder position `requiredByPosition`.
 
 ### 6.3. Skip Logic
 
-If `arrivalPosition > deadline`, the part is skipped:
+If `requiredByPosition - leadCounts < freePositionAfterBuffer`, the sorter cannot start moving in time, so the part is skipped:
 
 - No jet command sent (part stays on conveyor)
 - No move command sent (sorter stays put)
@@ -251,3 +254,5 @@ If `MC:` not received within expected time:
 | `ROW_MAJOR_ORDER`                    | Grid layout (true/false)           |
 
 These are stored in Firebase settings and sent to each sorter Arduino on initialization.
+
+**Server-side position calibration** (in `positionCalibration`): `sorterRestBufferInCounts` is the encoder counts the sorter must remain idle after a move completes before starting the next move (default 20). This ensures the previous part has fully cleared the tube before the sorter moves.

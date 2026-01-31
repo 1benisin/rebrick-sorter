@@ -409,8 +409,10 @@ export class SorterStateManager extends BaseComponent {
       return state.moveStartPosition + estimatedCounts;
     }
 
-    // If idle, free now
-    return this.conveyorManager.getInterpolatedPosition();
+    // If idle, free after max(lastMoveComplete, currentPosition)
+    // This ensures buffer is enforced from when the last move actually completed
+    const currentPosition = this.conveyorManager.getInterpolatedPosition();
+    return Math.max(state.lastMoveCompletePosition, currentPosition);
   }
 
   /**
@@ -422,6 +424,34 @@ export class SorterStateManager extends BaseComponent {
       return this.DEFAULT_VELOCITY;
     }
     return velocity;
+  }
+
+  /**
+   * Gets the configured sorter rest buffer in encoder counts.
+   * This is the minimum encoder counts the sorter must remain idle
+   * after completing a move before starting the next move.
+   *
+   * Equivalent to (FALL_TIME_LONGEST - FALL_TIME_SHORTEST) from the
+   * old time-based system, converted to encoder counts.
+   */
+  private getBufferCounts(): number {
+    const settings = this.settingsManager.getSettings();
+    return settings?.positionCalibration?.sorterRestBufferInCounts ?? 0;
+  }
+
+  /**
+   * Gets the encoder position at which the sorter will be free to start a new move,
+   * INCLUDING the required buffer time after the previous move completes.
+   *
+   * This is the authoritative "free after buffer" position used for scheduling.
+   * A move command should NOT be sent before this position.
+   *
+   * Formula: freeAfterBuffer = rawFreePosition + bufferCounts
+   */
+  private getFreePositionAfterBuffer(sorterNum: number): number {
+    const rawFreePosition = this.getFreePosition(sorterNum);
+    const bufferCounts = this.getBufferCounts();
+    return rawFreePosition + bufferCounts;
   }
 
   /**
@@ -456,6 +486,14 @@ export class SorterStateManager extends BaseComponent {
   /**
    * Checks if a sorter can reach a target bin by a required encoder position.
    *
+   * Skip rule (from SORTER_TIMING_RESEARCH.md Section 1.2):
+   *   Skip when earliestMoveStartPosition < freeAfterBufferPosition
+   *   i.e., (requiredByPosition - leadCounts) < (freePosition + bufferCounts)
+   *
+   * Schedule rule (from SORTER_TIMING_RESEARCH.md Section 1.3):
+   *   triggerPosition = max(freeAfterBufferPosition, requiredByPosition - leadCounts)
+   *   This is "just-in-time": move as late as possible while respecting buffer.
+   *
    * @param sorterNum - Sorter index (0-3)
    * @param targetBin - Desired bin number
    * @param requiredByPosition - Encoder position by which the sorter must arrive
@@ -471,49 +509,46 @@ export class SorterStateManager extends BaseComponent {
       };
     }
 
-    // 1. Determine when the sorter will be free
-    const freePosition = this.getFreePosition(sorterNum);
+    // 1. Get free position AFTER buffer (this is when the sorter can START moving)
+    const freePositionAfterBuffer = this.getFreePositionAfterBuffer(sorterNum);
 
     // 2. Determine the effective "from bin"
     const fromBin = this.getEffectiveFromBin(sorterNum);
 
     // 3. If already at target bin, no movement needed
+    //    Still respect buffer - return freePositionAfterBuffer for consistency
     if (fromBin === targetBin) {
       return {
         available: true,
-        triggerPosition: freePosition, // No move needed, but return free position for consistency
+        triggerPosition: freePositionAfterBuffer,
       };
     }
 
     // 4. Calculate lead counts (travel time in encoder counts)
     const leadCounts = this.calculateLeadCounts(sorterNum, fromBin, targetBin);
 
-    // 5. Calculate earliest arrival position
-    const arrivalPosition = freePosition + leadCounts;
+    // 5. Calculate the EARLIEST position at which the sorter MUST start moving
+    //    to arrive by requiredByPosition
+    const earliestMoveStartPosition = requiredByPosition - leadCounts;
 
-    // 6. Check if sorter can arrive in time
-    if (arrivalPosition > requiredByPosition) {
+    // 6. SKIP RULE: If the earliest we NEED to start moving is BEFORE
+    //    when we're allowed to start (after buffer), we cannot make it.
+    if (earliestMoveStartPosition < freePositionAfterBuffer) {
+      const bufferCounts = this.getBufferCounts();
       return {
         available: false,
         triggerPosition: 0,
         reason:
           `Sorter ${sorterNum} cannot reach bin ${targetBin} in time. ` +
-          `Needs to arrive at ${arrivalPosition} but required by ${requiredByPosition}. ` +
-          `Free at ${freePosition}, lead counts: ${leadCounts}`,
+          `Must start by position ${earliestMoveStartPosition} but sorter free (after buffer) at ${freePositionAfterBuffer}. ` +
+          `Lead counts: ${leadCounts}, buffer: ${bufferCounts}`,
       };
     }
 
-    // 7. Calculate optimal trigger position
-    // If free position plus lead time still leaves room, we can delay the trigger
-    // Otherwise, trigger as soon as free
-    let triggerPosition: number;
-    if (freePosition + leadCounts <= requiredByPosition) {
-      // We have flexibility - trigger so arrival is just in time
-      triggerPosition = Math.max(freePosition, requiredByPosition - leadCounts);
-    } else {
-      // No flexibility - trigger immediately when free
-      triggerPosition = freePosition;
-    }
+    // 7. SCHEDULE RULE: Trigger position is "just-in-time" - as late as possible
+    //    while still respecting the buffer and arriving on time.
+    //    triggerPosition = max(freeAfterBuffer, earliestMoveStart)
+    const triggerPosition = Math.max(freePositionAfterBuffer, earliestMoveStartPosition);
 
     return {
       available: true,
@@ -564,7 +599,7 @@ export class SorterStateManager extends BaseComponent {
     console.log(
       `[SORTER_STATE] Scheduled move for sorter ${sorterNum}: ` +
         `part ${partId} -> bin ${bin} at position ${triggerPosition} ` +
-        `(expected complete at ${expectedCompletePosition})`,
+        `(expected complete at ${expectedCompletePosition}, buffer: ${this.getBufferCounts()})`,
     );
   }
 

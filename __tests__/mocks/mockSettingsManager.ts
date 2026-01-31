@@ -12,8 +12,9 @@ export const defaultPositionCalibration: PositionCalibrationType = {
   cameraWidthInTicks: 150,
   cameraWidthPixels: 1280,
   jetEncoderOffsets: [500, 600, 700, 800] as [number, number, number, number],
-  fallTimeInCounts: 24,
+  fallTimeInCounts: 5,
   jetLeadCounts: 100,
+  sorterRestBufferInCounts: 85,
 };
 
 /**
@@ -26,8 +27,9 @@ export const uncalibratedPositionCalibration: PositionCalibrationType = {
   cameraWidthInTicks: 0,
   cameraWidthPixels: 1280,
   jetEncoderOffsets: [0, 0, 0, 0] as [number, number, number, number],
-  fallTimeInCounts: 24,
+  fallTimeInCounts: 5,
   jetLeadCounts: 100,
+  sorterRestBufferInCounts: 0, // 0 for backward compat in uncalibrated state
 };
 
 /**
@@ -70,6 +72,8 @@ export const createMockSettingsManager = (calibrationOverrides?: Partial<Positio
     getSettings: jest.fn().mockReturnValue(settings),
     updateSettings: jest.fn().mockResolvedValue(undefined),
     initialize: jest.fn().mockResolvedValue(undefined),
+    registerSettingsUpdateCallback: jest.fn(),
+    unregisterSettingsUpdateCallback: jest.fn(),
   };
 };
 
@@ -80,4 +84,6 @@ export const createNullSettingsManager = () => ({
   getSettings: jest.fn().mockReturnValue(null),
   updateSettings: jest.fn().mockResolvedValue(undefined),
   initialize: jest.fn().mockResolvedValue(undefined),
+  registerSettingsUpdateCallback: jest.fn(),
+  unregisterSettingsUpdateCallback: jest.fn(),
 });

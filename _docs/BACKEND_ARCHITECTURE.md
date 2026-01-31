@@ -121,11 +121,20 @@ Once complete, the server listens for HTTP and WebSocket connections.
   }
   ```
 
+- **Availability:** `canSorterReachBin(sorterNum, targetBin, requiredByPosition)` returns `AvailabilityResult`:
+  ```typescript
+  interface AvailabilityResult {
+    available: boolean;
+    triggerPosition: number;  // Encoder position at which to send move command
+    reason?: string;         // For logging when unavailable
+  }
+  ```
+  Skip rule: part is skipped when earliest move start position is before the sorter is free (after buffer). Schedule rule: `triggerPosition = max(freePositionAfterBuffer, requiredByPosition - leadCounts)` (just-in-time).
 - **Key Methods:**
-  - `canSorterReachBin(sorterNum, targetBin, requiredByPosition)`: Check if sorter can reach a bin by deadline
-  - `calculateLeadCounts(sorterNum, fromBin, toBin)`: Encoder counts needed for move
+  - `canSorterReachBin(sorterNum, targetBin, requiredByPosition)`: Returns availability and trigger position (or reason)
+  - `calculateLeadCounts(sorterNum, fromBin, toBin)`: Encoder counts needed for move (travel time × velocity)
   - `scheduleMove(sorterNum, bin, partId, triggerPosition)`: Add move to sorter's queue
-  - `markMoveStarted(sorterNum, targetBin)`: Called when move command is sent
+  - `markMoveStarted(sorterNum, targetBin)`: Called when move command is sent (sets moveStartPosition)
   - `getEffectiveFromBin(sorterNum)`: Get the bin sorter will be at before starting a new move
   - `clearAllScheduledMoves()`: Clear all scheduled moves (for reset)
 
@@ -175,11 +184,12 @@ Once complete, the server listens for HTTP and WebSocket connections.
 1. `SocketManager` receives `SORT_PART` event with:
 
    - `partId`: Unique identifier
-   - `pixelPosition`: X position in camera frame
-   - `detectionTime`: Timestamp when detected
+   - `initialPosition`: Pixel X position in camera frame
+   - `initialTime`: Timestamp when detected
    - `encoderAtDetection`: Encoder position when frame was captured
    - `bin`: Target bin number
    - `sorter`: Which sorter (0-3)
+   - `cameraWidthPixels` (optional): Camera width at detection time
 
 2. Calls `SystemCoordinator.handleSortPart()`
 
@@ -202,25 +212,27 @@ This approach works correctly regardless of where in the camera frame the part i
 
 ### 5.3. Sorter Availability Check
 
-1. Call `SorterStateManager.canSorterReachBin(sorter, bin, deadline)`
-2. Calculate deadline: `jetPosition - fallTimeInCounts`
-3. Check sorter's current state and scheduled moves
-4. Calculate when sorter will be free
-5. Calculate travel time to target bin (from travel time matrix)
-6. Determine if sorter can arrive before deadline
+1. Calculate required-by position: `requiredByPosition = jetPosition + fallTimeInCounts` (when part lands after falling)
+2. Call `SorterStateManager.canSorterReachBin(sorter, bin, requiredByPosition)` → returns `AvailabilityResult`
+3. SorterStateManager computes:
+   - `freePositionAfterBuffer` = when sorter is free to start next move (after last move completes + `sorterRestBufferInCounts`)
+   - `leadCounts` = travel time (ms) × encoder velocity (counts/ms)
+   - Skip if `requiredByPosition - leadCounts < freePositionAfterBuffer`
+   - If available: `triggerPosition = max(freePositionAfterBuffer, requiredByPosition - leadCounts)` (just-in-time)
 
 ### 5.4. Scheduling Decision
 
 **If sorter available:**
 
-1. Calculate `moveTriggerPosition` (when to send move command)
+1. Use `availability.triggerPosition` from `canSorterReachBin` as `moveTriggerPosition`
 2. Create `EncoderPart` object:
    ```typescript
    {
      partId,
      detectionEncoderPos,
      jetPosition,
-     moveTriggerPosition,
+     moveTriggerPosition: availability.triggerPosition,
+     expectedMoveCompletePosition: availability.triggerPosition + leadCounts,
      jet: sorter,  // jet index matches sorter
      sorter,
      bin,
@@ -230,7 +242,7 @@ This approach works correctly regardless of where in the camera frame the part i
    }
    ```
 3. Insert into `ConveyorManager.encoderPartQueue` (sorted by jetPosition)
-4. Add to `SorterStateManager.scheduleMove()`
+4. Add to `SorterStateManager.scheduleMove(sorter, bin, partId, availability.triggerPosition)`
 
 **If sorter unavailable:**
 
@@ -379,6 +391,7 @@ interface Settings {
     jetEncoderOffsets: number[]; // Encoder tick distance from camera LEFT EDGE to each jet
     fallTimeInCounts: number; // Encoder counts for part to fall from jet to sorter
     jetLeadCounts: number; // How far ahead to send jet commands
+    sorterRestBufferInCounts: number; // Encoder counts sorter must remain idle after move before next move (default 20)
   };
 
   // Per-sorter settings

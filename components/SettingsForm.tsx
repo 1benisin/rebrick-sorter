@@ -399,6 +399,41 @@ const SettingsForm = () => {
                       </FormItem>
                     )}
                   />
+
+                  {/* Sorter Rest Buffer */}
+                  <FormField
+                    control={form.control}
+                    name="positionCalibration.sorterRestBufferInCounts"
+                    render={({ field }) => (
+                      <FormItem>
+                        <HoverCard>
+                          <HoverCardTrigger asChild>
+                            <FormLabel className="cursor-help underline decoration-dotted">
+                              Sorter Rest Buffer (counts)
+                            </FormLabel>
+                          </HoverCardTrigger>
+                          <HoverCardContent className="w-80">
+                            <p className="text-sm">
+                              Encoder counts the sorter must wait after a move completes before starting the next move.
+                              This ensures the previous part has time to fully fall out of the tube.
+                            </p>
+                          </HoverCardContent>
+                        </HoverCard>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(e) => {
+                              const num = e.target.valueAsNumber;
+                              field.onChange(Number.isNaN(num) ? 0 : num);
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
                 {/* Jet Encoder Offsets */}

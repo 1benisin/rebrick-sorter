@@ -286,9 +286,7 @@ class SortProcessControllerService implements Service {
     const beforeCount = this.detectionPairGroups.length;
 
     // Find groups to remove (off-screen AND classified)
-    const groupsToRemove = this.detectionPairGroups.filter(
-      (group) => group.offScreen && group.classificationResult,
-    );
+    const groupsToRemove = this.detectionPairGroups.filter((group) => group.offScreen && group.classificationResult);
 
     // Remove from store first
     for (const group of groupsToRemove) {

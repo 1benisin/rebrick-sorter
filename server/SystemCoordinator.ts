@@ -144,13 +144,18 @@ export class SystemCoordinator {
       // but keep explicit check for extra safety and clear error message
       if (data.encoderAtDetection === undefined || data.encoderAtDetection === null) {
         console.error('[SORT] Missing encoderAtDetection in SORT_PART message');
-        this.socketManager.emitEncoderPartSkipped(data.partId, 'Missing encoder data from frontend', data.sorter, data.bin);
+        this.socketManager.emitEncoderPartSkipped(
+          data.partId,
+          'Missing encoder data from frontend',
+          data.sorter,
+          data.bin,
+        );
         return;
       }
 
       // Check calibration
       const { cameraWidthInTicks, jetEncoderOffsets } = settings.positionCalibration;
-      if (cameraWidthInTicks <= 0 || jetEncoderOffsets.every(o => o === 0)) {
+      if (cameraWidthInTicks <= 0 || jetEncoderOffsets.every((o) => o === 0)) {
         console.error('[SORT] Calibration required - cannot sort part');
         this.socketManager.emitEncoderPartSkipped(data.partId, 'Calibration required', data.sorter, data.bin);
         return;
@@ -232,7 +237,15 @@ export class SystemCoordinator {
    * @returns EncoderPart for scheduling, or null if part should be skipped
    */
   private buildEncoderPart(data: SortPartDto): EncoderPart | null {
-    const { partId, initialPosition, initialTime, encoderAtDetection, bin, sorter, cameraWidthPixels: providedCameraWidth } = data;
+    const {
+      partId,
+      initialPosition,
+      initialTime,
+      encoderAtDetection,
+      bin,
+      sorter,
+      cameraWidthPixels: providedCameraWidth,
+    } = data;
 
     // Get calibration settings
     const calibration = this.positionTranslator.getCalibration();
@@ -476,7 +489,12 @@ export class SystemCoordinator {
       }
 
       // Clone the current jet offsets array and update the specific sorter
-      const jetEncoderOffsets = [...currentSettings.positionCalibration.jetEncoderOffsets];
+      const jetEncoderOffsets = [...currentSettings.positionCalibration.jetEncoderOffsets] as [
+        number,
+        number,
+        number,
+        number,
+      ];
       jetEncoderOffsets[sorter] = offsetFromLeftEdge;
 
       await this.settingsManager.updateSettings({

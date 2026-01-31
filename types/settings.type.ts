@@ -41,9 +41,20 @@ export const positionCalibrationSchema = z.object({
     .tuple([z.coerce.number(), z.coerce.number(), z.coerce.number(), z.coerce.number()])
     .default([0, 0, 0, 0]),
   /** Encoder counts for part to fall from jet to sorter position */
-  fallTimeInCounts: z.coerce.number().default(24),
+  fallTimeInCounts: z.coerce.number().default(5),
   /** How far ahead (in encoder counts) to send jet commands to Arduino */
   jetLeadCounts: z.coerce.number().default(100),
+  /**
+   * Encoder counts the sorter must remain idle after a move completes
+   * before starting the next move. This buffer ensures the previous part
+   * has time to fully fall out of the tube before the sorter moves again.
+   *
+   * This is the encoder-based equivalent of (FALL_TIME_LONGEST - FALL_TIME_SHORTEST)
+   * from the old time-based system (800ms ≈ 16-40 counts depending on velocity).
+   *
+   * Default: 85 counts (reasonable starting point; tune based on testing)
+   */
+  sorterRestBufferInCounts: z.coerce.number().default(85),
 });
 
 export type PositionCalibrationType = z.infer<typeof positionCalibrationSchema>;
