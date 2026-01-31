@@ -11,9 +11,10 @@ export const defaultPositionCalibration: PositionCalibrationType = {
   countsPerPixel: 1,
   cameraWidthInTicks: 150,
   cameraWidthPixels: 1280,
-  jetEncoderOffsets: [500, 600, 700, 800],
-  fallTimeInCounts: 24,
+  jetEncoderOffsets: [500, 600, 700, 800] as [number, number, number, number],
+  fallTimeInCounts: 5,
   jetLeadCounts: 100,
+  sorterRestBufferInCounts: 85,
 };
 
 /**
@@ -25,9 +26,10 @@ export const uncalibratedPositionCalibration: PositionCalibrationType = {
   countsPerPixel: 1,
   cameraWidthInTicks: 0,
   cameraWidthPixels: 1280,
-  jetEncoderOffsets: [0, 0, 0, 0],
-  fallTimeInCounts: 24,
+  jetEncoderOffsets: [0, 0, 0, 0] as [number, number, number, number],
+  fallTimeInCounts: 5,
   jetLeadCounts: 100,
+  sorterRestBufferInCounts: 0, // 0 for backward compat in uncalibrated state
 };
 
 /**
@@ -43,10 +45,7 @@ export const createMockSettingsManager = (calibrationOverrides?: Partial<Positio
 
   const settings = {
     positionCalibration,
-    conveyorSpeed: 1,
     maxConveyorRPM: 100,
-    minConveyorRPM: 50,
-    constantConveyorSpeed: false,
     detectDistanceThreshold: 1,
     conveyorJetsSerialPort: '',
     hopperFeederSerialPort: '',
@@ -67,13 +66,14 @@ export const createMockSettingsManager = (calibrationOverrides?: Partial<Positio
     sorters: [],
     hopperCycleInterval: 20000,
     hopperCycleSteps: 2020,
-    useEncoderScheduling: false,
   } as SettingsType;
 
   return {
     getSettings: jest.fn().mockReturnValue(settings),
     updateSettings: jest.fn().mockResolvedValue(undefined),
     initialize: jest.fn().mockResolvedValue(undefined),
+    registerSettingsUpdateCallback: jest.fn(),
+    unregisterSettingsUpdateCallback: jest.fn(),
   };
 };
 
@@ -84,4 +84,6 @@ export const createNullSettingsManager = () => ({
   getSettings: jest.fn().mockReturnValue(null),
   updateSettings: jest.fn().mockResolvedValue(undefined),
   initialize: jest.fn().mockResolvedValue(undefined),
+  registerSettingsUpdateCallback: jest.fn(),
+  unregisterSettingsUpdateCallback: jest.fn(),
 });

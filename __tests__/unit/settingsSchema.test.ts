@@ -13,8 +13,9 @@ describe('positionCalibrationSchema', () => {
       expect(result.cameraWidthInTicks).toBe(0);
       expect(result.cameraWidthPixels).toBe(1280);
       expect(result.jetEncoderOffsets).toEqual([0, 0, 0, 0]);
-      expect(result.fallTimeInCounts).toBe(24);
+      expect(result.fallTimeInCounts).toBe(5);
       expect(result.jetLeadCounts).toBe(100);
+      expect(result.sorterRestBufferInCounts).toBe(85);
     });
 
     it('preserves provided values while filling defaults for missing', () => {
@@ -27,7 +28,7 @@ describe('positionCalibrationSchema', () => {
       expect(result.jetEncoderOffsets).toEqual([500, 600, 700, 800]);
       // Defaults for unprovided fields
       expect(result.cameraWidthPixels).toBe(1280);
-      expect(result.fallTimeInCounts).toBe(24);
+      expect(result.fallTimeInCounts).toBe(5);
     });
   });
 
@@ -80,6 +81,14 @@ describe('positionCalibrationSchema', () => {
       expect(() => positionCalibrationSchema.parse(validCalibration)).not.toThrow();
     });
 
+    it('accepts cameraWidthInTicks > 0 for calibrated sorting', () => {
+      const result = positionCalibrationSchema.parse({
+        cameraWidthInTicks: 150,
+        cameraWidthPixels: 1280,
+      });
+      expect(result.cameraWidthInTicks).toBe(150);
+    });
+
     it('accepts negative values for cameraEncoderOffset', () => {
       // This is valid - can be negative depending on camera position
       const result = positionCalibrationSchema.parse({
@@ -89,21 +98,25 @@ describe('positionCalibrationSchema', () => {
       expect(result.cameraEncoderOffset).toBe(-100);
     });
 
-    it('accepts arrays of any length for jetEncoderOffsets', () => {
-      // Note: Schema doesn't enforce array length - that's business logic in isCalibrated()
+    it('enforces exactly 4 elements for jetEncoderOffsets tuple', () => {
+      // Schema uses z.tuple() which enforces exactly 4 elements (jets A, B, C, D)
+      expect(() =>
+        positionCalibrationSchema.parse({
+          jetEncoderOffsets: [500, 600], // Only 2 elements - should fail
+        }),
+      ).toThrow();
+
+      expect(() =>
+        positionCalibrationSchema.parse({
+          jetEncoderOffsets: [], // Empty - should fail
+        }),
+      ).toThrow();
+
+      // Exactly 4 elements should work
       const result = positionCalibrationSchema.parse({
-        jetEncoderOffsets: [500, 600],
+        jetEncoderOffsets: [500, 600, 700, 800],
       });
-
-      expect(result.jetEncoderOffsets).toEqual([500, 600]);
-    });
-
-    it('accepts empty array for jetEncoderOffsets (uncalibrated)', () => {
-      const result = positionCalibrationSchema.parse({
-        jetEncoderOffsets: [],
-      });
-
-      expect(result.jetEncoderOffsets).toEqual([]);
+      expect(result.jetEncoderOffsets).toEqual([500, 600, 700, 800]);
     });
   });
 
@@ -173,6 +186,7 @@ describe('settingsSchema', () => {
         jetEncoderOffsets: [400, 500, 600, 700],
         fallTimeInCounts: 30,
         jetLeadCounts: 150,
+        sorterRestBufferInCounts: 25,
       };
 
       const result = settingsSchema.parse({
@@ -183,36 +197,21 @@ describe('settingsSchema', () => {
     });
   });
 
-  describe('useEncoderScheduling flag', () => {
-    it('defaults to false', () => {
-      const result = settingsSchema.parse({});
-
-      expect(result.useEncoderScheduling).toBe(false);
-    });
-
-    it('can be set to true', () => {
-      const result = settingsSchema.parse({
-        useEncoderScheduling: true,
-      });
-
-      expect(result.useEncoderScheduling).toBe(true);
-    });
-  });
-
   describe('conveyor settings', () => {
     it('provides correct conveyor defaults', () => {
       const result = settingsSchema.parse({});
 
-      expect(result.conveyorSpeed).toBe(1);
       expect(result.maxConveyorRPM).toBe(100);
-      expect(result.minConveyorRPM).toBe(50);
-      expect(result.constantConveyorSpeed).toBe(false);
+      expect(result.conveyorPulsesPerRevolution).toBe(20);
+      expect(result.conveyorKp).toBe(1.0);
+      expect(result.conveyorKi).toBe(0.15);
+      expect(result.conveyorKd).toBe(0.0);
     });
 
-    it('validates conveyor speed is non-negative', () => {
+    it('validates maxConveyorRPM is non-negative', () => {
       expect(() =>
         settingsSchema.parse({
-          conveyorSpeed: -1,
+          maxConveyorRPM: -1,
         }),
       ).toThrow();
     });

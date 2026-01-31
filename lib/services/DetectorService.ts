@@ -18,13 +18,6 @@ export const CLASSIFICATION_DIMENSIONS = {
 const DETECTION_MODEL_URL = '/detection-model/model.json';
 const DETECTION_OPTIONS = { score: 0.5, iou: 0.5, topk: 5 };
 const MAX_DETECTION_DIMENSION = 300; // max width or height of image to be used for detection
-const MIN_DETECT_DIST_PERCENT = 0.1; // min percentage of detection image width two detections can be from each other
-const CALIBRATION_SAMPLE_COUNT = 20;
-const CALIBRATION_MIN_TIME_DIFF_MS = 150; // ignore tiny time gaps
-const CALIBRATION_MIN_PIXEL_DELTA = 8; // ignore jitter/noise
-const CALIBRATION_MAX_ITERATIONS = 400; // upper bound to avoid infinite loops
-const CALIBRATION_MAX_Y_DELTA = 60; // avoid switching to other parts far in Y
-const CALIBRATION_MIN_IOU = 0.2; // bounding box overlap continuity threshold
 
 // create tagged predictions type that extends automl.PredictedObject
 type TaggedPredictionType = automl.PredictedObject & {
@@ -104,110 +97,6 @@ class DetectorService implements Service {
     }
   }
 
-  // Method to calibrate conveyor speed
-  async calibrateConveyorSpeed(): Promise<number> {
-    try {
-      if (!this.model) {
-        const error = 'Model not loaded. Call loadModel() first.';
-        alertStore.getState().addAlert({ type: 'error', message: error, timestamp: Date.now() });
-        throw new Error(error);
-      }
-
-      console.log('Starting calibration...');
-      // loop until we have enough distance samples
-      const speedSamples: number[] = []; // pixels per millisecond
-      let lastPosition: { x: number; y: number } | null = null;
-      let lastBox: { left: number; top: number; width: number; height: number } | null = null;
-      let lastTimestamp: number | null = null;
-      let iterationCount = 0;
-
-      while (speedSamples.length < CALIBRATION_SAMPLE_COUNT) {
-        iterationCount++;
-
-        const detectionPairs = await this.detect();
-
-        if (detectionPairs.length === 0) {
-          // brief delay to avoid hot-looping when there are no detections
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          if (iterationCount > CALIBRATION_MAX_ITERATIONS) {
-            console.log(`Calibration timeout after ${CALIBRATION_MAX_ITERATIONS} iterations (no detections)`);
-            throw new Error('Calibration timeout - unable to collect enough samples');
-          }
-          continue;
-        }
-
-        // Build a list of top-view detections for this frame
-        const topDetections: Detection[] = detectionPairs.map((pair) => pair[0]);
-
-        // Select detection:
-        // - First frame: choose rightmost (largest x)
-        // - Subsequent frames: choose the detection closest to lastPosition with continuity constraints
-        let nextDetection: Detection;
-        if (!lastPosition) {
-          nextDetection = topDetections.reduce(
-            (best, d) => (d.centroid.x > best.centroid.x ? d : best),
-            topDetections[0],
-          );
-        } else {
-          // Filter to those not jumping backwards in Y excessively and not moving right significantly
-          const candidates = topDetections.filter((d) => {
-            const dy = Math.abs(d.centroid.y - lastPosition!.y);
-            const dx = d.centroid.x - lastPosition!.x;
-            const iouVal = lastBox ? this.computeIoU(lastBox, d.box) : 1;
-            return dy <= CALIBRATION_MAX_Y_DELTA && dx <= 2 && iouVal >= CALIBRATION_MIN_IOU; // expect small or negative dx (moving left)
-          });
-
-          const pool = candidates.length > 0 ? candidates : topDetections;
-
-          nextDetection = pool.reduce((best, d) => {
-            const bestDist =
-              Math.abs(best.centroid.x - lastPosition!.x) + 0.3 * Math.abs(best.centroid.y - lastPosition!.y);
-            const currDist = Math.abs(d.centroid.x - lastPosition!.x) + 0.3 * Math.abs(d.centroid.y - lastPosition!.y);
-            return currDist < bestDist ? d : best;
-          }, pool[0]);
-        }
-
-        if (lastPosition && lastTimestamp) {
-          const timeDiff = nextDetection.timestamp - lastTimestamp;
-          const pixelDelta = lastPosition.x - nextDetection.centroid.x; // expect decreasing x (right-to-left)
-          // Only calculate speed if moving in expected direction and enough movement/time has occurred
-          if (timeDiff >= CALIBRATION_MIN_TIME_DIFF_MS && pixelDelta >= CALIBRATION_MIN_PIXEL_DELTA && pixelDelta > 0) {
-            const speed = pixelDelta / timeDiff; // pixels per ms
-            speedSamples.push(speed);
-            console.log(`Added speed sample: ${speed} (${speedSamples.length}/${CALIBRATION_SAMPLE_COUNT})`);
-          }
-        }
-
-        lastPosition = { x: nextDetection.centroid.x, y: nextDetection.centroid.y };
-        lastBox = nextDetection.box;
-        lastTimestamp = nextDetection.timestamp;
-
-        // Safety timeout
-        if (iterationCount > CALIBRATION_MAX_ITERATIONS) {
-          console.log(`Calibration timeout after ${CALIBRATION_MAX_ITERATIONS} iterations`);
-          throw new Error('Calibration timeout - unable to collect enough samples');
-        }
-
-        // Add small delay between iterations
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      // robust aggregation: trimmed mean (drop top/bottom 20%) and report also median
-      speedSamples.sort((a, b) => a - b);
-      const medianConveyorSpeed = speedSamples[Math.floor(speedSamples.length / 2)];
-      const trimmed = this.computeTrimmedMean(speedSamples, 0.2);
-
-      console.log(`Median conveyor speed: ${medianConveyorSpeed} pixels/ms`);
-      console.log(`Trimmed-mean conveyor speed: ${trimmed} pixels/ms`);
-
-      return trimmed;
-    } catch (error) {
-      const message = 'Error during calibration: ' + error;
-      console.error(message);
-      alertStore.getState().addAlert({ type: 'error', message, timestamp: Date.now() });
-      throw new Error(message);
-    }
-  }
-
   private computeIoU(
     a: { left: number; top: number; width: number; height: number },
     b: { left: number; top: number; width: number; height: number },
@@ -234,15 +123,6 @@ class DetectorService implements Service {
     const areaB = (bx2 - bx1) * (by2 - by1);
     const union = areaA + areaB - inter;
     return union > 0 ? inter / union : 0;
-  }
-
-  private computeTrimmedMean(values: number[], trimFraction: number): number {
-    if (values.length === 0) return 0;
-    const n = values.length;
-    const k = Math.floor(n * trimFraction);
-    const trimmed = values.slice(k, Math.max(k, n - k));
-    const sum = trimmed.reduce((acc, v) => acc + v, 0);
-    return sum / Math.max(1, trimmed.length);
   }
 
   // Method to detect objects in an image
@@ -302,6 +182,7 @@ class DetectorService implements Service {
       const cropCanvas = document.createElement('canvas');
       const DetectionPairs = this.createDetections(
         imageCapture.timestamp,
+        imageCapture.encoderAtCapture,
         mergedCanvas,
         cropCanvas,
         scaledPredictionPairs,
@@ -325,6 +206,7 @@ class DetectorService implements Service {
 
   private createDetections(
     timestamp: number,
+    encoderAtDetection: number,
     canvas: HTMLCanvasElement,
     cropCanvas: HTMLCanvasElement,
     predictionsPairs: PredictionsPair[],
@@ -336,20 +218,20 @@ class DetectorService implements Service {
       const sideViewDetectionImageURI = this.getCroppedImageURI(canvas, cropCanvas, pair.sideView.box);
 
       // Calculate x from ML detection box centroid
-      // Raw x already increases over time (rightward motion), matching findPositionAtTime's expectations
       const centroidX = pair.topView.box.left + pair.topView.box.width / 2;
 
-      // Log first 5 detections for validation
+      // Log first 5 detections for validation (now includes encoder)
       if (index < 5) {
-        console.log(`[DETECTION] detection ${index}: x=${centroidX.toFixed(1)} (width=${videoWidth})`);
+        console.log(`[DETECTION] detection ${index}: x=${centroidX.toFixed(1)}, encoder=${encoderAtDetection}`);
       }
 
       const topViewDetection: Detection = {
         view: 'top',
         imageURI: topViewDetectionImageURI,
         timestamp,
+        encoderAtDetection,
         centroid: {
-          x: centroidX, // Raw x increases over time (rightward motion)
+          x: centroidX,
           y: pair.topView.box.top + pair.topView.box.height / 2,
         },
         box: pair.topView.box,
@@ -359,6 +241,7 @@ class DetectorService implements Service {
         view: 'side',
         imageURI: sideViewDetectionImageURI,
         timestamp,
+        encoderAtDetection,
         centroid: {
           x: pair.sideView.box.left + pair.sideView.box.width / 2,
           y: pair.sideView.box.top + pair.sideView.box.height / 2,

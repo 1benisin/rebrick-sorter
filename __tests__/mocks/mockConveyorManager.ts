@@ -27,7 +27,9 @@ export const createMockConveyorManager = (snapshotOverrides?: Partial<EncoderSna
     getEncoderSnapshot: jest.fn().mockReturnValue(snapshot),
     getInterpolatedPosition: jest.fn().mockReturnValue(snapshot.position),
     getCurrentEncoderPosition: jest.fn().mockReturnValue(snapshot.position),
+    getEncoderVelocity: jest.fn().mockReturnValue(snapshot.velocity),
     resetEncoderPosition: jest.fn(),
+    skipPartsForSorter: jest.fn(),
     initialize: jest.fn().mockResolvedValue(undefined),
   };
 };
@@ -47,7 +49,9 @@ export const createUninitializedConveyorManager = () => {
     getEncoderSnapshot: jest.fn().mockReturnValue(snapshot),
     getInterpolatedPosition: jest.fn().mockReturnValue(0),
     getCurrentEncoderPosition: jest.fn().mockReturnValue(0),
+    getEncoderVelocity: jest.fn().mockReturnValue(0),
     resetEncoderPosition: jest.fn(),
+    skipPartsForSorter: jest.fn(),
     initialize: jest.fn().mockResolvedValue(undefined),
   };
 };
@@ -66,8 +70,12 @@ export const createErrorConveyorManager = () => ({
   getCurrentEncoderPosition: jest.fn().mockImplementation(() => {
     throw new Error('Position read failed');
   }),
+  getEncoderVelocity: jest.fn().mockImplementation(() => {
+    throw new Error('Velocity read failed');
+  }),
   resetEncoderPosition: jest.fn().mockImplementation(() => {
     throw new Error('Reset failed');
   }),
+  skipPartsForSorter: jest.fn(),
   initialize: jest.fn().mockResolvedValue(undefined),
 });

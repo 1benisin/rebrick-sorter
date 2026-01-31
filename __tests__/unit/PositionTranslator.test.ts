@@ -226,9 +226,9 @@ describe('PositionTranslator', () => {
       expect(translator.isCalibrated()).toBe(false);
     });
 
-    it('returns false when jetEncoderOffsets has wrong length', () => {
+    it('returns false when jetEncoderOffsets has missing values', () => {
       const mockSettings = createMockSettingsManager({
-        jetEncoderOffsets: [500, 600], // Only 2 jets instead of 4
+        jetEncoderOffsets: [500, 600, 0, 0] as [number, number, number, number], // Missing last 2 jets
       });
       const mockConveyor = createMockConveyorManager();
       const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
@@ -273,16 +273,17 @@ describe('PositionTranslator', () => {
   });
 
   describe('calculateRequiredByPosition', () => {
-    it('subtracts fallTimeInCounts from jetPosition', () => {
+    it('adds fallTimeInCounts to jetPosition (sorter must be ready when part lands)', () => {
       const mockSettings = createMockSettingsManager({
-        fallTimeInCounts: 24,
+        fallTimeInCounts: 5,
       });
       const mockConveyor = createMockConveyorManager();
       const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
 
       const requiredBy = translator.calculateRequiredByPosition(1000);
 
-      expect(requiredBy).toBe(976); // 1000 - 24
+      // Jet fires at 1000, part falls for 5 counts, lands at 1005
+      expect(requiredBy).toBe(1005); // 1000 + 5
     });
 
     it('handles different fallTimeInCounts values', () => {
@@ -294,7 +295,8 @@ describe('PositionTranslator', () => {
 
       const requiredBy = translator.calculateRequiredByPosition(1000);
 
-      expect(requiredBy).toBe(950); // 1000 - 50
+      // Jet fires at 1000, part falls for 50 counts, lands at 1050
+      expect(requiredBy).toBe(1050); // 1000 + 50
     });
   });
 
@@ -342,117 +344,4 @@ describe('PositionTranslator', () => {
     });
   });
 
-  describe('getEncoderPositionAtTime', () => {
-    it('returns current position when timestamp is 0 (no data)', () => {
-      const mockSettings = createMockSettingsManager();
-      const mockConveyor = createUninitializedConveyorManager();
-      const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
-
-      const position = translator.getEncoderPositionAtTime(Date.now());
-
-      expect(position).toBe(0);
-    });
-
-    it('interpolates backwards using velocity', () => {
-      const now = Date.now();
-      const mockSettings = createMockSettingsManager();
-      const mockConveyor = createMockConveyorManager({
-        position: 1000,
-        timestamp: now,
-        velocity: 0.5, // 0.5 counts per ms
-      });
-      const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
-
-      // Detection was 100ms ago
-      const detectionTime = now - 100;
-      const position = translator.getEncoderPositionAtTime(detectionTime);
-
-      // Position at detection = 1000 - (100 * 0.5) = 950
-      expect(position).toBe(950);
-    });
-
-    it('returns current position when detection time is in future', () => {
-      const now = Date.now();
-      const mockSettings = createMockSettingsManager();
-      const mockConveyor = createMockConveyorManager({
-        position: 1000,
-        timestamp: now,
-        velocity: 0.5,
-      });
-      const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
-
-      // Detection time is in the future (clock skew)
-      const futureTime = now + 100;
-      const position = translator.getEncoderPositionAtTime(futureTime);
-
-      expect(position).toBe(1000);
-    });
-  });
-
-  describe('pixelToEncoderPosition (deprecated)', () => {
-    it('calculates position with pixel offset using countsPerPixel', () => {
-      const now = Date.now();
-      const mockSettings = createMockSettingsManager({
-        countsPerPixel: 1,
-        cameraEncoderOffset: 0,
-      });
-      const mockConveyor = createMockConveyorManager({
-        position: 1000,
-        timestamp: now,
-        velocity: 0,
-      });
-      const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
-
-      const position = translator.pixelToEncoderPosition(100, now);
-
-      // position = 1000 + (100 * 1) + 0 = 1100
-      expect(position).toBe(1100);
-    });
-
-    it('includes cameraEncoderOffset in calculation', () => {
-      const now = Date.now();
-      const mockSettings = createMockSettingsManager({
-        countsPerPixel: 1,
-        cameraEncoderOffset: 50,
-      });
-      const mockConveyor = createMockConveyorManager({
-        position: 1000,
-        timestamp: now,
-        velocity: 0,
-      });
-      const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
-
-      const position = translator.pixelToEncoderPosition(100, now);
-
-      // position = 1000 + (100 * 1) + 50 = 1150
-      expect(position).toBe(1150);
-    });
-  });
-
-  describe('calculateJetPosition (deprecated)', () => {
-    it('adds jet offset to detection position', () => {
-      const mockSettings = createMockSettingsManager({
-        jetEncoderOffsets: [500, 600, 700, 800],
-      });
-      const mockConveyor = createMockConveyorManager();
-      const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
-
-      const jetPos = translator.calculateJetPosition(1000, 0);
-
-      expect(jetPos).toBe(1500); // 1000 + 500
-    });
-
-    it('uses correct offset for each sorter', () => {
-      const mockSettings = createMockSettingsManager({
-        jetEncoderOffsets: [500, 600, 700, 800],
-      });
-      const mockConveyor = createMockConveyorManager();
-      const translator = new PositionTranslator(mockConveyor as any, mockSettings as any);
-
-      expect(translator.calculateJetPosition(1000, 0)).toBe(1500);
-      expect(translator.calculateJetPosition(1000, 1)).toBe(1600);
-      expect(translator.calculateJetPosition(1000, 2)).toBe(1700);
-      expect(translator.calculateJetPosition(1000, 3)).toBe(1800);
-    });
-  });
 });

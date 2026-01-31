@@ -14,7 +14,6 @@ export const createMockSocketManager = () => ({
   emitEncoderPartScheduled: jest.fn(),
   emitEncoderPartSorted: jest.fn(),
   emitEncoderPartSkipped: jest.fn(),
-  emitPartSkipped: jest.fn(),
   emitListSerialPortsSuccess: jest.fn(),
 
   // Socket setup

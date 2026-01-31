@@ -34,14 +34,28 @@ export type BrickognizeResponse = z.infer<typeof brickognizeResponseSchema>;
 
 export type Detection = {
   view: 'top' | 'side';
+
+  /** Unix timestamp (ms) when the frame was captured */
   timestamp: number;
+
+  /**
+   * Encoder position (ticks) when the frame was captured.
+   * Used for encoder-based detection matching and position calculation.
+   */
+  encoderAtDetection: number;
+
+  /** Centroid of the detection bounding box in pixels */
   centroid: { x: number; y: number };
+
+  /** Bounding box coordinates in pixels */
   box: {
     left: number;
     top: number;
     width: number;
     height: number;
   };
+
+  /** Base64-encoded cropped image of the detection */
   imageURI: string;
 };
 

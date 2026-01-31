@@ -34,13 +34,27 @@ export const positionCalibrationSchema = z.object({
    * These offsets are measured during calibration by:
    * 1. Resetting encoder to 0 with part at camera left edge
    * 2. Moving part to each jet and recording the encoder position
+   * Uses tuple to enforce exactly 4 elements.
    * Default is [0,0,0,0] to indicate uncalibrated state.
    */
-  jetEncoderOffsets: z.array(z.coerce.number()).default([0, 0, 0, 0]),
+  jetEncoderOffsets: z
+    .tuple([z.coerce.number(), z.coerce.number(), z.coerce.number(), z.coerce.number()])
+    .default([0, 0, 0, 0]),
   /** Encoder counts for part to fall from jet to sorter position */
-  fallTimeInCounts: z.coerce.number().default(24),
+  fallTimeInCounts: z.coerce.number().default(5),
   /** How far ahead (in encoder counts) to send jet commands to Arduino */
   jetLeadCounts: z.coerce.number().default(100),
+  /**
+   * Encoder counts the sorter must remain idle after a move completes
+   * before starting the next move. This buffer ensures the previous part
+   * has time to fully fall out of the tube before the sorter moves again.
+   *
+   * This is the encoder-based equivalent of (FALL_TIME_LONGEST - FALL_TIME_SHORTEST)
+   * from the old time-based system (800ms ≈ 16-40 counts depending on velocity).
+   *
+   * Default: 85 counts (reasonable starting point; tune based on testing)
+   */
+  sorterRestBufferInCounts: z.coerce.number().default(85),
 });
 
 export type PositionCalibrationType = z.infer<typeof positionCalibrationSchema>;
@@ -48,11 +62,6 @@ export type PositionCalibrationType = z.infer<typeof positionCalibrationSchema>;
 export const sorterSettingsSchema = z.object({
   name: serialPortNameEnumSchema.default(serialPortNameEnumSchema.Values.conveyor_jets),
   serialPort: z.string().min(1).default('default'),
-  jetPositionStart: z.coerce
-    .number()
-    .min(0, { message: 'Start jet position must be a non-negative number' })
-    .max(99999, { message: 'Start jet position exceeds maximum allowed value' })
-    .default(0),
   jetDuration: z.coerce
     .number()
     .min(1, { message: 'Jet duration must be at least 1 millisecond' })
@@ -78,16 +87,10 @@ export const sorterSettingsSchema = z.object({
 export type SorterSettingsType = z.infer<typeof sorterSettingsSchema>;
 
 export const settingsSchema = z.object({
-  conveyorSpeed: z.coerce.number().min(0, { message: 'Conveyor speed must be a non-negative number' }).default(1),
   maxConveyorRPM: z.coerce
     .number()
     .min(0, { message: 'Maximum conveyor RPM must be a non-negative number' })
     .default(100),
-  minConveyorRPM: z.coerce
-    .number()
-    .min(0, { message: 'Minimum conveyor RPM must be a non-negative number' })
-    .default(50),
-  constantConveyorSpeed: z.boolean().default(false),
   detectDistanceThreshold: z.coerce
     .number()
     .min(1, { message: 'Detection threshold must be at least 1 unit' })
@@ -115,10 +118,8 @@ export const settingsSchema = z.object({
   sorters: z.array(sorterSettingsSchema).default([]),
   hopperCycleInterval: z.coerce.number().min(0).default(20000),
   hopperCycleSteps: z.coerce.number().min(100).max(10000).default(2020),
-  /** Position calibration for encoder-based scheduling (Phase 4) */
+  /** Position calibration for encoder-based scheduling */
   positionCalibration: positionCalibrationSchema.default({}),
-  /** Feature flag: use encoder-based scheduling instead of time-based */
-  useEncoderScheduling: z.boolean().default(false),
 });
 
 export type SettingsType = z.infer<typeof settingsSchema>;

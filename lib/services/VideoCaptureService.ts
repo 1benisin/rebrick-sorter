@@ -120,17 +120,40 @@ class VideoCaptureService implements Service {
     }
 
     try {
-      // Grab both frames with per-camera timing to reduce timestamp skew.
-      // We take the timestamp at the moment the first (top-view) frame resolves, as that's
-      // the image used to anchor initial position and jet timing downstream.
+      // Get encoder state
+      const { encoderPosition, encoderTimestamp } = sortProcessStore.getState();
       const captureTime = Date.now();
+
+      // CRITICAL: Block capture if no encoder data has been received yet
+      // This prevents sorting with encoderAtDetection=0 which causes incorrect jet positions
+      if (encoderTimestamp === 0) {
+        const message = 'Cannot capture: no encoder data received from server yet. Waiting for encoder updates.';
+        console.warn(`[VIDEO_CAPTURE] ${message}`);
+        throw new Error(message);
+      }
+
+      // Warn if encoder data seems stale (no updates in last 2 seconds)
+      // This could indicate Arduino disconnection or communication issues
+      if (captureTime - encoderTimestamp > 2000) {
+        console.warn(
+          `[VIDEO_CAPTURE] Encoder data may be stale - last update was ${captureTime - encoderTimestamp}ms ago`,
+        );
+      }
+
+      const encoderAtCapture = encoderPosition;
+
+      // Grab both frames with per-camera timing to reduce timestamp skew.
       const [imageBitmap1, imageBitmap2] = await Promise.all([
         this.imageCapture1.grabFrame(),
         this.imageCapture2.grabFrame(),
       ]);
 
       // Do not flip here; mergeBitmaps in DetectorService handles the flip once
-      return { imageBitmaps: [imageBitmap1, imageBitmap2], timestamp: captureTime };
+      return {
+        imageBitmaps: [imageBitmap1, imageBitmap2],
+        timestamp: captureTime,
+        encoderAtCapture,
+      };
     } catch (error) {
       const message = 'Error taking photos: ' + error;
       console.error(message);

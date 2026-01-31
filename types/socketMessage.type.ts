@@ -1,7 +1,6 @@
 // types/socketMessage.type.ts
 
 import { SortPartDto } from './sortPart.dto';
-import { Part } from './part.type';
 
 export enum FrontToBackEvents {
   SORT_PART = 'sort-part',
@@ -25,7 +24,6 @@ export enum FrontToBackEvents {
 export enum BackToFrontEvents {
   INIT_HARDWARE_SUCCESS = 'init-hardware-success',
   SORT_PART_SUCCESS = 'sort-part-success',
-  CONVEYOR_SPEED_UPDATE = 'conveyor-speed-update',
   LOG_PART_QUEUE_SUCCESS = 'log-part-queue-success',
   LIST_SERIAL_PORTS_SUCCESS = 'list-serial-ports-success',
   SORTER_MOVED = 'sorter-moved',
@@ -33,8 +31,6 @@ export enum BackToFrontEvents {
   COMPONENT_STATUS_UPDATE = 'component-status-update',
   SORTER_POSITION_UPDATE = 'sorter-position-update',
   SORTER_STATE_UPDATE = 'sorter-state-update',
-  PART_SORTED = 'part-sorted',
-  PART_SKIPPED = 'part-skipped',
   ENCODER_POSITION_UPDATE = 'encoder-position-update',
   // Phase 4: Encoder-based part scheduling events
   ENCODER_PART_SCHEDULED = 'encoder-part-scheduled',
@@ -96,7 +92,6 @@ export interface EventPayloads {
   };
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.SORT_PART_SUCCESS]: { success: boolean };
-  [BackToFrontEvents.CONVEYOR_SPEED_UPDATE]: number;
   [BackToFrontEvents.LOG_PART_QUEUE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.LIST_SERIAL_PORTS_SUCCESS]: string[];
   [BackToFrontEvents.SORTER_MOVED]: { sorter: number; bin: number };
@@ -125,8 +120,6 @@ export interface EventPayloads {
     /** Current encoder position when update was sent */
     encoderPosition: number;
   };
-  [BackToFrontEvents.PART_SORTED]: { part: Part };
-  [BackToFrontEvents.PART_SKIPPED]: { part: Part };
   /** Encoder position update from server to frontend for real-time tracking */
   [BackToFrontEvents.ENCODER_POSITION_UPDATE]: {
     /** Encoder position in ticks (counts) */

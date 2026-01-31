@@ -47,20 +47,11 @@ class SocketService implements Service {
   private setupEventListeners(): void {
     if (!this.socket) return;
 
-    this.socket.on(AllEvents.CONVEYOR_SPEED_UPDATE, (speed: number) => {
-      console.log('CONVEYOR_SPEED_UPDATE: ', speed);
-      sortProcessStore.getState().setConveyorSpeed(speed);
-    });
-
     this.socket.on(AllEvents.LIST_SERIAL_PORTS_SUCCESS, (ports: string[]) => {
       sortProcessStore.getState().setSerialPorts(ports);
     });
 
-    this.socket.on(AllEvents.PART_SORTED, () => {
-      sortProcessStore.getState().handlePartSorted();
-    });
-
-    // Encoder position tracking (Phase 5)
+    // Encoder position tracking
     this.socket.on(
       AllEvents.ENCODER_POSITION_UPDATE,
       (data: { position: number; timestamp: number; velocity: number }) => {

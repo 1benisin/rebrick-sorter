@@ -33,138 +33,12 @@ export class PositionTranslator {
         cameraWidthInTicks: 0,
         cameraWidthPixels: 1280,
         jetEncoderOffsets: [1000, 1000, 1000, 1000],
-        fallTimeInCounts: 24,
+        fallTimeInCounts: 5,
         jetLeadCounts: 100,
+        sorterRestBufferInCounts: 85,
       };
     }
     return settings.positionCalibration;
-  }
-
-  /**
-   * @deprecated Use getEncoderPositionAtTime() + calculateJetTriggerEncoder() instead.
-   * This method uses the old calibration system (cameraEncoderOffset, countsPerPixel).
-   * The new calibration system uses cameraWidthInTicks and left-edge-based jet offsets.
-   *
-   * Translates a pixel position to an encoder position at the time of detection.
-   *
-   * The calculation accounts for:
-   * 1. The time elapsed since detection (parts move while being processed)
-   * 2. The pixel offset using countsPerPixel conversion
-   * 3. The camera's encoder position offset (cameraEncoderOffset)
-   *
-   * @param pixelX - Pixel position from camera (0 = left edge of camera view)
-   * @param detectionTime - Timestamp when the part was detected (ms since epoch)
-   * @returns Encoder position where the part was at detection time
-   */
-  public pixelToEncoderPosition(pixelX: number, detectionTime: number): number {
-    const calibration = this.getCalibration();
-    const snapshot = this.conveyorManager.getEncoderSnapshot();
-
-    // If no encoder data yet, use current position with pixel offset
-    if (snapshot.timestamp === 0) {
-      console.warn('[POSITION_TRANSLATOR] No encoder data available, using raw position');
-      return Math.round(snapshot.position + pixelX * calibration.countsPerPixel);
-    }
-
-    // Calculate position at detection time by interpolating backwards
-    // The part has moved since detection, so we need to find where it was
-    const timeSinceDetection = snapshot.timestamp - detectionTime;
-
-    // If detection was in the future (clock skew), just use current position
-    if (timeSinceDetection < 0) {
-      console.warn('[POSITION_TRANSLATOR] Detection time is in the future, using current position');
-      return Math.round(snapshot.position + pixelX * calibration.countsPerPixel);
-    }
-
-    // Interpolate back to detection time
-    // Position at detection = current position - (time since detection * velocity)
-    const positionAtDetection = snapshot.position - timeSinceDetection * snapshot.velocity;
-
-    // Add pixel offset (countsPerPixel converts camera pixels to encoder counts)
-    // Add cameraEncoderOffset to account for camera position relative to encoder zero
-    const encoderPosition = positionAtDetection + pixelX * calibration.countsPerPixel + calibration.cameraEncoderOffset;
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PositionTranslator.ts:pixelToEncoderPosition',message:'Detection position calculation',data:{pixelX,detectionTime,snapshotPosition:snapshot.position,snapshotTimestamp:snapshot.timestamp,snapshotVelocity:snapshot.velocity,timeSinceDetection,positionAtDetection,cameraEncoderOffset:calibration.cameraEncoderOffset,countsPerPixel:calibration.countsPerPixel,finalEncoderPosition:Math.round(encoderPosition)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-
-    return Math.round(encoderPosition);
-  }
-
-  /**
-   * Maximum time in ms to interpolate backwards for detection time.
-   * Beyond this, accuracy degrades significantly due to velocity estimation errors.
-   * This assumes conveyor speed is relatively stable during the detection-to-processing window.
-   */
-  private readonly MAX_BACKWARD_INTERPOLATION_MS = 500;
-
-  /**
-   * Gets the raw encoder position at a specific point in time by interpolating
-   * backwards from the current encoder state. Does NOT apply any pixel offset.
-   *
-   * Use this method when the new calibration system is active, as pixel-to-tick
-   * conversion is handled separately by calculateJetTriggerEncoder().
-   *
-   * Note: This method assumes conveyor speed is relatively stable between detection
-   * time and processing time. Large delays (>500ms) may result in position errors,
-   * especially during speed changes.
-   *
-   * @param detectionTime - Timestamp when the part was detected (ms since epoch)
-   * @returns Raw encoder position at the detection time (no pixel offset applied)
-   */
-  public getEncoderPositionAtTime(detectionTime: number): number {
-    const snapshot = this.conveyorManager.getEncoderSnapshot();
-
-    // If no encoder data yet, use current position
-    if (snapshot.timestamp === 0) {
-      console.warn('[POSITION_TRANSLATOR] No encoder data available, using current position');
-      return snapshot.position;
-    }
-
-    const timeSinceDetection = snapshot.timestamp - detectionTime;
-
-    // If detection was in the future (clock skew), just use current position
-    if (timeSinceDetection < 0) {
-      console.warn('[POSITION_TRANSLATOR] Detection time is in the future, using current position');
-      return snapshot.position;
-    }
-
-    // Warn if interpolation distance is large (accuracy may be degraded)
-    if (timeSinceDetection > this.MAX_BACKWARD_INTERPOLATION_MS) {
-      console.warn(
-        `[POSITION_TRANSLATOR] Large backward interpolation: ${timeSinceDetection}ms ` +
-          `(max recommended: ${this.MAX_BACKWARD_INTERPOLATION_MS}ms). ` +
-          `Position accuracy may be reduced.`,
-      );
-    }
-
-    // Interpolate back to detection time
-    // Position at detection = current position - (time since detection * velocity)
-    return Math.round(snapshot.position - timeSinceDetection * snapshot.velocity);
-  }
-
-  /**
-   * Calculates the encoder position where a jet should fire for a part.
-   *
-   * The jet position is the detection position plus the camera-to-jet offset
-   * for the specific sorter/jet.
-   *
-   * @deprecated Use calculateJetTriggerEncoder() for the new calibration system
-   * @param detectionEncoderPos - Encoder position where the part was detected
-   * @param sorter - Sorter/jet number (0-3)
-   * @returns Encoder position where the jet should fire
-   */
-  public calculateJetPosition(detectionEncoderPos: number, sorter: number): number {
-    const calibration = this.getCalibration();
-
-    // Get the jet offset for this sorter (default to first offset if out of range)
-    const jetOffset = calibration.jetEncoderOffsets[sorter] ?? calibration.jetEncoderOffsets[0] ?? 1000;
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PositionTranslator.ts:calculateJetPosition',message:'Jet position calculation',data:{detectionEncoderPos,sorter,jetOffset,allJetOffsets:calibration.jetEncoderOffsets,resultJetPosition:detectionEncoderPos+jetOffset},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-
-    return detectionEncoderPos + jetOffset;
   }
 
   /**
@@ -241,14 +115,6 @@ export class PositionTranslator {
       );
     }
 
-    // Log for debugging
-    console.log(
-      `[POSITION_TRANSLATOR] Jet trigger calc: pixelX=${pixelX}, ` +
-        `encoder=${encoderAtDetection}, jet=${jetIndex}, ` +
-        `partTicks=${partTicksFromLeftEdge.toFixed(1)}, jetOffset=${jetTicksFromLeftEdge}, ` +
-        `remaining=${remainingTicks.toFixed(1)}, trigger=${Math.round(encoderAtDetection + remainingTicks)}`,
-    );
-
     // Trigger encoder value = encoder at detection + remaining distance
     return Math.round(encoderAtDetection + remainingTicks);
   }
@@ -272,14 +138,18 @@ export class PositionTranslator {
 
   /**
    * Calculates the encoder position by which a sorter must be in position.
-   * This is the jet position minus the fall time in counts.
+   * This is the jet position plus the fall time in counts.
+   *
+   * The jet fires at jetPosition, then the part falls for fallTimeInCounts
+   * before landing in the sorter bin. The sorter must be in position
+   * by the time the part lands.
    *
    * @param jetPosition - Encoder position where the jet fires
-   * @returns Encoder position by which the sorter must be ready
+   * @returns Encoder position by which the sorter must be ready (when part lands)
    */
   public calculateRequiredByPosition(jetPosition: number): number {
     const calibration = this.getCalibration();
-    return jetPosition - calibration.fallTimeInCounts;
+    return jetPosition + calibration.fallTimeInCounts;
   }
 
   /**

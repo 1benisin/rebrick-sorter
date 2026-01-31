@@ -62,7 +62,6 @@ Once complete, the server listens for HTTP and WebSocket connections.
 - **Key Methods:**
   - `initializeComponents()`: Manages system startup
   - `handleSortPart(data: SortPartDto)`: Entry point for sorting a part
-  - `translatePixelToEncoder()`: Converts frontend pixel position to encoder position
   - `handleSaveCalibrationData()`: Batched save of all calibration data (camera width + jet offsets) in a single Firebase write
 - **Interactions:** Coordinates all manager components
 
@@ -96,7 +95,7 @@ Once complete, the server listens for HTTP and WebSocket connections.
 - **Purpose:** Real-time communication with frontend
 - **Interactions:**
   - **Frontend → Backend:** `SORT_PART`, `SAVE_CALIBRATION_DATA`, manual control commands
-  - **Backend → Frontend:** `ENCODER_POSITION`, `PART_SORTED`, `PART_SKIPPED`, `CALIBRATION_POINT_RECORDED`, status updates
+  - **Backend → Frontend:** `ENCODER_POSITION_UPDATE`, `ENCODER_PART_SORTED`, `ENCODER_PART_SKIPPED`, `CALIBRATION_POINT_RECORDED`, status updates
 - **State:** Active socket instance
 
 ### 4.5. `SorterStateManager`
@@ -122,11 +121,20 @@ Once complete, the server listens for HTTP and WebSocket connections.
   }
   ```
 
+- **Availability:** `canSorterReachBin(sorterNum, targetBin, requiredByPosition)` returns `AvailabilityResult`:
+  ```typescript
+  interface AvailabilityResult {
+    available: boolean;
+    triggerPosition: number;  // Encoder position at which to send move command
+    reason?: string;         // For logging when unavailable
+  }
+  ```
+  Skip rule: part is skipped when earliest move start position is before the sorter is free (after buffer). Schedule rule: `triggerPosition = max(freePositionAfterBuffer, requiredByPosition - leadCounts)` (just-in-time).
 - **Key Methods:**
-  - `canSorterReachBin(sorterNum, targetBin, requiredByPosition)`: Check if sorter can reach a bin by deadline
-  - `calculateLeadCounts(sorterNum, fromBin, toBin)`: Encoder counts needed for move
+  - `canSorterReachBin(sorterNum, targetBin, requiredByPosition)`: Returns availability and trigger position (or reason)
+  - `calculateLeadCounts(sorterNum, fromBin, toBin)`: Encoder counts needed for move (travel time × velocity)
   - `scheduleMove(sorterNum, bin, partId, triggerPosition)`: Add move to sorter's queue
-  - `markMoveStarted(sorterNum, targetBin)`: Called when move command is sent
+  - `markMoveStarted(sorterNum, targetBin)`: Called when move command is sent (sets moveStartPosition)
   - `getEffectiveFromBin(sorterNum)`: Get the bin sorter will be at before starting a new move
   - `clearAllScheduledMoves()`: Clear all scheduled moves (for reset)
 
@@ -138,7 +146,6 @@ Once complete, the server listens for HTTP and WebSocket connections.
   currentEncoderPosition: number;   // Latest from Arduino EP: messages
   lastEncoderUpdateTime: number;    // Timestamp for interpolation
   encoderVelocity: number;          // Counts per millisecond (smoothed via EMA)
-  partQueue: Part[];                // Legacy time-based parts
   encoderPartQueue: EncoderPart[];  // Position-based parts (sorted by jetPosition)
   ```
 - **Constants:**
@@ -170,14 +177,6 @@ Once complete, the server listens for HTTP and WebSocket connections.
   - `homeSorter()`: Send `a` command
   - `handleMoveComplete()`: Parse `MC:` responses, update SorterStateManager
 
-### 4.8. `SpeedManager`
-
-- **Purpose:** Manages conveyor belt speed
-- **State:** `defaultSpeed`, `currentSpeed`
-- **Key Logic:**
-  - Converts internal speed (pixels/ms) to hardware (RPM)
-  - Sends speed commands via DeviceManager
-
 ## 5. The Sorting Process: A Backend Walkthrough
 
 ### 5.1. Part Reception
@@ -185,10 +184,12 @@ Once complete, the server listens for HTTP and WebSocket connections.
 1. `SocketManager` receives `SORT_PART` event with:
 
    - `partId`: Unique identifier
-   - `pixelPosition`: X position in camera frame
-   - `detectionTime`: Timestamp when detected
+   - `initialPosition`: Pixel X position in camera frame
+   - `initialTime`: Timestamp when detected
+   - `encoderAtDetection`: Encoder position when frame was captured
    - `bin`: Target bin number
    - `sorter`: Which sorter (0-3)
+   - `cameraWidthPixels` (optional): Camera width at detection time
 
 2. Calls `SystemCoordinator.handleSortPart()`
 
@@ -196,7 +197,7 @@ Once complete, the server listens for HTTP and WebSocket connections.
 
 The `PositionTranslator` class handles pixel-to-encoder conversion using the calibrated camera width and jet offsets:
 
-1. Get encoder position at detection time by interpolating backwards from current position
+1. Use `encoderAtDetection` from frontend directly (no interpolation needed)
 2. Convert pixel position to ticks from camera left edge:
    ```typescript
    partTicksFromLeftEdge = (pixelX / cameraWidthPixels) * cameraWidthInTicks;
@@ -211,25 +212,27 @@ This approach works correctly regardless of where in the camera frame the part i
 
 ### 5.3. Sorter Availability Check
 
-1. Call `SorterStateManager.canSorterReachBin(sorter, bin, deadline)`
-2. Calculate deadline: `jetPosition - fallTimeInCounts`
-3. Check sorter's current state and scheduled moves
-4. Calculate when sorter will be free
-5. Calculate travel time to target bin (from travel time matrix)
-6. Determine if sorter can arrive before deadline
+1. Calculate required-by position: `requiredByPosition = jetPosition + fallTimeInCounts` (when part lands after falling)
+2. Call `SorterStateManager.canSorterReachBin(sorter, bin, requiredByPosition)` → returns `AvailabilityResult`
+3. SorterStateManager computes:
+   - `freePositionAfterBuffer` = when sorter is free to start next move (after last move completes + `sorterRestBufferInCounts`)
+   - `leadCounts` = travel time (ms) × encoder velocity (counts/ms)
+   - Skip if `requiredByPosition - leadCounts < freePositionAfterBuffer`
+   - If available: `triggerPosition = max(freePositionAfterBuffer, requiredByPosition - leadCounts)` (just-in-time)
 
 ### 5.4. Scheduling Decision
 
 **If sorter available:**
 
-1. Calculate `moveTriggerPosition` (when to send move command)
+1. Use `availability.triggerPosition` from `canSorterReachBin` as `moveTriggerPosition`
 2. Create `EncoderPart` object:
    ```typescript
    {
      partId,
      detectionEncoderPos,
      jetPosition,
-     moveTriggerPosition,
+     moveTriggerPosition: availability.triggerPosition,
+     expectedMoveCompletePosition: availability.triggerPosition + leadCounts,
      jet: sorter,  // jet index matches sorter
      sorter,
      bin,
@@ -238,13 +241,13 @@ This approach works correctly regardless of where in the camera frame the part i
      status: 'scheduled'
    }
    ```
-3. Insert into `ConveyorManager.partQueue` (sorted by jetPosition)
-4. Add to `SorterStateManager.scheduleMove()`
+3. Insert into `ConveyorManager.encoderPartQueue` (sorted by jetPosition)
+4. Add to `SorterStateManager.scheduleMove(sorter, bin, partId, availability.triggerPosition)`
 
 **If sorter unavailable:**
 
 1. Log skip reason
-2. Emit `PART_SKIPPED` to frontend
+2. Emit `ENCODER_PART_SKIPPED` to frontend
 3. Do not add to queue (no commands sent, part falls off conveyor)
 
 ### 5.5. Command Execution
@@ -253,9 +256,6 @@ The `ConveyorManager` runs a position-check loop on each encoder update via `pro
 
 ```typescript
 processPositionActions(currentPosition: number) {
-  // Only process if encoder scheduling is enabled
-  if (!settings.useEncoderScheduling) return;
-
   // Skip if encoder data is stale
   if (this.isEncoderDataStale()) return;
 
@@ -296,7 +296,7 @@ processPositionActions(currentPosition: number) {
 
 1. Find matching part in queue
 2. Mark as `sorted`
-3. Emit `PART_SORTED` to frontend
+3. Emit `ENCODER_PART_SORTED` to frontend
 4. Remove from queue
 
 **Move Complete (`MC:<bin>`):**
@@ -305,27 +305,11 @@ processPositionActions(currentPosition: number) {
 2. Removes from scheduled moves queue
 3. Enables next scheduled move
 
-## 6. Position vs Time: Key Differences
+## 6. Position-Based Scheduling (Encoder-Only)
 
-### 6.1. Old Time-Based Approach
+The system uses encoder position as the source of truth for part tracking. **All scheduling is encoder-based;** there is no time-based path, no SpeedManager, and no conveyor speed tracking. The frontend sends `encoderAtDetection` with each part; the server uses it directly (no interpolation). Conveyor runs at constant speed; if a sorter cannot reach a bin in time, the part is skipped.
 
-```typescript
-// Calculate when jet should fire
-const jetTime = this.findTimeAfterDistance(initialTime, distance);
-const moveTime = jetTime - travelTime;
-
-// Schedule with setTimeout
-setTimeout(() => fireJet(), jetTime - Date.now());
-setTimeout(() => moveSorter(), moveTime - Date.now());
-```
-
-**Problems:**
-
-- Clock drift between server and Arduino
-- Speed changes require recalculating all timeouts
-- Hard to debug timing issues
-
-### 6.2. New Position-Based Approach
+### 6.1. Position-Based Approach
 
 ```typescript
 // Calculate where jet should fire
@@ -381,10 +365,7 @@ interface Settings {
   hopperFeederSerialPort: string;
 
   // Conveyor settings
-  conveyorSpeed: number; // pixels per millisecond (for time-based)
   maxConveyorRPM: number;
-  minConveyorRPM: number;
-  constantConveyorSpeed: boolean; // If true, skip parts rather than slow down
   conveyorPulsesPerRevolution: number; // Encoder PPR
 
   // PID tuning for conveyor motor
@@ -403,17 +384,15 @@ interface Settings {
 
   // Position calibration (encoder-based scheduling)
   positionCalibration: {
-    cameraEncoderOffset: number; // @deprecated - use cameraWidthInTicks instead
-    countsPerPixel: number; // @deprecated - replaced by cameraWidthInTicks/cameraWidthPixels ratio
+    cameraEncoderOffset: number; // @deprecated - legacy field, kept for compatibility
+    countsPerPixel: number; // @deprecated - legacy field, kept for compatibility
     cameraWidthInTicks: number; // Width of camera view in encoder ticks (left edge to right edge)
     cameraWidthPixels: number; // Camera resolution width in pixels (default 1280)
     jetEncoderOffsets: number[]; // Encoder tick distance from camera LEFT EDGE to each jet
-    fallTimeInCounts: number; // Time for part to fall from jet to sorter
+    fallTimeInCounts: number; // Encoder counts for part to fall from jet to sorter
     jetLeadCounts: number; // How far ahead to send jet commands
+    sorterRestBufferInCounts: number; // Encoder counts sorter must remain idle after move before next move (default 20)
   };
-
-  // Feature flag
-  useEncoderScheduling: boolean; // Use position-based instead of time-based
 
   // Per-sorter settings
   sorters: SorterSettings[];
@@ -432,7 +411,6 @@ interface Settings {
 interface SorterSettings {
   name: string;
   serialPort: string;
-  jetPositionStart: number;
   jetDuration: number;
   maxPartDimensions: { width: number; height: number };
   gridDimension: number; // e.g., 12 for 12x12 bin grid
@@ -453,8 +431,8 @@ Changes propagate via Firestore `onSnapshot` listeners, triggering component rei
 
 ### 9.1. Encoder Update Frequency
 
-- Arduino reports position every 5-10 ticks (~2-4 times/second)
-- Server interpolates between updates
+- Arduino reports position periodically (e.g., every 100ms via `EP:<position>`)
+- Server may interpolate encoder position between Arduino reports for display/velocity; **position translation for scheduling uses `encoderAtDetection` from the frontend directly** (no server-side interpolation for part position)
 - Higher frequency not needed (parts travel slowly)
 
 ### 9.2. Part Queue Size

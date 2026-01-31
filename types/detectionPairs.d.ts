@@ -42,35 +42,48 @@ export type ClassificationItem = {
 
 // --- Mock Data ---
 
-// Mocking a Detection object
+// Mocking a Detection object (matches Detection type from types.ts)
 const mockDetection: Detection = {
-  id: 'det123',
-  type: 'brick',
-  confidence: 0.98,
-  partId: '3001',
-  imageURI: 'prime_model_image.jpg',
+  view: 'top',
+  timestamp: Date.now(),
+  encoderAtDetection: 5000,
+  centroid: { x: 640, y: 360 },
+  box: { left: 600, top: 320, width: 80, height: 80 },
+  imageURI: 'data:image/jpeg;base64,mock',
 };
 
-// Mocking a BrickognizeResponse object
+// Mocking a BrickognizeResponse object (matches brickognizeResponseSchema from types.ts)
 const mockBrickognizeResponse: BrickognizeResponse = {
-  id: 'resp123',
-  type: 'brick',
-  score: 0.95,
-  name: '2x4 Brick',
-  img_url: 'prime_model_image.jpg',
-  external_sites: [],
-  category: 'Basic Brick',
-  bin: 5,
-  sorter: 1,
+  listing_id: 'resp123',
+  bounding_box: {
+    left: 0,
+    upper: 0,
+    right: 100,
+    lower: 100,
+    image_width: 299,
+    image_height: 299,
+    score: 0.95,
+  },
+  items: [
+    {
+      id: '3001',
+      score: 0.95,
+      name: '2x4 Brick',
+      img_url: 'https://example.com/brick.jpg',
+      external_sites: [],
+      category: 'Basic Brick',
+      type: 'brick',
+    },
+  ],
 };
 
 // Mocking a ClassificationItem object
 const mockClassificationItem: ClassificationItem = {
   type: 'brick',
-  score: 1,
+  score: 0.95,
   id: '3001',
   name: '2x4 Brick',
-  img_url: 'prime_model_image.jpg',
+  img_url: 'https://example.com/brick.jpg',
   external_sites: [],
   category: 'Basic Brick',
   bin: 5,
@@ -80,7 +93,7 @@ const mockClassificationItem: ClassificationItem = {
 // Creating a DetectionPairGroup with fake data
 export const mockDetectionPairGroup: DetectionPairGroup = {
   id: 'group123',
-  detectionPairs: [[mockDetection, mockDetection]],
+  detectionPairs: [[mockDetection, { ...mockDetection, view: 'side' }]],
   offScreen: false,
   classifications: [mockBrickognizeResponse, mockBrickognizeResponse],
   combineclassification: [mockClassificationItem, mockClassificationItem],

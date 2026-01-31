@@ -1,5 +1,20 @@
 // types/imageCapture.d.ts
 
-// ImageCaptureType is a type that represents the imageBitmap and the timestamp of the image capture process
-// create after using ImageCatpure.grabFrame() method
-export type ImageCaptureType = { imageBitmaps: [ImageBitmap, ImageBitmap]; timestamp: number };
+/**
+ * Represents the result of capturing frames from both cameras.
+ * Created by VideoCaptureService.captureImage() using ImageCapture.grabFrame().
+ */
+export type ImageCaptureType = {
+  /** Pair of image bitmaps from top and side cameras */
+  imageBitmaps: [ImageBitmap, ImageBitmap];
+
+  /** Unix timestamp (ms) when capture was initiated */
+  timestamp: number;
+
+  /**
+   * Encoder position (ticks) at the moment of capture.
+   * Read from sortProcessStore.encoderPosition before async frame grab.
+   * Used for encoder-based detection matching and position calculation.
+   */
+  encoderAtCapture: number;
+};

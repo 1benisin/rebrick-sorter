@@ -56,36 +56,10 @@ const SettingsForm = () => {
           <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <FormField
               control={form.control}
-              name="conveyorSpeed"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Conveyor Speed</FormLabel>
-                  <FormControl>
-                    <Input className="w-full" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="maxConveyorRPM"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Maximum Conveyor RPM</FormLabel>
-                  <FormControl>
-                    <Input className="w-full" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="minConveyorRPM"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Minimum Conveyor RPM</FormLabel>
                   <FormControl>
                     <Input className="w-full" {...field} />
                   </FormControl>
@@ -146,34 +120,6 @@ const SettingsForm = () => {
                 </FormItem>
               )}
             />
-            <HoverCard>
-              <HoverCardTrigger asChild>
-                <div className="pt-5">
-                  <FormField
-                    control={form.control}
-                    name="constantConveyorSpeed"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-start gap-x-2">
-                        <FormLabel>Constant Conveyor Speed</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={field.value}
-                            onChange={(e) => field.onChange(e.target.checked)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </HoverCardTrigger>
-              <HoverCardContent>
-                If checked, the conveyor will run at a constant speed and skip parts that are too close together. If
-                unchecked, the conveyor will slow down to accommodate parts.
-              </HoverCardContent>
-            </HoverCard>
             <FormField
               control={form.control}
               name="conveyorPulsesPerRevolution"
@@ -349,7 +295,7 @@ const SettingsForm = () => {
 
         {/* Position Calibration (Encoder-based scheduling) */}
         <Card>
-          <Collapsible>
+          <Collapsible defaultOpen={true}>
             <CollapsibleTrigger className="flex w-full items-center justify-between p-4">
               <CardTitle>Position Calibration (Encoder)</CardTitle>
               <ChevronDown className="h-4 w-4" />
@@ -361,59 +307,47 @@ const SettingsForm = () => {
                   Sorter page to record positions automatically, or edit values manually here.
                 </div>
 
-                {/* Enable Encoder Scheduling */}
-                <HoverCard>
-                  <HoverCardTrigger asChild>
-                    <FormField
-                      control={form.control}
-                      name="useEncoderScheduling"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-start gap-x-2 rounded-lg border p-3">
-                          <FormControl>
-                            <Input
-                              type="checkbox"
-                              className="h-5 w-5"
-                              checked={field.value}
-                              onChange={(e) => field.onChange(e.target.checked)}
-                            />
-                          </FormControl>
-                          <FormLabel className="text-base font-semibold">Enable Encoder-Based Scheduling</FormLabel>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </HoverCardTrigger>
-                  <HoverCardContent>
-                    When enabled, uses encoder position tracking instead of time-based scheduling for more accurate part
-                    sorting.
-                  </HoverCardContent>
-                </HoverCard>
-
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {/* Camera Encoder Offset */}
+                  {/* Camera Width in Ticks */}
                   <FormField
                     control={form.control}
-                    name="positionCalibration.cameraEncoderOffset"
+                    name="positionCalibration.cameraWidthInTicks"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Camera Encoder Offset</FormLabel>
+                        <FormLabel>Camera Width (ticks)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input
+                            type="number"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(e) => {
+                              const num = e.target.valueAsNumber;
+                              field.onChange(Number.isNaN(num) ? 0 : num);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  {/* Counts Per Pixel */}
+                  {/* Camera Width in Pixels */}
                   <FormField
                     control={form.control}
-                    name="positionCalibration.countsPerPixel"
+                    name="positionCalibration.cameraWidthPixels"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Counts Per Pixel</FormLabel>
+                        <FormLabel>Camera Width (pixels)</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" {...field} />
+                          <Input
+                            type="number"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(e) => {
+                              const num = e.target.valueAsNumber;
+                              field.onChange(Number.isNaN(num) ? 0 : num);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -428,7 +362,15 @@ const SettingsForm = () => {
                       <FormItem>
                         <FormLabel>Fall Time (counts)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input
+                            type="number"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(e) => {
+                              const num = e.target.valueAsNumber;
+                              field.onChange(Number.isNaN(num) ? 0 : num);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -443,7 +385,50 @@ const SettingsForm = () => {
                       <FormItem>
                         <FormLabel>Jet Lead (counts)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input
+                            type="number"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(e) => {
+                              const num = e.target.valueAsNumber;
+                              field.onChange(Number.isNaN(num) ? 0 : num);
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Sorter Rest Buffer */}
+                  <FormField
+                    control={form.control}
+                    name="positionCalibration.sorterRestBufferInCounts"
+                    render={({ field }) => (
+                      <FormItem>
+                        <HoverCard>
+                          <HoverCardTrigger asChild>
+                            <FormLabel className="cursor-help underline decoration-dotted">
+                              Sorter Rest Buffer (counts)
+                            </FormLabel>
+                          </HoverCardTrigger>
+                          <HoverCardContent className="w-80">
+                            <p className="text-sm">
+                              Encoder counts the sorter must wait after a move completes before starting the next move.
+                              This ensures the previous part has time to fully fall out of the tube.
+                            </p>
+                          </HoverCardContent>
+                        </HoverCard>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(e) => {
+                              const num = e.target.valueAsNumber;
+                              field.onChange(Number.isNaN(num) ? 0 : num);
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -455,16 +440,24 @@ const SettingsForm = () => {
                 <div className="space-y-2">
                   <FormLabel className="text-sm font-medium">Jet Encoder Offsets (per sorter)</FormLabel>
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                    {[0, 1, 2, 3].map((index) => (
+                    {([0, 1, 2, 3] as const).map((index) => (
                       <FormField
                         key={index}
                         control={form.control}
-                        name={`positionCalibration.jetEncoderOffsets.${index}`}
+                        name={`positionCalibration.jetEncoderOffsets.${index}` as const}
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Jet {String.fromCharCode(65 + index)}</FormLabel>
                             <FormControl>
-                              <Input type="number" {...field} />
+                              <Input
+                                type="number"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={(e) => {
+                                  const num = e.target.valueAsNumber;
+                                  field.onChange(Number.isNaN(num) ? 0 : num);
+                                }}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -524,20 +517,6 @@ const SettingsForm = () => {
                     control={form.control}
                     name={`sorters.${index}.serialPort`}
                     label="Sorter Serial Port"
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name={`sorters.${index}.jetPositionStart`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Start Jet Position</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
                   />
 
                   <FormField

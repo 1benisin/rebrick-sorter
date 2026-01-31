@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Rebrick Sorter is a sophisticated system designed to automatically detect, classify, and sort Lego bricks using computer vision and machine learning. The application is built using Next.js and follows a service-oriented architecture pattern.
+The Rebrick Sorter is a sophisticated system designed to automatically detect, classify, and sort Lego bricks using computer vision and machine learning. The application is built using Next.js and follows a service-oriented architecture pattern. **Scheduling is encoder-based only** (no time-based path or SpeedManager). For detailed, up-to-date docs (backend, frontend, hardware, calibration), see **`_docs/README.md`** and the documents it links.
 
 ## System Components
 
@@ -341,21 +341,21 @@ sequenceDiagram
 
 37. **DetectorService requests images**: The DetectorService calls the captureImage() method on the VideoCaptureService to get current images from both cameras.
 
-38. **VideoCaptureService captures and returns images**: The service captures frames from both cameras and returns them to the DetectorService.
+38. **VideoCaptureService captures and returns images**: The service captures frames and reads `encoderPosition` from the store at capture time; it returns `ImageCaptureType` (imageBitmaps, timestamp, encoderAtCapture) to the DetectorService.
 
 39. **DetectorService processes images with TensorFlow**: The service sends the captured images to the TensorFlow model for object detection.
 
 40. **TensorFlow returns detection results**: The model identifies objects in the images and returns bounding boxes and confidence scores.
 
-41. **DetectorService returns detection pairs**: The service processes the raw detection results, pairs corresponding top and side view detections, and returns them to the SorterService.
+41. **DetectorService returns detection pairs**: The service processes the raw detection results, pairs corresponding top and side view detections, and sets `encoderAtDetection` (from encoderAtCapture) on each detection; it returns these pairs to the SorterService.
 
-42. **SorterService matches detections to groups**: The service tracks parts across frames by matching new detections to existing detection groups based on position and timing.
+42. **SorterService matches detections to groups**: The service tracks parts across frames by **encoder-based matching**: it computes absolute position = encoderAtDetection - (pixelX/cameraWidthPixels)*cameraWidthInTicks and matches detections within a tick threshold (no speed or time-based prediction).
 
 43. **SorterService requests part classification**: For detection groups that have moved to the classification zone, the service calls the classify() method on the ClassifierService.
 
 44. **ClassifierService performs classification**: The service analyzes the detection images to determine the part type and ID.
 
-45. **ClassifierService prepares sort command**: Based on the classification result, the service creates a sort command with the appropriate bin target.
+45. **ClassifierService prepares sort command**: Based on the classification result, the service creates a SORT_PART payload (partId, initialPosition, initialTime, encoderAtDetection, bin, sorter) with the appropriate bin target.
 
 46. **ClassifierService sends command via SocketService**: The service emits a SORT_PART event through the SocketService to initiate the physical sorting.
 
@@ -365,7 +365,7 @@ sequenceDiagram
 
 49. **ClassifierService returns result to SorterService**: The service sends the classification result back to the SorterService for tracking.
 
-50. **SorterService updates offscreen detections**: The service marks detection groups that have moved off-screen based on conveyor speed and timing calculations.
+50. **SorterService updates offscreen detections**: The service marks detection groups that have moved off-screen (position/encoder-based logic; no conveyor speed tracking).
 
 51. **Process loop repeats**: Steps 36-50 repeat at minimum 500ms intervals while sorting is active.
 
@@ -412,33 +412,37 @@ The server architecture consists of several interconnected components that manag
 
 ### Server Component Diagram
 
+The server is orchestrated by **SystemCoordinator**; there is no separate "Event Hub" or "Hardware Manager." See `_docs/BACKEND_ARCHITECTURE.md` for full detail.
+
 ```mermaid
 graph TD
     A[Next.js Server] --> B[Socket.IO Server]
-    B --> C[Event Hub]
-    C --> D[Hardware Manager]
-    D --> E[Arduino Device Manager]
-    D --> F[Conveyor Controller]
+    B --> C[SystemCoordinator]
+    C --> D[SocketManager]
+    C --> E[DeviceManager]
+    C --> F[ConveyorManager]
+    C --> G[SorterStateManager]
+    C --> H[SorterManager]
+    C --> I[SettingsManager]
+    C --> J[PositionTranslator]
 
-    E --> G[Arduino Device 1<br/>Sorter A]
-    E --> H[Arduino Device 2<br/>Sorter B]
-    E --> I[Arduino Device 3<br/>Conveyor Jets]
-    E --> J[Arduino Device 4<br/>Hopper Feeder]
+    E --> K[Arduino Sorter A]
+    E --> L[Arduino Sorter B]
+    E --> M[Arduino Sorter C]
+    E --> N[Arduino Sorter D]
+    E --> O[Arduino Conveyor Jets]
+    E --> P[Arduino Hopper Feeder]
 
-    %% Event Flow
-    K[Frontend Client] <--> B
-    C --> L[Event Listeners]
-    L --> M[Hardware Controls]
-    L --> N[Sort Process]
+    K --> Q[Serial Port]
+    L --> Q
+    M --> Q
+    N --> Q
+    O --> Q
+    P --> Q
 
-    %% Hardware Communication
-    G --> O[Serial Port]
-    H --> O
-    I --> O
-    J --> O
+    Frontend[Frontend Client] <--> D
 
     style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#afd,stroke:#333,stroke-width:2px
     style C fill:#fda,stroke:#333,stroke-width:2px
 ```
 
@@ -448,47 +452,50 @@ graph TD
 sequenceDiagram
     participant Client
     participant Server
-    participant EventHub
-    participant HardwareManager
-    participant ArduinoManager
+    participant SocketManager
+    participant SystemCoordinator
+    participant DeviceManager
     participant Arduino
 
     Client->>Server: Connect
-    Server->>EventHub: Register Listeners
-    Server->>HardwareManager: Initialize
-    HardwareManager->>ArduinoManager: Connect Devices
-    ArduinoManager->>Arduino: Initialize Serial Connection
-    Arduino->>ArduinoManager: Ready Signal
-    ArduinoManager->>Arduino: Send Config
-    Arduino->>ArduinoManager: Config Acknowledged
-    HardwareManager->>EventHub: Hardware Ready
-    EventHub->>Client: Initialization Success
+    Server->>SocketManager: Connection
+    Server->>SystemCoordinator: Initialize components
+    SystemCoordinator->>DeviceManager: Connect devices
+    DeviceManager->>Arduino: Open serial, send settings
+    Arduino->>DeviceManager: Ready
+    DeviceManager->>Arduino: Send config (s command)
+    Arduino->>DeviceManager: Settings updated
+    DeviceManager->>SystemCoordinator: Devices ready
+    SocketManager->>Client: Status / encoder updates
 ```
 
-### Conveyor System Flow
+### Conveyor System Flow (Position-Based)
+
+Sorting is **encoder-based only**: parts are tracked by encoder position; jet and sorter commands trigger when encoder crosses thresholds. No time-based scheduling.
 
 ```mermaid
 graph TD
     A[Sort Process Start] --> B[Detect Part]
-    B --> C{Calculate Timings}
-    C --> D[Schedule Sorter Move]
-    C --> E[Schedule Jet Fire]
+    B --> C[encoderAtDetection + pixel → jet position]
+    C --> D{Sorter can reach bin in time?}
+    D -->|Yes| E[Schedule Sorter Move]
+    D -->|Yes| F[Schedule Jet at encoder position]
+    D -->|No| G[Skip Part]
 
-    D --> F[Move Sorter]
-    E --> G[Fire Jet]
+    E --> H[Move Sorter at trigger position]
+    F --> I[Queue Jet at jetPosition]
 
-    F --> H[Arduino Command]
-    G --> H
+    H --> J[Arduino Command]
+    I --> J
 
-    subgraph Timing Calculation
-        I[Initial Position] --> J[Calculate Distance to Jet]
-        J --> K[Calculate Jet Time]
-        K --> L[Calculate Move Time]
-        L --> M[Add Safety Buffers]
+    subgraph Position Calculation
+        K[encoderAtDetection from frontend] --> L[Pixel → ticks: cameraWidthInTicks/cameraWidthPixels]
+        L --> M[Jet position = encoderAtDetection + remaining ticks to jet]
+        M --> N[Move trigger = when sorter free]
     end
 
     style A fill:#f96,stroke:#333,stroke-width:2px
-    style H fill:#69f,stroke:#333,stroke-width:2px
+    style J fill:#69f,stroke:#333,stroke-width:2px
 ```
 
 ### Event Communication System
@@ -496,72 +503,58 @@ graph TD
 ```mermaid
 graph LR
     A[Frontend Events] --> B[Socket.IO]
-    B --> C[Event Hub]
-    C --> D[Hardware Events]
-    C --> E[Sort Process Events]
-    C --> F[System Events]
+    B --> C[SocketManager]
+    C --> D[SystemCoordinator]
+    D --> E[Hardware / DeviceManager]
+    D --> F[Sort Process / handleSortPart]
+    D --> G[Calibration / PositionTranslator]
 
-    D --> G[Arduino Commands]
-    E --> H[Part Detection]
-    E --> I[Part Classification]
-    F --> J[Status Updates]
+    E --> H[Arduino Commands]
+    F --> I[ConveyorManager / SorterStateManager]
+    C --> J[Status / Encoder / Part Events to Frontend]
 
-    subgraph Event Types
-        K[FrontToBack Events]
-        L[BackToFront Events]
-        M[Internal Events]
-    end
-
-    style C fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#f9f,stroke:#333,stroke-width:2px
     style B fill:#afd,stroke:#333,stroke-width:2px
 ```
 
 ## Server Components
 
-### Event Hub
+See **`_docs/BACKEND_ARCHITECTURE.md`** for the authoritative backend description. Summary:
 
-- Central event management system
-- Handles bidirectional communication between frontend and backend
-- Manages hardware control events
-- Coordinates sort process events
+### SystemCoordinator
 
-### Hardware Manager
+- Central orchestrator; wires all managers and handles socket events (e.g. `handleSortPart`).
+- No separate "Event Hub" or "Hardware Manager"; coordination lives here and in the managers.
 
-- Singleton instance managing all hardware components
-- Initializes and configures Arduino devices
-- Manages conveyor system
-- Handles timing calculations for sorting operations
-- Coordinates multiple sorter units
+### SocketManager
 
-### Arduino Device Manager
+- WebSocket (Socket.IO) communication with frontend: SORT_PART, calibration, manual controls; encoder/part/status events to frontend.
 
-- Manages serial communication with Arduino devices
-- Handles device configuration and initialization
-- Provides command interface for hardware control
-- Supports mock devices for development
+### DeviceManager
 
-### Conveyor Controller
+- Serial communication with all Arduinos (Conveyor Jets, 4 Sorters, Hopper Feeder). Handles connection, framing with `<>`, reconnection. Baud: 115200 for Conveyor Jets, 9600 for others.
 
-- Manages conveyor belt operations
-- Handles part queue management
-- Coordinates timing between detection and sorting
-- Manages jet firing sequences
+### ConveyorManager
+
+- Encoder position tracking (from Arduino `EP:`), encoder part queue (sorted by jet position), position-triggered jet and move dispatch via `processPositionActions()`. No time-based scheduling; encoder-only.
+
+### SorterStateManager, SorterManager, SettingsManager, PositionTranslator
+
+- SorterStateManager: per-sorter state and scheduled moves; availability checks. SorterManager: move/home commands. SettingsManager: Firebase settings. PositionTranslator: pixel + encoderAtDetection → jet encoder position using calibration.
 
 ## Hardware Communication
 
 ### Arduino Protocol
 
-- Serial communication at 9600 baud rate
-- Checksum-verified message format: `<command{data}checksum>`
-- Bidirectional acknowledgment system
-- Device-specific initialization sequences
+- Serial: **115200 baud** for Conveyor/Jets Arduino, **9600 baud** for Sorter and Hopper/Feeder Arduinos (see `server/components/DeviceManager.ts`).
+- Message framing: commands wrapped in `<...>` (e.g. `<m045>`, `<q2,14800>`).
+- Arduino sends `Ready` on boot; backend sends settings first, then commands.
+- See `_docs/CONVEYOR_JETS_INTERACTION.md`, `_docs/SORTER_INTERACTION.md`, `_docs/HOPPER_FEEDER_INTERACTION.md` for device-specific protocols.
 
-### Timing System
+### Position-Based Scheduling (Encoder-Only)
 
-- Precise coordination of multiple hardware components
-- Predictive timing calculations for part movement
-- Safety buffers for mechanical operations
-- Queue-based operation scheduling
+- Parts are scheduled by **encoder position**, not time. Frontend sends `encoderAtDetection` with each part; server computes jet position and move trigger positions in encoder counts.
+- ConveyorManager runs `processPositionActions()` on each encoder update; jets and moves are dispatched when encoder crosses thresholds. No SpeedManager or time-based path.
 
 ## Development Notes
 
