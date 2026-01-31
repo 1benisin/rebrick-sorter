@@ -2,29 +2,19 @@ import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent
 import { DeviceManager } from './DeviceManager';
 import { SocketManager } from './SocketManager';
 import { ArduinoCommands } from '../../types/arduinoCommands.type';
-import { Part, EncoderPart } from '../../types/part.type';
+import { EncoderPart } from '../../types/part.type';
 import { SettingsManager } from './SettingsManager';
-import { SpeedManager } from './SpeedManager';
 import { SorterManager } from './SorterManager';
 import { DeviceName } from '../../types/deviceName.type';
-import { SortPartDto } from '../../types/sortPart.dto';
 
 // Forward declaration to avoid circular dependency
 import type { SorterStateManager } from './SorterStateManager';
-
-interface ReturnToDefaultSpeed {
-  time: number;
-  speed: number;
-  ref: NodeJS.Timeout;
-}
 
 export interface ConveyorManagerConfig extends ComponentConfig {
   deviceManager: DeviceManager;
   socketManager: SocketManager;
   settingsManager: SettingsManager;
-  speedManager: SpeedManager;
   sorterManager: SorterManager;
-  buildPart: (part: SortPartDto) => Part;
   /** Optional - set via setSorterStateManager() due to circular dependency */
   sorterStateManager?: SorterStateManager;
 }
@@ -33,18 +23,10 @@ export class ConveyorManager extends BaseComponent {
   private deviceManager: DeviceManager;
   private socketManager: SocketManager;
   private settingsManager: SettingsManager;
-  private speedManager: SpeedManager;
   private sorterManager: SorterManager;
   private sorterStateManager: SorterStateManager | null = null;
-  private buildPart: (part: SortPartDto) => Part;
-  private jetPositionsStart: number[] = [];
-  private jetDurations: number[] = [];
-  private partQueue: Part[] = [];
-  private speedLog: { time: number; speed: number }[] = [];
-  private isRecalculating: boolean = false;
-  private returnToDefaultConveyorSpeed: ReturnToDefaultSpeed | null = null;
 
-  // --- Encoder-Based Part Queue (Phase 4) ---
+  // --- Encoder-Based Part Queue ---
 
   /**
    * Queue of parts being tracked for position-based scheduling.
@@ -94,6 +76,9 @@ export class ConveyorManager extends BaseComponent {
   /** Time in ms after which encoder data is considered stale */
   private readonly STALE_DATA_THRESHOLD_MS = 1000;
 
+  /** Cooldown flag to prevent rapid buffer-full processing */
+  private bufferFullCooldown: boolean = false;
+
   // Bound callback references (to enable proper unregistration)
   private boundReinitialize: () => Promise<void>;
   private boundHandleConveyorData: (data: string) => void;
@@ -111,9 +96,7 @@ export class ConveyorManager extends BaseComponent {
     this.deviceManager = config.deviceManager;
     this.socketManager = config.socketManager;
     this.settingsManager = config.settingsManager;
-    this.speedManager = config.speedManager;
     this.sorterManager = config.sorterManager;
-    this.buildPart = config.buildPart;
 
     // Bind callbacks once in constructor to ensure same reference for register/unregister
     this.boundReinitialize = this.reinitialize.bind(this);
@@ -131,12 +114,8 @@ export class ConveyorManager extends BaseComponent {
         throw new Error('Settings not available');
       }
 
-      // Initialize from settings
-      this.jetPositionsStart = settings.sorters.map((sorter) => sorter.jetPositionStart);
-      this.jetDurations = settings.sorters.map((sorter) => sorter.jetDuration);
-      this.partQueue = [];
-      this.speedLog = [];
-      this.encoderPartQueue = []; // Clear encoder queue (Phase 4)
+      // Clear encoder part queue
+      this.encoderPartQueue = [];
 
       // Reset encoder state
       this.currentEncoderPosition = 0;
@@ -170,19 +149,8 @@ export class ConveyorManager extends BaseComponent {
     this.deviceManager.unregisterDeviceReconnectCallback(DeviceName.CONVEYOR_JETS);
     // Unregister settings callback (using same bound reference as registration)
     this.settingsManager.unregisterSettingsUpdateCallback(this.boundReinitialize);
-    // clear all part actions
-    this.partQueue.forEach((part) => {
-      if (part.moveRef) clearTimeout(part.moveRef);
-      if (part.jetRef) clearTimeout(part.jetRef);
-      if (part.conveyorSpeedRef) clearTimeout(part.conveyorSpeedRef);
-    });
-    if (this.returnToDefaultConveyorSpeed) {
-      clearTimeout(this.returnToDefaultConveyorSpeed.ref);
-      this.returnToDefaultConveyorSpeed = null;
-    }
-    this.partQueue = [];
-    this.speedLog = [];
-    this.encoderPartQueue = []; // Clear encoder queue (Phase 4)
+    // Clear encoder part queue
+    this.encoderPartQueue = [];
 
     this.setStatus(ComponentStatus.UNINITIALIZED);
   }
@@ -191,303 +159,7 @@ export class ConveyorManager extends BaseComponent {
     this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.CONVEYOR_ON_OFF);
   }
 
-  public getCurrentSpeed(): number {
-    return this.speedManager.getCurrentSpeed();
-  }
-
-  public getJetPosition(sorter: number): number {
-    return this.jetPositionsStart[sorter] + this.jetDurations[sorter] / 2;
-  }
-
-  public findPreviousSorterPart(sorter: number): Part | null {
-    return this.partQueue.reduce<Part | null>((acc, p) => {
-      if (p.sorter === sorter) return p;
-      return acc;
-    }, null);
-  }
-
-  public findPreviousConveyorPart(defaultArrivalTime: number): Part | null {
-    return this.partQueue.reduce<Part | null>((acc, p) => {
-      if (p.defaultArrivalTime < defaultArrivalTime) return p;
-      return acc;
-    }, null);
-  }
-
-  public findNextConveyorPart(defaultArrivalTime: number): Part | null {
-    return this.partQueue.find((p) => p.defaultArrivalTime > defaultArrivalTime) || null;
-  }
-
-  private trimSpeedLog(): void {
-    if (this.partQueue.length === 0) {
-      this.speedLog = [];
-      return;
-    }
-
-    // Find earliest initial time among all parts
-    const earliestInitialTime = Math.min(...this.partQueue.map((p) => p.initialTime));
-
-    // Remove all speed log entries before the earliest part's initial time
-    this.speedLog = this.speedLog.filter((entry) => entry.time >= earliestInitialTime);
-  }
-
-  public addSpeedToLog(time: number, speed: number): void {
-    this.speedLog.push({ time, speed });
-    this.trimSpeedLog();
-  }
-
-  public findTimeAfterDistance = (startTime: number, distance: number) => {
-    // sanity checks
-    if (distance < 0) console.warn('findTimeAfterDistance: distance is negative');
-
-    if (distance === 0) return startTime; // exit condition
-
-    // Combine historical speed changes from speedLog with future speed changes from partQueue and return to default speed
-    const allSpeedChanges: { time: number; speed: number }[] = [
-      // Add historical speed changes from speedLog
-      ...this.speedLog,
-      // Add future speed changes from partQueue
-      ...this.partQueue
-        .filter((part) => part.conveyorSpeedTime > Date.now()) // Only include future speed changes
-        .map((part) => ({
-          time: part.conveyorSpeedTime,
-          speed: part.conveyorSpeed,
-        })),
-      // Add return to default speed if it exists and is in the future
-      ...(this.returnToDefaultConveyorSpeed
-        ? [
-            {
-              time: this.returnToDefaultConveyorSpeed.time,
-              speed: this.returnToDefaultConveyorSpeed.speed,
-            },
-          ]
-        : []),
-    ].sort((a, b) => a.time - b.time); // Sort by time
-
-    // Determine the speed active at startTime
-    const lastChangeBeforeStart = [...allSpeedChanges].filter((c) => c.time <= startTime).pop();
-    let lastSpeed = lastChangeBeforeStart ? lastChangeBeforeStart.speed : this.speedManager.getCurrentSpeed();
-
-    let remainingDistance = distance;
-    let finishTime = startTime;
-    let lastTime = startTime;
-
-    // Iterate forward through changes after startTime, consuming distance
-    for (let i = 0; i < allSpeedChanges.length && remainingDistance > 0; i++) {
-      const { speed, time: changeTime } = allSpeedChanges[i];
-      if (changeTime <= startTime) {
-        // Keep updating lastSpeed for changes up to startTime
-        lastSpeed = speed;
-        continue;
-      }
-
-      // Time span at lastSpeed until the next change
-      const timeTraveled = changeTime - lastTime;
-      if (timeTraveled > 0) {
-        const distanceTraveled = timeTraveled * lastSpeed;
-        if (distanceTraveled >= remainingDistance) {
-          finishTime += remainingDistance / lastSpeed;
-          remainingDistance = 0;
-          return finishTime;
-        } else {
-          finishTime += timeTraveled;
-          remainingDistance -= distanceTraveled;
-          lastTime = changeTime;
-        }
-      }
-
-      // Apply the new speed after the change
-      lastSpeed = speed;
-    }
-
-    // After processing all changes, continue at lastSpeed up to a reasonable bound
-    if (remainingDistance > 0) {
-      const maxHorizon = lastTime + 10 * 60 * 1000; // 10 minutes fallback horizon
-      const timeTraveled = maxHorizon - lastTime;
-      const distanceTraveled = timeTraveled * lastSpeed;
-      if (distanceTraveled >= remainingDistance) {
-        finishTime += remainingDistance / lastSpeed;
-        remainingDistance = 0;
-      } else {
-        // If still not enough, return the horizon (should not happen under normal speeds)
-        finishTime = maxHorizon;
-        remainingDistance = 0;
-      }
-    }
-
-    return finishTime;
-  };
-
-  public scheduleJetFire(jet: number, jetTime: number, part: Part): NodeJS.Timeout {
-    const delay = jetTime - Date.now();
-    return setTimeout(() => {
-      this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, ArduinoCommands.FIRE_JET, jet);
-      this.markPartSorted(part.initialTime);
-    }, delay);
-  }
-
-  private scheduleReturnToDefaultSpeed(jetTime: number): void {
-    // Cancel existing return to default speed timer if it exists
-    if (this.returnToDefaultConveyorSpeed) {
-      clearTimeout(this.returnToDefaultConveyorSpeed.ref);
-      this.returnToDefaultConveyorSpeed = null;
-    }
-
-    // Skip scheduling return to default speed in constant speed mode
-    const settings = this.settingsManager.getSettings();
-    if (settings && settings.constantConveyorSpeed) {
-      return;
-    }
-
-    // Schedule new return to default speed timer
-    const defaultSpeed = this.speedManager.getDefaultSpeed();
-
-    const ref = this.speedManager.scheduleConveyorSpeedChange(defaultSpeed, jetTime, (time: number, speed: number) =>
-      this.addSpeedToLog(time, speed),
-    );
-    this.returnToDefaultConveyorSpeed = { time: jetTime, speed: defaultSpeed, ref };
-  }
-
-  public insertPart(part: Part): void {
-    // Find insertion index based on defaultArrivalTime
-    let insertIndex = this.partQueue.findIndex((p) => p.defaultArrivalTime > part.defaultArrivalTime);
-    const isInsertAtEnd = insertIndex === -1;
-    insertIndex = insertIndex === -1 ? this.partQueue.length : insertIndex; // if no part found, insert at the end
-
-    // Schedule and assign all part actions
-    this.schedulePartActions(part);
-
-    // Insert part at correct index
-    this.partQueue.splice(insertIndex, 0, part);
-
-    // if there is an arrival time delay, we need to slow down the part
-    if (isInsertAtEnd) {
-      // Reschedule return to default speed for the new last part
-      this.scheduleReturnToDefaultSpeed(part.jetTime);
-    } else if (part.arrivalTimeDelay > 0) {
-      this.updateAllFutureParts(insertIndex);
-    } else {
-      this.updateNextPart(part.jetTime, insertIndex);
-    }
-  }
-
-  private updateNextPart(nextPartSpeedTime: number, insertIndex: number): void {
-    // Find next conveyor part
-    const nextConveyorPart = this.partQueue[insertIndex + 1];
-    if (nextConveyorPart) {
-      // Cancel next part's conveyor speed ref
-      if (nextConveyorPart.conveyorSpeedRef) {
-        clearTimeout(nextConveyorPart.conveyorSpeedRef);
-      }
-
-      // Update next part's conveyor speed time
-      nextConveyorPart.conveyorSpeedTime = nextPartSpeedTime;
-
-      // Reschedule conveyor speed change only if not in constant speed mode
-      const settings = this.settingsManager.getSettings();
-      if (settings && !settings.constantConveyorSpeed) {
-        nextConveyorPart.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
-          nextConveyorPart.conveyorSpeed,
-          nextConveyorPart.conveyorSpeedTime,
-          (time: number, speed: number) => this.addSpeedToLog(time, speed),
-        );
-      }
-    }
-  }
-
-  private updateAllFutureParts(insertIndex: number): void {
-    // console.log('updateAllFutureParts =============================================');
-    // const filteredPartQueue = this.partQueue.map((p) => {
-    //   const { moveRef, jetRef, conveyorSpeedRef, ...rest } = p;
-    //   return rest;
-    // });
-    // console.log(filteredPartQueue);
-    // console.log(insertIndex);
-    // console.log('===============================================================');
-    // Prevent recursive recalculation
-    // - there should be no recursive recalculation because the partQueue is sorted by defaultArrivalTime
-    // - if there is a recursive recalculation, it is because of a bug
-    if (this.isRecalculating) {
-      console.error('\x1b[33mError: recursive recalculation\x1b[0m');
-      return;
-    }
-    this.isRecalculating = true;
-
-    try {
-      // Find all parts that come after current part
-      const partsToResort = this.partQueue.slice(insertIndex + 1);
-      // Remove partsToResort from partQueue
-      this.partQueue = this.partQueue.slice(0, insertIndex + 1);
-
-      // Cancel all actions for parts to be resorted
-      this.cancelPartActions(partsToResort);
-
-      // Resort all removed parts
-      partsToResort.forEach((p) => {
-        // Recalculate timings for each part
-        const recalculatedPart = this.buildPart({
-          partId: p.partId,
-          initialTime: p.initialTime,
-          initialPosition: p.initialPosition,
-          bin: p.bin,
-          sorter: p.sorter,
-        });
-        // Insert the recalculated part
-        this.insertPart(recalculatedPart);
-      });
-    } finally {
-      this.isRecalculating = false;
-    }
-  }
-
-  private schedulePartActions(part: Part): void {
-    // Schedule move action
-    part.moveRef = this.sorterManager.scheduleSorterMove(part.sorter, part.bin, part.moveTime);
-
-    // Schedule jet action
-    part.jetRef = this.scheduleJetFire(part.sorter, part.jetTime, part);
-
-    // Schedule conveyor speed change only if not in constant speed mode
-    const settings = this.settingsManager.getSettings();
-    if (settings && !settings.constantConveyorSpeed) {
-      part.conveyorSpeedRef = this.speedManager.scheduleConveyorSpeedChange(
-        part.conveyorSpeed,
-        part.conveyorSpeedTime,
-        (time: number, speed: number) => this.addSpeedToLog(time, speed),
-      );
-    }
-  }
-
-  private cancelPartActions(parts: Part[]): void {
-    parts.forEach((part) => {
-      if (part.moveRef) clearTimeout(part.moveRef);
-      if (part.jetRef) clearTimeout(part.jetRef);
-      if (part.conveyorSpeedRef) clearTimeout(part.conveyorSpeedRef);
-    });
-  }
-
-  public markPartSorted(initialTime: number): void {
-    const partIndex = this.partQueue.findIndex((p) => p.initialTime === initialTime);
-    if (partIndex !== -1) {
-      const part = this.partQueue[partIndex];
-      part.status = 'completed';
-      this.socketManager.emitPartSorted(part);
-      this.partQueue.splice(partIndex, 1);
-    }
-  }
-
-  public filterQueue(): void {
-    // keep last part to leave conveyor onward
-    const lastRecentPartToLeaveConveyor = this.partQueue.find((p) => p.defaultArrivalTime < Date.now());
-    if (lastRecentPartToLeaveConveyor) {
-      this.partQueue = this.partQueue.slice(this.partQueue.indexOf(lastRecentPartToLeaveConveyor));
-    }
-  }
-
-  public getPartQueue(): Part[] {
-    return this.partQueue;
-  }
-
-  // --- Encoder Position Tracking Methods (Phase 2) ---
+  // --- Encoder Position Tracking Methods ---
 
   private handleReconnect(): void {
     console.log('\x1b[32m[ENCODER] Conveyor reconnected, syncing encoder state\x1b[0m');
@@ -558,9 +230,41 @@ export class ConveyorManager extends BaseComponent {
       // Encoder reset confirmation: ER:0
       console.log(`\x1b[32m[ENCODER] Encoder reset confirmed: ${data}\x1b[0m`);
     } else if (data.includes('Error: Jet buffer full')) {
-      // Arduino buffer is full - log warning
-      console.error('\x1b[31m[ENCODER] Arduino jet buffer full - commands may be lost\x1b[0m');
-      // Could emit event to frontend to display warning
+      // Prevent rapid re-processing if buffer stays full
+      if (this.bufferFullCooldown) {
+        console.warn('[ENCODER] Buffer full event ignored - cooldown active');
+        return;
+      }
+      this.bufferFullCooldown = true;
+
+      // Arduino buffer is full - commands are being lost
+      console.error('\x1b[31m[ENCODER] Arduino jet buffer full - marking pending parts as skipped\x1b[0m');
+
+      // Mark all parts that haven't had their jet command sent as skipped
+      // These parts won't be sorted because we can't queue their jet commands
+      const skippedParts = this.encoderPartQueue.filter((p) => !p.jetCommandSent && p.status !== 'skipped');
+
+      for (const part of skippedParts) {
+        part.status = 'skipped';
+        this.socketManager.emitEncoderPartSkipped(
+          part.partId,
+          'Arduino jet buffer full',
+          part.sorter,
+          part.bin,
+        );
+        console.warn(`[ENCODER] Skipped part ${part.partId} due to buffer full`);
+      }
+
+      // Remove skipped parts from queue
+      this.encoderPartQueue = this.encoderPartQueue.filter((p) => p.status !== 'skipped');
+
+      // Also notify frontend about buffer status
+      this.socketManager.emitBufferStatusUpdate(16, 16); // Full buffer
+
+      // Reset cooldown after a short delay
+      setTimeout(() => {
+        this.bufferFullCooldown = false;
+      }, 500);
     }
   }
 
@@ -620,14 +324,29 @@ export class ConveyorManager extends BaseComponent {
   private handleJetFired(jet: number, position: number): void {
     console.log(`\x1b[32m[ENCODER] Jet ${jet} fired at encoder position ${position}\x1b[0m`);
 
-    // Check if encoder scheduling is enabled
-    const settings = this.settingsManager.getSettings();
-    if (!settings?.useEncoderScheduling) {
-      return;
-    }
+    // Position tolerance for matching (accounts for timing differences)
+    const POSITION_MATCH_TOLERANCE = 50;
 
-    // Find the part in the encoder queue that matches this jet and hasn't been sorted yet
-    const part = this.encoderPartQueue.find((p) => p.jet === jet && p.status !== 'sorted');
+    // Find the part in the encoder queue that matches this jet, position, and hasn't been sorted yet
+    // Primary match: jet number + position within tolerance
+    let part = this.encoderPartQueue.find(
+      (p) =>
+        p.jet === jet &&
+        p.status !== 'sorted' &&
+        Math.abs(p.jetPosition - position) <= POSITION_MATCH_TOLERANCE,
+    );
+
+    // Fallback: if no position match, find by jet number only (backwards compatibility)
+    // This handles cases where Arduino position tracking drifts
+    if (!part) {
+      part = this.encoderPartQueue.find((p) => p.jet === jet && p.status !== 'sorted');
+      if (part) {
+        console.warn(
+          `[JET_FIRED] Position mismatch for jet ${jet}: expected ${part.jetPosition}, actual ${position}. ` +
+            `Delta: ${Math.abs(part.jetPosition - position)} ticks. Using fallback match.`,
+        );
+      }
+    }
 
     if (part) {
       // Update part status
@@ -790,6 +509,29 @@ export class ConveyorManager extends BaseComponent {
   }
 
   /**
+   * Skips all encoder parts targeting a specific sorter.
+   * Called when a sorter disconnects/reconnects and its state is unknown.
+   * @param sorterNum - Sorter index (0-3)
+   * @param reason - Reason for skipping (for logging)
+   */
+  public skipPartsForSorter(sorterNum: number, reason: string): void {
+    const affectedParts = this.encoderPartQueue.filter(
+      (p) => p.sorter === sorterNum && p.status !== 'sorted' && p.status !== 'skipped',
+    );
+
+    for (const part of affectedParts) {
+      part.status = 'skipped';
+      this.socketManager.emitEncoderPartSkipped(part.partId, reason, part.sorter, part.bin);
+      console.warn(`[ENCODER] Skipped part ${part.partId} for sorter ${sorterNum}: ${reason}`);
+    }
+
+    // Remove skipped parts from queue
+    this.encoderPartQueue = this.encoderPartQueue.filter((p) => p.status !== 'skipped');
+
+    console.log(`[ENCODER] Skipped ${affectedParts.length} parts for sorter ${sorterNum}`);
+  }
+
+  /**
    * Sets the SorterStateManager reference.
    * Called after construction to avoid circular dependency.
    */
@@ -807,99 +549,16 @@ export class ConveyorManager extends BaseComponent {
    * @param currentPosition - Current encoder position
    */
   private processPositionActions(currentPosition: number): void {
-    // Only process if encoder scheduling is enabled
-    const settings = this.settingsManager.getSettings();
-    // #region agent log
-    if (!settings?.useEncoderScheduling) {
-      // Log only occasionally to avoid spam (every 5 seconds)
-      if (!this._lastEncoderSkipLog || Date.now() - this._lastEncoderSkipLog > 5000) {
-        this._lastEncoderSkipLog = Date.now();
-        fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            location: 'ConveyorManager.ts:processPositionActions',
-            message: 'Encoder scheduling disabled',
-            data: { useEncoderScheduling: settings?.useEncoderScheduling, hasSettings: !!settings },
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            hypothesisId: 'A',
-          }),
-        }).catch(() => {});
-      }
-      return;
-    }
-    // #endregion
-
     // Don't process actions if encoder data is stale
     if (this.isEncoderDataStale()) {
       console.warn('[ENCODER_ACTION] Skipping action processing - encoder data is stale');
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'ConveyorManager.ts:processPositionActions',
-          message: 'Encoder data stale',
-          data: { currentPosition, lastUpdateTime: this.lastEncoderUpdateTime, now: Date.now() },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          hypothesisId: 'B',
-        }),
-      }).catch(() => {});
-      // #endregion
       return;
     }
 
     const { jetsToQueue, movesToSend } = this.getActionableParts(currentPosition);
 
-    // #region agent log
-    if (this.encoderPartQueue.length > 0) {
-      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'ConveyorManager.ts:processPositionActions',
-          message: 'Checking actionable parts',
-          data: {
-            currentPosition,
-            queueLength: this.encoderPartQueue.length,
-            jetsToQueueCount: jetsToQueue.length,
-            movesToSendCount: movesToSend.length,
-            firstPart: this.encoderPartQueue[0]
-              ? {
-                  partId: this.encoderPartQueue[0].partId,
-                  jetPosition: this.encoderPartQueue[0].jetPosition,
-                  jetCommandSent: this.encoderPartQueue[0].jetCommandSent,
-                  jet: this.encoderPartQueue[0].jet,
-                  threshold: this.encoderPartQueue[0].jetPosition - this.JET_LEAD_COUNTS,
-                }
-              : null,
-          },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          hypothesisId: 'C',
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
-
     // Send jet queue commands to Arduino
     for (const part of jetsToQueue) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'ConveyorManager.ts:processPositionActions',
-          message: 'About to queue jet fire',
-          data: { partId: part.partId, jet: part.jet, jetPosition: part.jetPosition, currentPosition },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          hypothesisId: 'D',
-        }),
-      }).catch(() => {});
-      // #endregion
       this.queueJetFire(part);
       part.jetCommandSent = true;
     }
@@ -911,7 +570,6 @@ export class ConveyorManager extends BaseComponent {
       part.status = 'moving';
     }
   }
-  private _lastEncoderSkipLog?: number;
 
   /**
    * Queues a jet fire command with the Arduino.
@@ -921,26 +579,6 @@ export class ConveyorManager extends BaseComponent {
   private queueJetFire(part: EncoderPart): void {
     // Send queue jet command: q<jet>,<position>
     const command = `q${part.jet},${part.jetPosition}`;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'ConveyorManager.ts:queueJetFire',
-        message: 'Sending jet queue command to Arduino',
-        data: {
-          command,
-          partId: part.partId,
-          jet: part.jet,
-          jetPosition: part.jetPosition,
-          currentEncoderPos: this.currentEncoderPosition,
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        hypothesisId: 'D',
-      }),
-    }).catch(() => {});
-    // #endregion
     this.deviceManager.sendCommand(DeviceName.CONVEYOR_JETS, command);
     console.log(`[JET_QUEUE] Queued jet ${part.jet} at position ${part.jetPosition} for part ${part.partId}`);
   }

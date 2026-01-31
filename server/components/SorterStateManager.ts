@@ -277,13 +277,22 @@ export class SorterStateManager extends BaseComponent {
       );
     }
 
+    // Skip any parts in the encoder queue for this sorter
+    // Their jets may fire but the sorter position is unknown
+    if (this.conveyorManager) {
+      this.conveyorManager.skipPartsForSorter(sorterNum, 'Sorter reconnected - position unknown');
+    } else {
+      console.warn(`[SORTER_STATE] Cannot skip parts for sorter ${sorterNum} - ConveyorManager not available`);
+    }
+
     // Emit update to frontend
+    const encoderPosition = this.conveyorManager?.getInterpolatedPosition() ?? 0;
     this.socketManager.emitSorterStateUpdate(sorterNum, {
       currentBin: state.currentBin,
       isMoving: false,
       targetBin: null,
       scheduledMoveCount: 0,
-      encoderPosition: this.conveyorManager.getInterpolatedPosition(),
+      encoderPosition,
     });
   }
 

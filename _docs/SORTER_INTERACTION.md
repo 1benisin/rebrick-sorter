@@ -212,7 +212,7 @@ If `arrivalPosition > deadline`, the part is skipped:
 - No jet command sent (part stays on conveyor)
 - No move command sent (sorter stays put)
 - Server logs reason: "Sorter X cannot reach bin Y in time"
-- Frontend notified via `PART_SKIPPED` event
+- Frontend notified via `ENCODER_PART_SKIPPED` event
 
 ## 7. Error Handling
 

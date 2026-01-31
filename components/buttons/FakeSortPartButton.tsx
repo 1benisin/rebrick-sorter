@@ -17,6 +17,7 @@ const FakeSortPartButton = () => {
       partId: 'fake-part-' + Math.random().toString(36).substr(2, 9),
       initialTime: Date.now(),
       initialPosition: Math.floor(Math.random() * 100),
+      encoderAtDetection: Math.floor(Math.random() * 10000), // Fake encoder position for testing
       bin: Math.floor(Math.random() * 5),
       sorter: Math.floor(Math.random() * 3),
     };

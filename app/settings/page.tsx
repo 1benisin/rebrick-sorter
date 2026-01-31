@@ -4,13 +4,11 @@
 'use client';
 
 import SettingsForm from '@/components/SettingsForm';
-import ConveyorCalibrationButton from '@/components/buttons/ConveyorCalibrationButton';
 import DualVideo from '@/components/DualVideo';
 import ConveyorButton from '@/components/buttons/ConveyorButton';
 import MoveSorterButton from '@/components/buttons/MoverSorterButton';
 import HomeSorterButton from '@/components/buttons/HomeSorterButton';
 import JetButton from '@/components/buttons/JetButton';
-import JetCalibrationButton from '@/components/buttons/JetCalibrationButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -39,15 +37,10 @@ const SettingsPage = () => {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            <ConveyorCalibrationButton />
             <MoveSorterButton />
             <JetButton />
             <HomeSorterButton />
             <ConveyorButton />
-            <JetCalibrationButton jetNumber={0} />
-            <JetCalibrationButton jetNumber={1} />
-            <JetCalibrationButton jetNumber={2} />
-            <JetCalibrationButton jetNumber={3} />
           </div>
         </CardContent>
       </Card>

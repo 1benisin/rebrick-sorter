@@ -5,14 +5,10 @@ import { DeviceManager } from './components/DeviceManager';
 import { SorterManager } from './components/SorterManager';
 import { SorterStateManager } from './components/SorterStateManager';
 import { ConveyorManager } from './components/ConveyorManager';
-import { SpeedManager } from './components/SpeedManager';
 import { PositionTranslator } from './components/PositionTranslator';
-import { SortPartDto } from '../types/sortPart.dto';
-import { Part, EncoderPart } from '../types/part.type';
+import { SortPartDto, sortPartSchema } from '../types/sortPart.dto';
+import { EncoderPart } from '../types/part.type';
 import { DeviceName } from '../types/deviceName.type';
-
-export const FALL_TIME_SHORTEST = 1200;
-export const FALL_TIME_LONGEST = 2000;
 
 export class SystemCoordinator {
   private socketManager: SocketManager;
@@ -21,7 +17,6 @@ export class SystemCoordinator {
   private sorterManager: SorterManager;
   private sorterStateManager: SorterStateManager;
   private conveyorManager: ConveyorManager;
-  private speedManager: SpeedManager;
   private positionTranslator: PositionTranslator;
 
   constructor(private io: SocketIOServer) {
@@ -50,12 +45,6 @@ export class SystemCoordinator {
       settingsManager: this.settingsManager,
     });
 
-    this.speedManager = new SpeedManager({
-      deviceManager: this.deviceManager,
-      socketManager: this.socketManager,
-      settingsManager: this.settingsManager,
-    });
-
     this.sorterManager = new SorterManager({
       deviceManager: this.deviceManager,
       socketManager: this.socketManager,
@@ -66,9 +55,7 @@ export class SystemCoordinator {
       deviceManager: this.deviceManager,
       socketManager: this.socketManager,
       settingsManager: this.settingsManager,
-      speedManager: this.speedManager,
       sorterManager: this.sorterManager,
-      buildPart: this.buildPart.bind(this),
     });
 
     // PositionTranslator for encoder-based scheduling (Phase 4)
@@ -112,10 +99,6 @@ export class SystemCoordinator {
       await this.deviceManager.initialize();
       console.log('DeviceManager initialized successfully.');
 
-      console.log('Initializing SpeedManager...');
-      await this.speedManager.initialize();
-      console.log('SpeedManager initialized successfully.');
-
       console.log('Initializing SorterManager...');
       await this.sorterManager.initialize();
       console.log('SorterManager initialized successfully.');
@@ -136,24 +119,55 @@ export class SystemCoordinator {
   }
 
   // Event handlers
-  private async handleSortPart(data: SortPartDto): Promise<void> {
+  private async handleSortPart(rawData: unknown): Promise<void> {
     try {
+      // Validate incoming data against schema
+      const parseResult = sortPartSchema.safeParse(rawData);
+      if (!parseResult.success) {
+        console.error('[SORT] Invalid SORT_PART data:', parseResult.error.format());
+        // Try to extract partId for skip notification, fall back to 'unknown'
+        const partId = (rawData as any)?.partId ?? 'unknown';
+        const sorter = (rawData as any)?.sorter ?? 0;
+        const bin = (rawData as any)?.bin ?? 0;
+        this.socketManager.emitEncoderPartSkipped(partId, 'Invalid data format', sorter, bin);
+        return;
+      }
+      const data = parseResult.data;
+
       const settings = this.settingsManager.getSettings();
       if (!settings) {
         console.error('Settings not available, skipping part.');
         return;
       }
 
-      // Check if encoder-based scheduling is enabled (Phase 4)
-      if (settings.useEncoderScheduling) {
-        this.handleEncoderSortPart(data);
+      // encoderAtDetection is now guaranteed by schema validation
+      // but keep explicit check for extra safety and clear error message
+      if (data.encoderAtDetection === undefined || data.encoderAtDetection === null) {
+        console.error('[SORT] Missing encoderAtDetection in SORT_PART message');
+        this.socketManager.emitEncoderPartSkipped(data.partId, 'Missing encoder data from frontend', data.sorter, data.bin);
         return;
       }
 
-      // Legacy time-based scheduling
-      this.handleTimeSortPart(data, settings);
+      // Check calibration
+      const { cameraWidthInTicks, jetEncoderOffsets } = settings.positionCalibration;
+      if (cameraWidthInTicks <= 0 || jetEncoderOffsets.every(o => o === 0)) {
+        console.error('[SORT] Calibration required - cannot sort part');
+        this.socketManager.emitEncoderPartSkipped(data.partId, 'Calibration required', data.sorter, data.bin);
+        return;
+      }
+
+      // Check specific sorter's jet is calibrated
+      const jetOffset = jetEncoderOffsets[data.sorter];
+      if (jetOffset === undefined || jetOffset <= 0) {
+        console.error(`[SORT] Jet for sorter ${data.sorter} not calibrated - cannot sort part`);
+        this.socketManager.emitEncoderPartSkipped(data.partId, 'Jet not calibrated', data.sorter, data.bin);
+        return;
+      }
+
+      // Encoder-based scheduling only
+      this.handleEncoderSortPart(data);
     } catch (error) {
-      console.error('\x1b[33mError handling sort part:\x1b[0m', error);
+      console.error('Error handling sort part:', error);
     }
   }
 
@@ -162,10 +176,6 @@ export class SystemCoordinator {
    * Uses position triggers instead of setTimeout for jet firing and sorter moves.
    */
   private handleEncoderSortPart(data: SortPartDto): void {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SystemCoordinator.ts:handleEncoderSortPart',message:'Received sort part request',data:{partId:data.partId,initialPosition:data.initialPosition,initialTime:data.initialTime,sorter:data.sorter,bin:data.bin,currentEncoderPos:this.conveyorManager.getCurrentEncoderPosition()},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-
     // Build encoder part (returns null if sorter unavailable)
     const encoderPart = this.buildEncoderPart(data);
 
@@ -212,206 +222,65 @@ export class SystemCoordinator {
   }
 
   /**
-   * Handles part sorting using legacy time-based scheduling.
-   * Uses setTimeout for jet firing and sorter moves.
-   */
-  private handleTimeSortPart(
-    data: SortPartDto,
-    settings: NonNullable<ReturnType<typeof this.settingsManager.getSettings>>,
-  ): void {
-    // Calculate all timings for the part
-    const part = this.buildPart(data);
-
-    // if constant speed is enabled and there is an arrival time delay, we must skip the part
-    if (settings.constantConveyorSpeed) {
-      if (part.arrivalTimeDelay > 0) {
-        console.log(`Skipping part ${part.partId}: Timing conflict with constant speed mode enabled.`);
-        this.socketManager.emitPartSkipped(part);
-        return;
-      }
-    } else {
-      // if there is an arrival time delay, we need to slow down the part
-      if (part.arrivalTimeDelay > 0) {
-        // Calculate required slowdown percentage before applying it
-        const targetJetTime = part.jetTime + part.arrivalTimeDelay;
-        const currentTimeGap = part.jetTime - part.conveyorSpeedTime;
-        const requiredTimeGap = targetJetTime - part.conveyorSpeedTime;
-        const slowdownPercent = currentTimeGap / requiredTimeGap;
-        const newSpeed = part.conveyorSpeed * slowdownPercent;
-
-        const minAllowedSpeed =
-          this.speedManager.getDefaultSpeed() * (settings.minConveyorRPM / settings.maxConveyorRPM);
-
-        if (newSpeed < minAllowedSpeed) {
-          part.status = 'skipped';
-          this.socketManager.emitPartSkipped(part);
-          return;
-        }
-
-        // Update part with arrival time delay
-        part.moveTime += part.arrivalTimeDelay;
-        part.moveFinishedTime += part.arrivalTimeDelay;
-        part.jetTime += part.arrivalTimeDelay;
-        part.conveyorSpeed = newSpeed;
-      }
-    }
-
-    // Insert speed change
-    this.conveyorManager.insertPart(part);
-
-    // filter partQueue
-    this.conveyorManager.filterQueue();
-  }
-
-  private buildPart(data: SortPartDto): Part {
-    const { partId, initialTime, initialPosition, bin, sorter } = data;
-    const settings = this.settingsManager.getSettings();
-    if (!settings) {
-      throw new Error('Settings not available in buildPart');
-    }
-
-    // -- calculate part properties --
-    // default arrival time
-    const jetPosition = this.conveyorManager.getJetPosition(sorter);
-    // Use absolute belt distance from detection to jet; clamp to at least 1px.
-    // This keeps timing correct regardless of leftward or rightward motion.
-    const distanceToJet = Math.max(1, Math.abs(jetPosition - initialPosition));
-    const defaultSpeed = this.speedManager.getDefaultSpeed();
-    const conveyorTravelTime = distanceToJet / defaultSpeed;
-    const defaultArrivalTime = initialTime + conveyorTravelTime;
-    console.log('[JET_CALC]', {
-      sorter,
-      bin,
-      initialPosition,
-      jetPosition,
-      distanceToJet,
-      defaultSpeed,
-      conveyorTravelTime,
-      initialTime,
-      defaultArrivalTime,
-    });
-    // jet time
-    const jetTime = this.conveyorManager.findTimeAfterDistance(initialTime, distanceToJet);
-    // move time
-    const sorterPreviousPart = this.conveyorManager.findPreviousSorterPart(sorter);
-    const travelTimeFromPreviousBin = this.sorterManager.getTravelTimeBetweenBins({
-      sorter: sorter,
-      fromBin: sorterPreviousPart?.bin,
-      toBin: bin,
-    });
-    const moveTime = jetTime + FALL_TIME_SHORTEST - travelTimeFromPreviousBin;
-    const moveFinishedTime = jetTime + FALL_TIME_LONGEST;
-    // arrival time delay
-    const arrivalTimeDelay = sorterPreviousPart ? Math.max(sorterPreviousPart.moveFinishedTime - moveTime, 0) : 0;
-    // conveyor speed
-    const nextConveyorPart = this.conveyorManager.findNextConveyorPart(defaultArrivalTime);
-    let conveyorSpeed = defaultSpeed;
-    if (!settings.constantConveyorSpeed && nextConveyorPart) {
-      conveyorSpeed = nextConveyorPart.conveyorSpeed;
-    }
-
-    // conveyor speed time
-    const previousConveyorPart = this.conveyorManager.findPreviousConveyorPart(defaultArrivalTime);
-    const conveyorSpeedTime = previousConveyorPart?.jetTime || Date.now();
-
-    // Create new part
-    const part: Part = {
-      partId,
-      sorter,
-      bin,
-      initialPosition,
-      initialTime,
-      defaultArrivalTime,
-      jetTime,
-      moveTime,
-      moveFinishedTime,
-      arrivalTimeDelay,
-      conveyorSpeed,
-      conveyorSpeedTime,
-      status: 'pending',
-    };
-
-    return part;
-  }
-
-  /**
    * Builds an EncoderPart for position-based scheduling.
    * Returns null if the sorter is unavailable (part should be skipped).
    *
-   * Uses the new left-edge-based calibration system:
-   * 1. Gets encoder position at detection time via interpolation
-   * 2. Uses calculateJetTriggerEncoder() for accurate pixel-to-tick translation
+   * Uses encoderAtDetection directly from the frontend - no interpolation needed.
+   * Calibration is now required (validated in handleSortPart).
    *
    * @param data - Sort part data from frontend
    * @returns EncoderPart for scheduling, or null if part should be skipped
    */
   private buildEncoderPart(data: SortPartDto): EncoderPart | null {
-    const { partId, initialPosition, initialTime, bin, sorter, cameraWidthPixels: providedCameraWidth } = data;
+    const { partId, initialPosition, initialTime, encoderAtDetection, bin, sorter, cameraWidthPixels: providedCameraWidth } = data;
 
-    // Get calibration settings for camera width
+    // Get calibration settings
     const calibration = this.positionTranslator.getCalibration();
-    const isCalibrated = this.positionTranslator.isCalibrated();
 
-    // Determine effective camera width: prefer provided value from frontend, fall back to calibration
+    // Determine effective camera width: prefer provided value from frontend
     let effectiveCameraWidthPixels = calibration.cameraWidthPixels;
     if (providedCameraWidth && providedCameraWidth > 0) {
-      // Validate against calibration - warn if mismatch detected
       if (calibration.cameraWidthPixels !== providedCameraWidth) {
         console.warn(
           `[ENCODER_PART] Camera width mismatch: calibration=${calibration.cameraWidthPixels}px, ` +
-            `actual=${providedCameraWidth}px. Using actual value. Consider recalibrating.`,
+            `actual=${providedCameraWidth}px. Using actual value.`,
         );
       }
       effectiveCameraWidthPixels = providedCameraWidth;
     }
 
-    // 1. Get encoder position at detection time
-    // When calibrated: get raw encoder position (no pixel offset) - pixel conversion is done in calculateJetTriggerEncoder
-    // When not calibrated: use legacy pixelToEncoderPosition which includes pixel offset
-    const detectionEncoderPos = isCalibrated
-      ? this.positionTranslator.getEncoderPositionAtTime(initialTime)
-      : this.positionTranslator.pixelToEncoderPosition(initialPosition, initialTime);
+    // Use encoderAtDetection directly from frontend - no interpolation needed!
+    const detectionEncoderPos = encoderAtDetection;
 
-    // 2. Calculate jet fire position using the new calibration-based method
-    // If calibrated: uses pixel position + raw encoder at detection + calibration data
-    // If not calibrated: falls back to adding jet offset to detection position (which already has pixel offset)
-    let jetPosition: number;
-    if (isCalibrated) {
-      // Use the new calibration-based calculation with raw encoder position
-      jetPosition = this.positionTranslator.calculateJetTriggerEncoder(
-        initialPosition, // pixelX from detection
-        detectionEncoderPos, // raw encoder value at detection time (no pixel offset)
-        sorter, // jet index
-        effectiveCameraWidthPixels, // camera resolution width (from frontend or calibration)
-      );
-    } else {
-      // Fallback to old method if not calibrated
-      jetPosition = this.positionTranslator.calculateJetPosition(detectionEncoderPos, sorter);
-      console.log('[ENCODER_PART] Using legacy calculation (not calibrated)');
-    }
+    // Calculate jet fire position using calibration
+    const jetPosition = this.positionTranslator.calculateJetTriggerEncoder(
+      initialPosition,
+      detectionEncoderPos,
+      sorter,
+      effectiveCameraWidthPixels,
+    );
 
-    // 3. Calculate the position by which the sorter must be ready
+    // Calculate the position by which the sorter must be ready
     const requiredByPosition = this.positionTranslator.calculateRequiredByPosition(jetPosition);
 
-    // 4. Check if sorter can reach the bin in time
+    // Check if sorter can reach the bin in time
     const availability = this.sorterStateManager.canSorterReachBin(sorter, bin, requiredByPosition);
 
-    // 5. Return null if sorter is unavailable (part will be skipped)
     if (!availability.available) {
       console.log(`[ENCODER_PART] Part ${partId} - sorter ${sorter} unavailable: ${availability.reason}`);
       return null;
     }
 
-    // 6. Get the effective "from bin" for lead count calculation
+    // Get the effective "from bin" for lead count calculation
     const fromBin = this.sorterStateManager.getEffectiveFromBin(sorter);
     const leadCounts = this.sorterStateManager.calculateLeadCounts(sorter, fromBin, bin);
 
-    // 7. Build the encoder part
+    // Build the encoder part
     const encoderPart: EncoderPart = {
       partId,
       detectionEncoderPos,
       jetPosition,
-      jet: sorter, // jet number corresponds to sorter number
+      jet: sorter,
       sorter,
       bin,
       moveTriggerPosition: availability.triggerPosition,
@@ -427,11 +296,8 @@ export class SystemCoordinator {
       partId,
       detectionEncoderPos,
       jetPosition,
-      moveTriggerPosition: availability.triggerPosition,
-      expectedMoveCompletePosition: availability.triggerPosition + leadCounts,
       sorter,
       bin,
-      calibrated: this.positionTranslator.isCalibrated(),
     });
 
     return encoderPart;

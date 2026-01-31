@@ -49,15 +49,15 @@ The key services are:
 
 - **`SettingsService`**: Manages fetching and saving application settings from/to Firebase Firestore. Uses real-time `onSnapshot` listeners for instant propagation of settings changes.
 - **`SocketService`**: Manages the persistent WebSocket connection to the Node.js backend. Sets up event listeners for encoder position updates, buffer status, and part lifecycle events. Updates `sortProcessStore` with encoder state.
-- **`VideoCaptureService`**: Handles access to the webcam video streams and provides a method for capturing frames.
-- **`DetectorService`**: Loads the local TensorFlow.js model (`public/detection-model/`) and performs object detection on captured video frames.
+- **`VideoCaptureService`**: Handles access to the webcam video streams and provides `captureImage()`. Each capture returns `ImageCaptureType`: `imageBitmaps`, `timestamp`, and **`encoderAtCapture`** (read from `sortProcessStore.encoderPosition` at capture time so detection and matching use the same encoder reference).
+- **`DetectorService`**: Loads the local TensorFlow.js model (`public/detection-model/`) and performs object detection on captured video frames. Receives `ImageCaptureType` (including `encoderAtCapture`) and creates `Detection` objects with **`encoderAtDetection`** set from `encoderAtCapture`, so downstream matching and SORT_PART use encoder position consistently.
 - **`ClassifierService`**: Manages the multi-step process of classifying a detected part:
   1. Sends cropped images to Brickognize API (via `/api/brickognize` proxy)
   2. Combines results from both camera views
   3. Looks up bin assignment from catalog data (loaded from Firebase Storage on init)
   4. Logs classification results and images to Firebase Firestore/Storage
   5. Emits `SORT_PART` event via SocketService with `initialTime` and `initialPosition`
-- **`SortProcessControllerService`** (in `SorterService.ts`): The central orchestrator. It runs the main processing loop (~500ms interval) coordinating detection, tracking, and classification. Manages `DetectionPairGroup` tracking to follow parts across frames.
+- **`SortProcessControllerService`** (in `SorterService.ts`): The central orchestrator. It runs the main processing loop (~500ms interval) coordinating detection, tracking, and classification. Manages `DetectionPairGroup` tracking to follow parts across frames. **Detection matching is encoder-based:** detections are matched by "absolute position" (encoder at detection minus pixel-to-ticks offset); no speed or time-based prediction. Matching threshold uses `Math.max(50, cameraWidthInTicks * 0.20)` ticks.
 
 ### 4.3. Calibration Components
 
@@ -77,12 +77,10 @@ For global state that needs to be accessed by multiple components and services, 
 
 - **`sortProcessStore`**: The main store, which tracks the entire state of the sorting pipeline:
   - `isRunning`: Whether the sort process loop is active
-  - `conveyorSpeed`: Current conveyor speed in pixels/ms
-  - `conveyorSpeedLog`: Historical speed changes for position prediction
   - `detectionPairGroups`: Tracked part groups with detection history
   - `videoCaptureDimensions`: Camera frame dimensions
   - `serialPorts`: Available serial ports from backend
-  - **Encoder State (Phase 5):**
+  - **Encoder State:**
     - `encoderPosition`: Current encoder position from server
     - `encoderTimestamp`: When position was last updated
     - `encoderVelocity`: Current smoothed velocity (counts/ms)
@@ -102,6 +100,7 @@ The frontend communicates with several other systems, each with a distinct proto
     - `partId`: Unique identifier
     - `initialPosition`: X position in camera frame (pixels)
     - `initialTime`: Timestamp when part was detected
+    - `encoderAtDetection`: Encoder position when the frame was captured (used for position calculation)
     - `bin`: Target bin number
     - `sorter`: Which sorter (0-3)
   - **Calibration Events (Client -> Server):**
@@ -112,12 +111,9 @@ The frontend communicates with several other systems, each with a distinct proto
   - **Server -> Client:** The backend streams status updates:
     - `ENCODER_POSITION_UPDATE`: Current conveyor encoder position with velocity (`{ position, timestamp, velocity }`)
     - `BUFFER_STATUS_UPDATE`: Arduino's pending jets buffer status (`{ count, capacity }`)
-    - `ENCODER_PART_SCHEDULED`: Part has been scheduled for sorting (encoder-based)
-    - `ENCODER_PART_SORTED`: Part was successfully sorted (jet fired)
+    - `ENCODER_PART_SCHEDULED`: Part has been scheduled for sorting (`{ partId, jetPosition, moveTriggerPosition, sorter, bin }`)
+    - `ENCODER_PART_SORTED`: Part was successfully sorted (jet fired) (`{ partId, jetPosition, sorter, bin }`)
     - `ENCODER_PART_SKIPPED`: Part couldn't be sorted with reason (`{ partId, reason, sorter, bin }`)
-    - `PART_SORTED`: Legacy confirmation when a part is sorted (time-based)
-    - `PART_SKIPPED`: Legacy notification when a part couldn't be sorted
-    - `CONVEYOR_SPEED_UPDATE`: Current conveyor speed
     - `LIST_SERIAL_PORTS_SUCCESS`: Available serial ports list
     - `COMPONENT_STATUS_UPDATE`: Individual component status changes
     - `ENCODER_RESET_COMPLETE`: Confirmation when encoder reset completes (`{ success, position }`)
@@ -180,17 +176,18 @@ sequenceDiagram
 **Step-by-step Breakdown:**
 
 1.  **Initiation:** The `SortProcessControllerService` (SPCS) starts its `runProcess` loop.
-2.  **Detection:** In each loop, it calls `DetectorService.detect()`. The `DetectorService` captures frames from the two webcams, runs them through the local TensorFlow.js model, and returns an array of detected part bounding boxes and image data.
-3.  **Tracking:** The `SPCS` takes these new detections and matches them to existing "groups" of detections from previous frames. This allows it to track a single physical part as it moves across the conveyor belt.
+2.  **Detection:** In each loop, it calls `DetectorService.detect()`. The `DetectorService` captures frames (with `encoderAtCapture` from the store) from the two webcams, runs them through the local TensorFlow.js model, and returns an array of detected part bounding boxes and image data; each detection includes `encoderAtDetection` (from `encoderAtCapture`) for encoder-based matching.
+3.  **Tracking:** The `SPCS` takes these new detections and matches them to existing "groups" of detections from previous frames using **encoder-based matching**. For each detection, it computes an "absolute position" = `encoderAtDetection - (pixelX / cameraWidthPixels) * cameraWidthInTicks`. Two detections of the same part have similar absolute positions (within a tick threshold). This allows tracking a single physical part across frames without any speed or time-based prediction.
 4.  **Classification Trigger:** The `SPCS` constantly checks the position of the last detection in each group. When a group's leading edge passes a virtual threshold on the screen (e.g., 33% across the view), it triggers the classification process.
 5.  **Classification:** The `SPCS` calls `ClassifierService.classify()`, passing the most recent images of the part from both camera views.
 6.  **Proxy to Brickognize:** The `ClassifierService` sends these images, one by one, to the `/api/brickognize` proxy, which gets the classification result from the external Brickognize service.
 7.  **Data Enrichment:** The `ClassifierService` combines the results from both views, assigns a final score, and if the score is high enough, it looks up the part's assigned bin and sorter location from the catalog data it loaded from Firebase.
 8.  **Logging:** The classification result and image are saved to Firestore and Firebase Storage for logging.
-9.  **Hand-off to Backend:** Finally, the `ClassifierService` calls `SocketService.emit()` to send a `SORT_PART` event to the main Node.js backend server. This payload contains:
+9.  **Hand-off to Backend:** Finally, the `ClassifierService` calls `SocketService.emit()` to send a `SORT_PART` event to the main Node.js backend server. This payload contains (see `SortPartDto` in `types/sortPart.dto.ts`):
     - `partId`: Unique identifier
     - `initialPosition`: X coordinate in camera frame (pixels)
-    - `initialTime`: Detection timestamp (ms since epoch)
+    - `initialTime`: Detection timestamp (ms since epoch) — used for logging only
+    - `encoderAtDetection`: Encoder position when the detection frame was captured (used by server for position calculation; no interpolation)
     - `bin`: Target bin number
     - `sorter`: Which sorter (0-3)
 10. **Physical Sort:** The frontend's direct involvement in this part's journey is now complete. The backend:

@@ -181,6 +181,7 @@ class ClassifierService implements Service {
     imageURI2,
     initialTime,
     initialPosition,
+    encoderAtDetection,
     detectionDimensions,
     classificationThresholdPercentage,
     maxPartDimensions,
@@ -190,6 +191,7 @@ class ClassifierService implements Service {
     imageURI2: string;
     initialTime: number;
     initialPosition: number;
+    encoderAtDetection: number;
     detectionDimensions: { width: number; height: number };
     classificationThresholdPercentage: number;
     maxPartDimensions: { width: number; height: number }[];
@@ -265,11 +267,18 @@ class ClassifierService implements Service {
         partId: combinedResult.id,
         initialPosition: backendInitialPosition,
         initialTime,
+        encoderAtDetection,
         bin: resolvedPosition.bin,
         sorter: resolvedPosition.sorter,
         // Include camera width for server-side validation against calibration
         cameraWidthPixels: videoCaptureDimensions.width > 0 ? videoCaptureDimensions.width : undefined,
       };
+
+      console.log(
+        `[CLASSIFIER] Sending SORT_PART: partId=${data.partId}, ` +
+          `pixelX=${data.initialPosition.toFixed(1)}, encoder=${data.encoderAtDetection}, ` +
+          `sorter=${data.sorter}, bin=${data.bin}`,
+      );
 
       const socketService = serviceManager.getService(ServiceName.SOCKET);
       socketService.emit(AllEvents.SORT_PART, data);

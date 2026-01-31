@@ -241,10 +241,9 @@ With calibration complete and sorting active:
 **Setup:**
 
 1. Complete jet position calibration using new workflow
-2. Enable `useEncoderScheduling` in Settings
-3. Home all sorters to bin 1
-4. Reset encoder to 0
-5. Start conveyor
+2. Home all sorters to bin 1
+3. Reset encoder to 0
+4. Start conveyor
 
 **Test Steps:**
 
@@ -278,9 +277,8 @@ With calibration complete and sorting active:
 
 **Setup:**
 
-1. Enable `useEncoderScheduling`
-2. Home all sorters
-3. Reset encoder
+1. Home all sorters
+2. Reset encoder
 
 **Test Steps:**
 
@@ -301,8 +299,7 @@ With calibration complete and sorting active:
 
 **Setup:**
 
-1. Enable `useEncoderScheduling`
-2. Home sorters to bin 1
+1. Home sorters to bin 1
 
 **Test Steps:**
 
@@ -324,8 +321,7 @@ With calibration complete and sorting active:
 
 **Setup:**
 
-1. Enable `useEncoderScheduling`
-2. Home sorters
+1. Home sorters
 
 **Test Steps:**
 
@@ -371,9 +367,8 @@ With calibration complete and sorting active:
 
 **Setup:**
 
-1. Enable `useEncoderScheduling`
-2. Set conveyor to maximum safe speed
-3. Home all sorters
+1. Set conveyor to maximum safe speed
+2. Home all sorters
 
 **Test Steps:**
 

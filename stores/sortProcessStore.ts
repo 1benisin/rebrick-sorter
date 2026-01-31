@@ -18,6 +18,7 @@ export type SortProcessState = {
     value: DetectionPairGroup[K],
   ) => void;
   addDetectionPairToGroup: (groupId: string, detectionPair: DetectionPair) => void;
+  removeDetectionPairGroup: (id: string) => void;
 
   // ---
   videoCaptureDimensions: { width: number; height: number };
@@ -26,11 +27,6 @@ export type SortProcessState = {
   setVideoStreamId: (id: string) => void;
   videoStreamId2: string;
   setVideoStreamId2: (id: string) => void;
-
-  // ---
-  conveyorSpeed: number;
-  conveyorSpeedLog: { time: number; speed: number }[];
-  setConveyorSpeed: (speed: number) => void;
 
   ppmCount: number;
   ppmTimestamps: number[];
@@ -93,6 +89,10 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
       }
       return { detectionPairGroups: [...groups] };
     }),
+  removeDetectionPairGroup: (id: string) =>
+    set((state) => ({
+      detectionPairGroups: state.detectionPairGroups.filter((g) => g.id !== id),
+    })),
 
   // ---
   videoCaptureDimensions: { width: 0, height: 0 },
@@ -102,20 +102,6 @@ export const sortProcessStore = create<SortProcessState>((set) => ({
   videoStreamId2: '',
   setVideoStreamId2: (id: string) => set({ videoStreamId2: id }),
 
-  // ---
-  conveyorSpeed: 0,
-  conveyorSpeedLog: [],
-  setConveyorSpeed: (speed: number) => {
-    console.log(`[sortProcessStore.setConveyorSpeed] Setting speed to: ${speed}`);
-    set((state) => {
-      const now = Date.now();
-      const speedLog = [...state.conveyorSpeedLog, { time: now, speed }].filter((log) => now - log.time < 60 * 1000);
-      console.log(
-        `[sortProcessStore.setConveyorSpeed] New speedLog entry added at t=${now}, total entries: ${speedLog.length}`,
-      );
-      return { conveyorSpeed: speed, conveyorSpeedLog: speedLog };
-    });
-  },
   // ---
   ppmCount: 0,
   ppmTimestamps: [],

@@ -1,12 +1,10 @@
 import { Socket } from 'socket.io';
 import { BaseComponent, ComponentConfig, ComponentStatus } from './BaseComponent';
-import { SettingsType } from '../../types/settings.type';
 import { BackToFrontEvents, FrontToBackEvents } from '../../types/socketMessage.type';
-import { Part, EncoderPart } from '../../types/part.type';
-import { SortPartDto } from '../../types/sortPart.dto';
+import { EncoderPart } from '../../types/part.type';
 
 export interface SocketManagerConfig extends ComponentConfig {
-  onSortPart: (data: SortPartDto) => void;
+  onSortPart: (data: unknown) => void;
   onConveyorOnOff: () => void;
   onHomeSorter: (data: { sorter: number }) => void;
   onMoveSorter: (data: { sorter: number; bin: number }) => void;
@@ -122,17 +120,7 @@ export class SocketManager extends BaseComponent {
     });
   }
 
-  public emitPartSorted(part: Part): void {
-    if (!this.socket) return;
-    this.socket.emit(BackToFrontEvents.PART_SORTED, { part });
-  }
-
-  public emitPartSkipped(part: Part): void {
-    if (!this.socket) return;
-    this.socket.emit(BackToFrontEvents.PART_SKIPPED, { part });
-  }
-
-  // --- Encoder-Based Part Events (Phase 4) ---
+  // --- Encoder-Based Part Events ---
 
   /**
    * Emits when an encoder-based part is scheduled.
@@ -172,10 +160,6 @@ export class SocketManager extends BaseComponent {
       sorter,
       bin,
     });
-  }
-
-  public emitConveyorSpeedUpdate(speed: number): void {
-    this.socket?.emit(BackToFrontEvents.CONVEYOR_SPEED_UPDATE, speed);
   }
 
   public emitEncoderPositionUpdate(position: number, timestamp: number, velocity: number): void {

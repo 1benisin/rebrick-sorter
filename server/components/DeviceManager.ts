@@ -51,7 +51,9 @@ export class DeviceManager extends BaseComponent {
       if (settings.conveyorJetsSerialPort) {
         await this.connectDevice(DeviceName.CONVEYOR_JETS, settings.conveyorJetsSerialPort, {
           deviceType: DeviceType.CONVEYOR_JETS,
-          JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
+          // Use jetEncoderOffsets from position calibration (encoder tick positions for each jet)
+          // Pad to exactly 4 elements (one per jet) with 0 for any missing offsets
+          JET_START_POSITIONS: Array.from({ length: 4 }, (_, i) => settings.positionCalibration.jetEncoderOffsets[i] ?? 0),
           JET_DURATIONS: settings.sorters.map((sorter) => sorter.jetDuration),
         });
       }
@@ -383,13 +385,16 @@ export class DeviceManager extends BaseComponent {
     if (config.deviceType !== 'conveyor_jets') return '';
     const settings = this.settingsManager.getSettings();
     if (!settings) return '';
+    // Constant speed mode: min RPM is no longer a setting, use 0
+    // Arduino init format: 's,<FIRE_TIME_0>,...,<MAX_RPM>,<MIN_RPM>,<PPR>,<KP>,<KI>,<KD>'
+    const minRPM = 0;
     return (
       's,' +
       config.JET_DURATIONS.join(',') +
       ',' +
       settings.maxConveyorRPM +
       ',' +
-      settings.minConveyorRPM +
+      minRPM +
       ',' +
       settings.conveyorPulsesPerRevolution +
       ',' +
@@ -663,7 +668,9 @@ export class DeviceManager extends BaseComponent {
       if (conveyorJets) {
         const config = {
           ...conveyorJets.config,
-          JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
+          // Use jetEncoderOffsets from position calibration (encoder tick positions for each jet)
+          // Pad to exactly 4 elements (one per jet) with 0 for any missing offsets
+          JET_START_POSITIONS: Array.from({ length: 4 }, (_, i) => settings.positionCalibration.jetEncoderOffsets[i] ?? 0),
           JET_DURATIONS: settings.sorters.map((sorter) => sorter.jetDuration),
         };
         this.devices.set(DeviceName.CONVEYOR_JETS, { ...conveyorJets, config });
@@ -738,7 +745,9 @@ export class DeviceManager extends BaseComponent {
           portHint: settings.conveyorJetsSerialPort,
           config: {
             deviceType: DeviceType.CONVEYOR_JETS,
-            JET_START_POSITIONS: settings.sorters.map((sorter) => sorter.jetPositionStart),
+            // Use jetEncoderOffsets from position calibration (encoder tick positions for each jet)
+            // Pad to exactly 4 elements (one per jet) with 0 for any missing offsets
+            JET_START_POSITIONS: Array.from({ length: 4 }, (_, i) => settings.positionCalibration.jetEncoderOffsets[i] ?? 0),
             JET_DURATIONS: settings.sorters.map((sorter) => sorter.jetDuration),
           },
         });

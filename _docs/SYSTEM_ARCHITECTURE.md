@@ -43,13 +43,13 @@ The primary function of the system is to identify and sort LEGO parts into desig
 │  1. Camera captures frame                                                    │
 │  2. TensorFlow.js detects part at pixel position                            │
 │  3. Brickognize API classifies part → bin assignment                        │
-│  4. Sends SORT_PART(pixelPos, timestamp, bin, sorter) to server             │
+│  4. Sends SORT_PART(pixelPos, timestamp, encoderAtDetection, bin, sorter)   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              BACKEND SERVER                                  │
-│  5. Translates pixel position → encoder position                            │
+│  5. Uses encoderAtDetection + calibration to get jet encoder position      │
 │  6. Checks sorter availability (can it reach the bin in time?)              │
 │  7. If available: schedules jet command + sorter move                       │
 │  8. If unavailable: skips part (logs reason)                                │
@@ -145,9 +145,10 @@ Real-time bidirectional communication via Socket.IO.
 
 **Backend → Frontend:**
 
-- `ENCODER_POSITION`: Current conveyor position for visualization
-- `PART_SORTED`: Confirmation when part sorted
-- `PART_SKIPPED`: Notification when part couldn't be sorted
+- `ENCODER_POSITION_UPDATE`: Current conveyor position with velocity for visualization
+- `ENCODER_PART_SCHEDULED`: Part has been scheduled for sorting
+- `ENCODER_PART_SORTED`: Confirmation when part sorted (jet fired)
+- `ENCODER_PART_SKIPPED`: Notification when part couldn't be sorted with reason
 - `CALIBRATION_POINT_RECORDED`: Confirmation when calibration data is saved
 - Hardware status updates
 
@@ -174,11 +175,13 @@ Text-based command protocol with `<>` framing.
 
 ## 6. Position-Based Scheduling
 
-The system uses **encoder position** as the source of truth for part location. This can be toggled via the `useEncoderScheduling` feature flag in settings - when false, the legacy time-based scheduling is used.
+The system uses **encoder position** as the source of truth for part location. All scheduling is position-based using encoder ticks rather than time.
 
-### 6.1. Why Position-Based?
+### 6.1. Why Position-Based? (Current Architecture)
 
-| Time-Based (Old)                    | Position-Based (New)             |
+The system uses **encoder position only** for scheduling. Time-based scheduling, SpeedManager, and conveyor speed tracking have been removed (see Constant Speed Simplification refactor).
+
+| Time-Based (Removed)                | Position-Based (Current)         |
 | ----------------------------------- | -------------------------------- |
 | Sensitive to clock drift            | Position is absolute             |
 | Speed changes require recalculation | Position is independent of speed |
@@ -187,9 +190,9 @@ The system uses **encoder position** as the source of truth for part location. T
 
 ### 6.2. How It Works
 
-1. **Detection:** Frontend detects part at pixel position, sends `SORT_PART` to server with timestamp.
+1. **Detection:** Frontend detects part at pixel position, sends `SORT_PART` to server with `encoderAtDetection` (encoder position when the frame was captured).
 2. **Translation:** `PositionTranslator` converts pixel position to encoder position using calibration data:
-   - Interpolates encoder position at detection time based on current position and velocity
+   - Uses `encoderAtDetection` directly from the frontend (no interpolation needed)
    - Converts pixel position to ticks: `partTicksFromLeftEdge = (pixelX / cameraWidthPixels) * cameraWidthInTicks`
    - Calculates remaining distance to jet: `remainingTicks = jetEncoderOffsets[sorter] - partTicksFromLeftEdge`
 3. **Jet Position:** `jetPosition = encoderAtDetection + remainingTicks`
@@ -242,7 +245,6 @@ If the sorter can't make it, the part is **skipped** (no jet fires, falls off co
 | ------------------ | ------------------ | -------------------------------------------------------------------- |
 | Encoder Position   | ConveyorManager    | Current position, timestamp, velocity (synced from Arduino EP: msgs) |
 | Encoder Part Queue | ConveyorManager    | `EncoderPart[]` sorted by jetPosition (position-based scheduling)    |
-| Part Queue         | ConveyorManager    | `Part[]` for legacy time-based scheduling                            |
 | Sorter States      | SorterStateManager | Per-sorter: currentBin, isMoving, targetBin, scheduledMoves queue    |
 | Settings           | SettingsManager    | All configuration from Firebase with real-time sync                  |
 | Device Connections | DeviceManager      | Connected Arduinos, reconnection state, handshake tracking           |
@@ -283,12 +285,10 @@ Skipped parts are logged and reported to frontend.
 System configuration is stored in Firebase Firestore (schema defined in `types/settings.type.ts`) and includes:
 
 - **Serial Ports:** `conveyorJetsSerialPort`, `hopperFeederSerialPort`, per-sorter `serialPort`
-- **Sorter Settings:** Grid dimensions, step offsets, acceleration, speed, row/column order
-- **Jet Settings:** Fire durations per jet (`jetDuration`), pixel positions (`jetPositionStart`)
+- **Sorter Settings:** Grid dimensions, step offsets, acceleration, speed, row/column order, jet duration
 - **Hopper/Feeder:** Vibration speed, pause times, cycle intervals
-- **Conveyor Motor:** Max/min RPM, PID tuning (Kp, Ki, Kd), pulses per revolution
-- **Position Calibration:** `positionCalibration` object with encoder offsets and counts per pixel
-- **Feature Flags:** `useEncoderScheduling` (true = position-based, false = time-based)
+- **Conveyor Motor:** Max RPM, PID tuning (Kp, Ki, Kd), pulses per revolution
+- **Position Calibration:** `positionCalibration` object with `cameraWidthInTicks`, `cameraWidthPixels`, `jetEncoderOffsets`, `fallTimeInCounts`, `jetLeadCounts`
 - **Detection/Classification:** Thresholds, camera positions, video stream IDs
 
 Changes propagate in real-time via Firestore `onSnapshot` listeners, triggering component reinitialization as needed.
