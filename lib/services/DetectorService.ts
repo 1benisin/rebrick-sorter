@@ -158,9 +158,6 @@ class DetectorService implements Service {
         height: scaledCanvas.height,
       });
 
-      // inject the detection canvas into the video-capture-container and highlight detections
-      this.displayDetectionCanvas(scaledCanvas, taggedPredictions);
-
       // create matching pairs of top view and non top view predictions
       const topViewPredictions = taggedPredictions.filter((p) => p.isTopView && p.matchingVerticalPairIndex !== -1);
       const pairedPredictions: PredictionsPair[] = topViewPredictions.map((p) => {
@@ -339,51 +336,6 @@ class DetectorService implements Service {
     }
 
     return taggedPredictions;
-  }
-
-  // Method to display detections on the canvas
-  private displayDetectionCanvas(canvas: HTMLCanvasElement, prediction: TaggedPredictionType[]): void {
-    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-    ctx.lineWidth = 3;
-    // ctx.font = '16px Arial';
-    // ctx.fillStyle = 'red';
-
-    prediction.forEach((p) => {
-      const { left, top, width, height } = p.box;
-      ctx.strokeStyle = p.isTopView ? 'white' : 'blue';
-      ctx.strokeStyle = p.matchingVerticalPairIndex !== -1 ? 'green' : ctx.strokeStyle;
-      ctx.strokeStyle = p.isTooCloseToOtherDetection === true ? 'red' : ctx.strokeStyle;
-      ctx.strokeStyle = p.isTooCloseToScreenEdge === true ? 'yellow' : ctx.strokeStyle;
-      ctx.strokeRect(left, top, width, height);
-    });
-
-    //   redraw canvas in a new canvas that's 25% of the original canvas height
-    // const template = document.getElementById('video-capture-canvas-template') as HTMLTemplateElement;
-    // const clone = document.importNode(template!.content, true);
-    // const flattenedCanvas = clone.querySelector('canvas') as HTMLCanvasElement;
-    const flattenedCanvas = document.createElement('canvas');
-
-    // const flattenedCanvas = document.createElement('canvas');
-    flattenedCanvas.width = canvas.width;
-    flattenedCanvas.height = canvas.height * 0.5;
-    // set key to current timestamp
-    flattenedCanvas.setAttribute('key', Date.now().toString());
-    const ctx2 = flattenedCanvas.getContext('2d') as CanvasRenderingContext2D;
-    ctx2.drawImage(canvas, 0, 0, flattenedCanvas.width, flattenedCanvas.height);
-    // insert the new canvas into the video-capture-container
-    const videoCaptureContainer = document.getElementById('video-capture-container');
-    if (videoCaptureContainer) {
-      while (videoCaptureContainer.children.length >= 6) {
-        videoCaptureContainer.removeChild(videoCaptureContainer.children[videoCaptureContainer.children.length - 1]);
-      }
-      if (videoCaptureContainer.firstChild) {
-        // If there is at least one child, insert before the first child
-        videoCaptureContainer.insertBefore(flattenedCanvas, videoCaptureContainer.firstChild);
-      } else {
-        // If there are no children, appendChild will effectively add it to the top
-        videoCaptureContainer.appendChild(flattenedCanvas);
-      }
-    }
   }
 
   private scaleCanvas(canvas: HTMLCanvasElement, scalar: number): HTMLCanvasElement {
