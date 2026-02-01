@@ -239,7 +239,13 @@ export class SorterManager extends BaseComponent {
     const x = y2 - y1;
     const moveDist = Math.sqrt(x * x + y * y);
     const closestTravelTimeIndex = Math.round(moveDist);
-    return this.travelTimes[sorter][closestTravelTimeIndex];
+    // Clamp to valid array bounds (floating-point rounding or edge cases could exceed length)
+    const times = this.travelTimes[sorter];
+    if (!times || times.length === 0) {
+      return 0; // Fallback when no travel times configured (e.g. zero sorters)
+    }
+    const safeIndex = Math.min(closestTravelTimeIndex, times.length - 1);
+    return times[Math.max(0, safeIndex)];
   }
 
   public scheduleSorterMove(sorter: number, bin: number, moveTime: number): NodeJS.Timeout {

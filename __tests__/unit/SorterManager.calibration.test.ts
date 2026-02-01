@@ -232,13 +232,13 @@ describe('SorterManager calibration', () => {
 
     /**
      * Helper to simulate all 4 MC: responses needed for calibration (3 moves + return home).
-     * Grid dimension 12: middleBin=73, maxBin=144
+     * Grid dimension 12: middleBin=79 (floor(6)*12+6+1), maxBin=144
      * Each response is sent after a short delay to allow promise setup.
      */
     const simulateFullCalibrationWithDelays = async (sorterNum: number) => {
-      // Move 1: to middle bin (73 for grid 12)
+      // Move 1: to middle bin (79 for grid 12)
       await new Promise((resolve) => setImmediate(resolve));
-      simulateMCResponse(sorterNum, 73);
+      simulateMCResponse(sorterNum, 79);
 
       // Move 2: back to bin 1
       await new Promise((resolve) => setImmediate(resolve));

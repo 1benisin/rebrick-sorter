@@ -475,4 +475,106 @@ describe('Sorting Lock During Calibration', () => {
       });
     });
   });
+
+  describe('Homing Wait Behavior (waitForAllSortersHomed pattern)', () => {
+    /**
+     * Simulates the waitForAllSortersHomed logic for unit testing.
+     * This mirrors the actual implementation in SystemCoordinator.
+     */
+    async function waitForAllSortersHomed(
+      sorterStateManager: { getCurrentBin: jest.Mock },
+      sorterCount: number,
+      timeoutMs: number = 30000,
+      pollIntervalMs: number = 200,
+    ): Promise<{ ok: true } | { ok: false; notHomedSorters: number[] }> {
+      const startTime = Date.now();
+
+      while (Date.now() - startTime < timeoutMs) {
+        const notHomedSorters: number[] = [];
+
+        for (let i = 0; i < sorterCount; i++) {
+          const currentBin = sorterStateManager.getCurrentBin(i);
+          if (currentBin !== 1) {
+            notHomedSorters.push(i);
+          }
+        }
+
+        if (notHomedSorters.length === 0) {
+          return { ok: true };
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      }
+
+      // Timeout - collect final list
+      const notHomedSorters: number[] = [];
+      for (let i = 0; i < sorterCount; i++) {
+        const currentBin = sorterStateManager.getCurrentBin(i);
+        if (currentBin !== 1) {
+          notHomedSorters.push(i);
+        }
+      }
+
+      return { ok: false, notHomedSorters };
+    }
+
+    it('returns ok: true immediately when all sorters already at home', async () => {
+      const sorterStateManager = createMockSorterStateManager();
+      sorterStateManager.getCurrentBin.mockReturnValue(1); // All at home
+
+      const result = await waitForAllSortersHomed(sorterStateManager, 4, 1000, 50);
+
+      expect(result.ok).toBe(true);
+      // Should have been called exactly once per sorter (no polling needed)
+      expect(sorterStateManager.getCurrentBin).toHaveBeenCalledTimes(4);
+    });
+
+    it('waits and returns ok: true when sorters reach home after polling', async () => {
+      const sorterStateManager = createMockSorterStateManager();
+
+      // Simulate sorters not homed initially, then become homed after 2 calls
+      let callCount = 0;
+      sorterStateManager.getCurrentBin.mockImplementation(() => {
+        callCount++;
+        // First 8 calls (2 rounds of 4 sorters): not all homed
+        // After that: all homed
+        return callCount <= 8 ? (callCount % 2 === 0 ? 1 : 5) : 1;
+      });
+
+      const result = await waitForAllSortersHomed(sorterStateManager, 4, 5000, 50);
+
+      expect(result.ok).toBe(true);
+      // More than 4 calls (indicating polling happened)
+      expect(sorterStateManager.getCurrentBin.mock.calls.length).toBeGreaterThan(4);
+    });
+
+    it('returns ok: false with notHomedSorters after timeout', async () => {
+      const sorterStateManager = createMockSorterStateManager();
+
+      // Sorter 0 and 2 never reach home
+      sorterStateManager.getCurrentBin.mockImplementation((sorterNum: number) => {
+        return sorterNum === 0 || sorterNum === 2 ? 5 : 1;
+      });
+
+      const result = await waitForAllSortersHomed(sorterStateManager, 4, 300, 50);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.notHomedSorters).toContain(0);
+        expect(result.notHomedSorters).toContain(2);
+        expect(result.notHomedSorters).not.toContain(1);
+        expect(result.notHomedSorters).not.toContain(3);
+      }
+    });
+
+    it('handles zero sorters (vacuously true)', async () => {
+      const sorterStateManager = createMockSorterStateManager();
+
+      const result = await waitForAllSortersHomed(sorterStateManager, 0, 1000, 50);
+
+      expect(result.ok).toBe(true);
+      // No calls needed for zero sorters
+      expect(sorterStateManager.getCurrentBin).not.toHaveBeenCalled();
+    });
+  });
 });

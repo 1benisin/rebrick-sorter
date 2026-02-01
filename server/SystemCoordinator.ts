@@ -585,6 +585,56 @@ export class SystemCoordinator {
   // --- Phase 8: Travel Time Calibration Handler ---
 
   /**
+   * Waits for all sorters to reach home position (bin 1).
+   *
+   * Polls SorterStateManager.getCurrentBin() until all sorters report bin 1,
+   * or times out. This handles the case where the user clicks "Calibrate"
+   * shortly after "Home All" - the Arduino MC:1 responses may not have arrived yet.
+   *
+   * @param sorterCount - Number of sorters to check
+   * @param timeoutMs - Maximum time to wait (default 30s, matches Arduino HOMING_TIMEOUT_MS)
+   * @param pollIntervalMs - Interval between polls (default 200ms)
+   * @returns Object indicating success or failure with list of sorters not at home
+   */
+  private async waitForAllSortersHomed(
+    sorterCount: number,
+    timeoutMs: number = 30000,
+    pollIntervalMs: number = 200,
+  ): Promise<{ ok: true } | { ok: false; notHomedSorters: number[] }> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      const notHomedSorters: number[] = [];
+
+      for (let i = 0; i < sorterCount; i++) {
+        const currentBin = this.sorterStateManager.getCurrentBin(i);
+        if (currentBin !== 1) {
+          notHomedSorters.push(i);
+        }
+      }
+
+      // All sorters at home - proceed immediately
+      if (notHomedSorters.length === 0) {
+        return { ok: true };
+      }
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    // Timeout - collect final list of sorters not at home
+    const notHomedSorters: number[] = [];
+    for (let i = 0; i < sorterCount; i++) {
+      const currentBin = this.sorterStateManager.getCurrentBin(i);
+      if (currentBin !== 1) {
+        notHomedSorters.push(i);
+      }
+    }
+
+    return { ok: false, notHomedSorters };
+  }
+
+  /**
    * Handles travel time calibration request from frontend.
    *
    * Preconditions:
@@ -622,7 +672,7 @@ export class SystemCoordinator {
       this.sorterStateManager.clearAllScheduledMoves();
       console.log('[CALIBRATION] Reset sorting state (queue cleared, scheduled moves cleared)');
 
-      // Check all sorters are homed (at bin 1)
+      // Check settings available
       const settings = this.settingsManager.getSettings();
       if (!settings) {
         this.socketManager.emitTravelTimeCalibrationStatus('error', 'Settings not available');
@@ -630,25 +680,24 @@ export class SystemCoordinator {
       }
 
       const sorterCount = settings.sorters.length;
-      const notHomedSorters: number[] = [];
 
-      for (let i = 0; i < sorterCount; i++) {
-        const currentBin = this.sorterStateManager.getCurrentBin(i);
-        if (currentBin !== 1) {
-          notHomedSorters.push(i);
-        }
-      }
+      // Emit started status immediately for UX feedback
+      // (the homing wait can take up to 30 seconds)
+      this.socketManager.emitTravelTimeCalibrationStatus('started');
+      console.log('[CALIBRATION] Waiting for all sorters to reach home position...');
 
-      if (notHomedSorters.length > 0) {
-        const errorMsg = `Sorters ${notHomedSorters.join(', ')} must be homed (at bin 1) before calibration`;
+      // Wait for all sorters to be homed (at bin 1), with polling
+      // This handles the case where user clicks Calibrate right after Home All
+      const homingResult = await this.waitForAllSortersHomed(sorterCount);
+
+      if (!homingResult.ok) {
+        const errorMsg = `Sorters ${homingResult.notHomedSorters.join(', ')} did not reach home within 30 seconds. Ensure all sorters are homed before calibrating.`;
         console.warn(`[CALIBRATION] ${errorMsg}`);
         this.socketManager.emitTravelTimeCalibrationStatus('error', errorMsg);
         return;
       }
 
-      // Emit started status
-      this.socketManager.emitTravelTimeCalibrationStatus('started');
-      console.log('[CALIBRATION] Starting travel time calibration for all sorters');
+      console.log('[CALIBRATION] All sorters homed. Starting travel time calibration for all sorters');
 
       // Run calibration
       const results = await this.sorterManager.startCalibration();
