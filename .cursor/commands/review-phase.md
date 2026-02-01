@@ -22,5 +22,8 @@ Focus on:
 - Integration: Do the changes work correctly with existing code?
 - Consistency: Are naming conventions, patterns, and data flows consistent?
 
+## 3. Clarifying Questions (if needed)
+List ambiguities as specific yes/no or multiple-choice questions.
+
 Call out any bugs, edge cases, or potential problems found in either the implementation, the plan itself, or in enterfacing with the codebase that wasn't changed in this phase.
 The goal is to keep the code both simple and correct. And keeping the entropy of the codebase low.

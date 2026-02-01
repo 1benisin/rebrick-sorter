@@ -18,6 +18,7 @@ import { ChevronDown } from 'lucide-react';
 import { useToast } from '@/components/hooks/use-toast';
 import { getSorterLetter } from '@/lib/utils';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import TravelTimeCalibrationButton from '@/components/buttons/TravelTimeCalibrationButton';
 
 const SettingsForm = () => {
   const { settings, saveSettings } = useSettings();
@@ -469,6 +470,20 @@ const SettingsForm = () => {
               </CardContent>
             </CollapsibleContent>
           </Collapsible>
+        </Card>
+
+        {/* Sorter Travel Time Calibration */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sorter Travel Time Calibration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+              Calibrates how long each sorter takes to move between bins. All sorters must be homed before
+              calibration.
+            </div>
+            <TravelTimeCalibrationButton />
+          </CardContent>
         </Card>
 
         {/* sorter settings array */}

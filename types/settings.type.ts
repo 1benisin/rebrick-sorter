@@ -59,6 +59,28 @@ export const positionCalibrationSchema = z.object({
 
 export type PositionCalibrationType = z.infer<typeof positionCalibrationSchema>;
 
+// ============================================================================
+// Travel Time Calibration (Sorter movement timing)
+// ============================================================================
+
+/**
+ * Calibration coefficients for sorter travel time calculation.
+ * The travel time formula is: time(d) = a×d² + b×d
+ * where d is the Euclidean distance in bin units.
+ */
+export const travelTimeCalibrationSchema = z.object({
+  /** Quadratic coefficient for travel time formula */
+  a: z.number(),
+  /** Linear coefficient for travel time formula */
+  b: z.number(),
+  /** ISO timestamp when calibration was performed */
+  calibratedAt: z.string().optional(),
+  /** Grid dimension (NxN) at the time of calibration */
+  gridDimensionAtCalibration: z.number(),
+});
+
+export type TravelTimeCalibrationType = z.infer<typeof travelTimeCalibrationSchema>;
+
 export const sorterSettingsSchema = z.object({
   name: serialPortNameEnumSchema.default(serialPortNameEnumSchema.Values.conveyor_jets),
   serialPort: z.string().min(1).default('default'),
@@ -120,6 +142,13 @@ export const settingsSchema = z.object({
   hopperCycleSteps: z.coerce.number().min(100).max(10000).default(2020),
   /** Position calibration for encoder-based scheduling */
   positionCalibration: positionCalibrationSchema.default({}),
+  /**
+   * Travel time calibration coefficients for each sorter.
+   * Array indices correspond to sorter numbers (0-3).
+   * Empty array indicates no calibration data (uses hardcoded values).
+   * Elements can be null to represent uncalibrated sorters while preserving index mapping.
+   */
+  travelTimeCalibration: z.array(travelTimeCalibrationSchema.nullable()).optional().default([]),
 });
 
 export type SettingsType = z.infer<typeof settingsSchema>;

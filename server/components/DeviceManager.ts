@@ -26,7 +26,8 @@ export class DeviceManager extends BaseComponent {
   private settingsAckTimeouts: Map<DeviceName, NodeJS.Timeout> = new Map();
   private readonly SETTINGS_ACK_TIMEOUT_MS = 5000;
   // Device data callbacks for external components to receive device messages
-  private deviceDataCallbacks: Map<DeviceName, (data: string) => void> = new Map();
+  // Supports multiple callbacks per device (e.g., SorterStateManager + calibration listener)
+  private deviceDataCallbacks: Map<DeviceName, Set<(data: string) => void>> = new Map();
   // Device reconnect callbacks for external components to handle reconnection events
   private deviceReconnectCallbacks: Map<DeviceName, () => void> = new Map();
 
@@ -511,10 +512,12 @@ export class DeviceManager extends BaseComponent {
       return;
     }
 
-    // Invoke registered callback for this device (for messages not handled above)
-    const callback = this.deviceDataCallbacks.get(deviceName);
-    if (callback) {
-      callback(data);
+    // Invoke all registered callbacks for this device (for messages not handled above)
+    const callbacks = this.deviceDataCallbacks.get(deviceName);
+    if (callbacks) {
+      for (const callback of callbacks) {
+        callback(data);
+      }
     }
   }
 
@@ -537,11 +540,22 @@ export class DeviceManager extends BaseComponent {
   }
 
   public registerDeviceDataCallback(deviceName: DeviceName, callback: (data: string) => void): void {
-    this.deviceDataCallbacks.set(deviceName, callback);
+    let callbacks = this.deviceDataCallbacks.get(deviceName);
+    if (!callbacks) {
+      callbacks = new Set();
+      this.deviceDataCallbacks.set(deviceName, callbacks);
+    }
+    callbacks.add(callback);
   }
 
-  public unregisterDeviceDataCallback(deviceName: DeviceName): void {
-    this.deviceDataCallbacks.delete(deviceName);
+  public unregisterDeviceDataCallback(deviceName: DeviceName, callback: (data: string) => void): void {
+    const callbacks = this.deviceDataCallbacks.get(deviceName);
+    if (callbacks) {
+      callbacks.delete(callback);
+      if (callbacks.size === 0) {
+        this.deviceDataCallbacks.delete(deviceName);
+      }
+    }
   }
 
   public registerDeviceReconnectCallback(deviceName: DeviceName, callback: () => void): void {

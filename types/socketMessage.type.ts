@@ -19,6 +19,9 @@ export enum FrontToBackEvents {
   RECORD_CAMERA_WIDTH = 'record-camera-width',
   /** Save all calibration data at once (camera width + jet positions) */
   SAVE_CALIBRATION_DATA = 'save-calibration-data',
+  // Phase 8: Travel time calibration
+  /** Trigger travel time calibration for all sorters */
+  START_TRAVEL_TIME_CALIBRATION = 'start-travel-time-calibration',
 }
 
 export enum BackToFrontEvents {
@@ -41,6 +44,9 @@ export enum BackToFrontEvents {
   // Phase 7: Encoder calibration responses
   ENCODER_RESET_COMPLETE = 'encoder-reset-complete',
   CALIBRATION_POINT_RECORDED = 'calibration-point-recorded',
+  // Phase 8: Travel time calibration
+  /** Travel time calibration status update */
+  TRAVEL_TIME_CALIBRATION_STATUS = 'travel-time-calibration-status',
 }
 
 export const AllEvents = { ...FrontToBackEvents, ...BackToFrontEvents } as const;
@@ -90,6 +96,8 @@ export interface EventPayloads {
     /** Encoder tick offsets from camera left edge to each jet [0-3] */
     jetEncoderOffsets: [number, number, number, number];
   };
+  /** Phase 8: Start travel time calibration (no payload needed) */
+  [FrontToBackEvents.START_TRAVEL_TIME_CALIBRATION]: void;
   [BackToFrontEvents.INIT_HARDWARE_SUCCESS]: { success: boolean };
   [BackToFrontEvents.SORT_PART_SUCCESS]: { success: boolean };
   [BackToFrontEvents.LOG_PART_QUEUE_SUCCESS]: { success: boolean };
@@ -175,5 +183,18 @@ export interface EventPayloads {
     sorter?: number;
     /** Whether the calibration was saved successfully */
     success: boolean;
+  };
+  /** Phase 8: Travel time calibration status response */
+  [BackToFrontEvents.TRAVEL_TIME_CALIBRATION_STATUS]: {
+    /** Overall calibration status */
+    status: 'started' | 'complete' | 'partial_failure' | 'error';
+    /** Error message if status is 'error' (e.g., sorters not homed) */
+    error?: string;
+    /** Results per sorter; present for complete, partial_failure, or error (all failed) */
+    results?: {
+      sorter: number;
+      success: boolean;
+      error?: string;
+    }[];
   };
 }
