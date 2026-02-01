@@ -63,12 +63,12 @@ export class SorterManager extends BaseComponent {
   private readonly FALLBACK_TRAVEL_TIMES: number[][] = [
     [0, 828, 1166, 1429, 1655, 1846, 2022, 2184, 2333, 2400, 2466, 2533, 2600, 2666, 2733, 2800, 2866],
     [
-      0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870, 3006,
-      3009, 3144,
+      0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870,
+      3006, 3009, 3144,
     ],
     [
-      0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870, 3006,
-      3009, 3144, 3280, 3415, 3550, 3685, 3820, 3955, 4090,
+      0, 767, 1088, 1331, 1538, 1721, 1886, 2036, 2177, 2310, 2448, 2585, 2522, 2545, 2726, 2861, 2667, 2734, 2870,
+      3006, 3009, 3144, 3280, 3415, 3550, 3685, 3820, 3955, 4090,
     ],
     [0, 828, 1166, 1429, 1655, 1846, 2022, 2184, 2333, 2400, 2466, 2533, 2600, 2666, 2733, 2800, 2866, 2933, 3000],
   ];
@@ -283,10 +283,7 @@ export class SorterManager extends BaseComponent {
    * @param gridDimension - Grid size (NxN) to determine max distance
    * @returns Array of travel times indexed by distance (in bin units, rounded)
    */
-  public generateTravelTimesFromCoefficients(
-    coefficients: { a: number; b: number },
-    gridDimension: number,
-  ): number[] {
+  public generateTravelTimesFromCoefficients(coefficients: { a: number; b: number }, gridDimension: number): number[] {
     const { a, b } = coefficients;
 
     // Max diagonal distance is from (0,0) to (N-1, N-1) = (N-1)×√2
@@ -317,12 +314,7 @@ export class SorterManager extends BaseComponent {
    *   a = (T₂×D₁ - T₁×D₂) / (D₁×D₂×(D₂ - D₁))
    *   b = (T₁ - a×D₁²) / D₁
    */
-  private calculateCoefficients(
-    d1: number,
-    t1: number,
-    d2: number,
-    t2: number,
-  ): { a: number; b: number } {
+  private calculateCoefficients(d1: number, t1: number, d2: number, t2: number): { a: number; b: number } {
     // Solve for a
     const denominator = d1 * d2 * (d2 - d1);
     if (Math.abs(denominator) < 0.0001) {
