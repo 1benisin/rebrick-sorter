@@ -343,5 +343,4 @@ describe('PositionTranslator', () => {
       expect(translator.getFallTimeInCounts()).toBe(30);
     });
   });
-
 });

@@ -11,6 +11,7 @@ import { AllEvents, BackToFrontEvents, EventPayloads } from '@/types/socketMessa
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Info } from 'lucide-react';
 import { getSorterLetter } from '@/lib/utils';
+import HomeAllSortersButton from '@/components/buttons/HomeAllSortersButton';
 
 /** Format a date string for display */
 const formatCalibrationDate = (isoString: string): string => {
@@ -54,9 +55,7 @@ const TravelTimeCalibrationButton = () => {
   useEffect(() => {
     if (!socket) return;
 
-    const handleCalibrationStatus = (
-      data: EventPayloads[BackToFrontEvents.TRAVEL_TIME_CALIBRATION_STATUS]
-    ) => {
+    const handleCalibrationStatus = (data: EventPayloads[BackToFrontEvents.TRAVEL_TIME_CALIBRATION_STATUS]) => {
       switch (data.status) {
         case 'started':
           setIsCalibrating(true);
@@ -109,8 +108,9 @@ const TravelTimeCalibrationButton = () => {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Button onClick={handleStartCalibration} disabled={!socket || isCalibrating} className="flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <HomeAllSortersButton />
+        <Button onClick={handleStartCalibration} disabled={!socket || isCalibrating} className="min-w-[180px] flex-1">
           {isCalibrating ? 'Calibrating...' : 'Calibrate Travel Times'}
         </Button>
 
@@ -124,8 +124,8 @@ const TravelTimeCalibrationButton = () => {
             <div className="space-y-2">
               <p className="font-semibold">Travel Time Calibration</p>
               <p className="text-gray-600">
-                This calibration measures how long each sorter takes to move between bins. The results
-                are used to determine if a sorter can reach a target bin in time for an incoming part.
+                This calibration measures how long each sorter takes to move between bins. The results are used to
+                determine if a sorter can reach a target bin in time for an incoming part.
               </p>
               <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
                 <strong>Requirements:</strong>
@@ -135,8 +135,7 @@ const TravelTimeCalibrationButton = () => {
                 </ul>
               </div>
               <p className="text-xs text-gray-500">
-                Calibration takes approximately 30-60 seconds. All 4 sorters are calibrated
-                simultaneously.
+                Calibration takes approximately 30-60 seconds. All 4 sorters are calibrated simultaneously.
               </p>
             </div>
           </HoverCardContent>

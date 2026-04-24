@@ -479,8 +479,7 @@ const SettingsForm = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
-              Calibrates how long each sorter takes to move between bins. All sorters must be homed before
-              calibration.
+              Calibrates how long each sorter takes to move between bins. All sorters must be homed before calibration.
             </div>
             <TravelTimeCalibrationButton />
           </CardContent>
