@@ -36,6 +36,8 @@ export class SystemCoordinator {
       onRecordCameraWidth: this.handleRecordCameraWidth.bind(this),
       onRecordJetPosition: this.handleRecordJetPosition.bind(this),
       onSaveCalibrationData: this.handleSaveCalibrationData.bind(this),
+      // Phase 8: Travel time calibration handler
+      onStartTravelTimeCalibration: this.handleStartTravelTimeCalibration.bind(this),
     });
 
     this.settingsManager = new SettingsManager(this.socketManager);
@@ -181,6 +183,11 @@ export class SystemCoordinator {
    * Uses position triggers instead of setTimeout for jet firing and sorter moves.
    */
   private handleEncoderSortPart(data: SortPartDto): void {
+    if (this.sorterManager.isCalibrationInProgress()) {
+      this.handleEncoderSkippedPart(data, 'Calibration in progress - sorting disabled');
+      return;
+    }
+
     // Build encoder part (returns null if sorter unavailable)
     const encoderPart = this.buildEncoderPart(data);
 
@@ -572,6 +579,154 @@ export class SystemCoordinator {
     } catch (error) {
       console.error('[CALIBRATION] Error saving calibration data:', error);
       this.socketManager.emitCalibrationPointRecorded('cameraWidth', 0, false);
+    }
+  }
+
+  // --- Phase 8: Travel Time Calibration Handler ---
+
+  /**
+   * Waits for all sorters to reach home position (bin 1).
+   *
+   * Polls SorterStateManager.getCurrentBin() until all sorters report bin 1,
+   * or times out. This handles the case where the user clicks "Calibrate"
+   * shortly after "Home All" - the Arduino MC:1 responses may not have arrived yet.
+   *
+   * @param sorterCount - Number of sorters to check
+   * @param timeoutMs - Maximum time to wait (default 30s, matches Arduino HOMING_TIMEOUT_MS)
+   * @param pollIntervalMs - Interval between polls (default 200ms)
+   * @returns Object indicating success or failure with list of sorters not at home
+   */
+  private async waitForAllSortersHomed(
+    sorterCount: number,
+    timeoutMs: number = 30000,
+    pollIntervalMs: number = 200,
+  ): Promise<{ ok: true } | { ok: false; notHomedSorters: number[] }> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      const notHomedSorters: number[] = [];
+
+      for (let i = 0; i < sorterCount; i++) {
+        const currentBin = this.sorterStateManager.getCurrentBin(i);
+        if (currentBin !== 1) {
+          notHomedSorters.push(i);
+        }
+      }
+
+      // All sorters at home - proceed immediately
+      if (notHomedSorters.length === 0) {
+        return { ok: true };
+      }
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    // Timeout - collect final list of sorters not at home
+    const notHomedSorters: number[] = [];
+    for (let i = 0; i < sorterCount; i++) {
+      const currentBin = this.sorterStateManager.getCurrentBin(i);
+      if (currentBin !== 1) {
+        notHomedSorters.push(i);
+      }
+    }
+
+    return { ok: false, notHomedSorters };
+  }
+
+  /**
+   * Handles travel time calibration request from frontend.
+   *
+   * Preconditions:
+   * - All sorters must be homed (at bin 1) before calibration can start
+   * - Calibration must not already be in progress
+   *
+   * The handler:
+   * 1. Validates sorters are homed
+   * 2. Emits 'started' status
+   * 3. Calls sorterManager.startCalibration()
+   * 4. Emits final status ('complete' or 'partial_failure')
+   */
+  private async handleStartTravelTimeCalibration(): Promise<void> {
+    try {
+      console.log('[CALIBRATION] Travel time calibration requested');
+
+      // Check if calibration is already in progress
+      if (this.sorterManager.isCalibrationInProgress()) {
+        console.warn('[CALIBRATION] Calibration already in progress');
+        this.socketManager.emitTravelTimeCalibrationStatus('error', 'Calibration already in progress');
+        return;
+      }
+
+      // Reset all sorting state - calibration is a clean-slate operation
+      const queuedParts = this.conveyorManager.getEncoderPartQueue();
+      for (const part of queuedParts) {
+        this.socketManager.emitEncoderPartSkipped(
+          part.partId,
+          'Calibration started - sorting state reset',
+          part.sorter,
+          part.bin,
+        );
+      }
+      this.conveyorManager.clearEncoderPartQueue();
+      this.sorterStateManager.clearAllScheduledMoves();
+      console.log('[CALIBRATION] Reset sorting state (queue cleared, scheduled moves cleared)');
+
+      // Check settings available
+      const settings = this.settingsManager.getSettings();
+      if (!settings) {
+        this.socketManager.emitTravelTimeCalibrationStatus('error', 'Settings not available');
+        return;
+      }
+
+      const sorterCount = settings.sorters.length;
+
+      // Emit started status immediately for UX feedback
+      // (the homing wait can take up to 30 seconds)
+      this.socketManager.emitTravelTimeCalibrationStatus('started');
+      console.log('[CALIBRATION] Waiting for all sorters to reach home position...');
+
+      // Wait for all sorters to be homed (at bin 1), with polling
+      // This handles the case where user clicks Calibrate right after Home All
+      const homingResult = await this.waitForAllSortersHomed(sorterCount);
+
+      if (!homingResult.ok) {
+        const errorMsg = `Sorters ${homingResult.notHomedSorters.join(', ')} did not reach home within 30 seconds. Ensure all sorters are homed before calibrating.`;
+        console.warn(`[CALIBRATION] ${errorMsg}`);
+        this.socketManager.emitTravelTimeCalibrationStatus('error', errorMsg);
+        return;
+      }
+
+      console.log('[CALIBRATION] All sorters homed. Starting travel time calibration for all sorters');
+
+      // Run calibration
+      const results = await this.sorterManager.startCalibration();
+
+      // Determine final status
+      const successCount = results.filter((r) => r.success).length;
+      const totalCount = results.length;
+
+      // Map results to socket payload format
+      const socketResults = results.map((r) => ({
+        sorter: r.sorter,
+        success: r.success,
+        error: r.error,
+      }));
+
+      if (successCount === totalCount) {
+        console.log('[CALIBRATION] Travel time calibration complete - all sorters succeeded');
+        this.socketManager.emitTravelTimeCalibrationStatus('complete', undefined, socketResults);
+      } else if (successCount > 0) {
+        console.warn(`[CALIBRATION] Travel time calibration partial failure: ${successCount}/${totalCount} succeeded`);
+        this.socketManager.emitTravelTimeCalibrationStatus('partial_failure', undefined, socketResults);
+      } else {
+        console.error('[CALIBRATION] Travel time calibration failed for all sorters');
+        this.socketManager.emitTravelTimeCalibrationStatus('error', 'All sorters failed calibration', socketResults);
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[CALIBRATION] Error during travel time calibration:', errorMsg);
+      this.socketManager.emitTravelTimeCalibrationStatus('error', errorMsg);
     }
   }
 }

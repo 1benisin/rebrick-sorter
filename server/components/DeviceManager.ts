@@ -26,9 +26,12 @@ export class DeviceManager extends BaseComponent {
   private settingsAckTimeouts: Map<DeviceName, NodeJS.Timeout> = new Map();
   private readonly SETTINGS_ACK_TIMEOUT_MS = 5000;
   // Device data callbacks for external components to receive device messages
-  private deviceDataCallbacks: Map<DeviceName, (data: string) => void> = new Map();
+  // Supports multiple callbacks per device (e.g., SorterStateManager + calibration listener)
+  private deviceDataCallbacks: Map<DeviceName, Set<(data: string) => void>> = new Map();
   // Device reconnect callbacks for external components to handle reconnection events
   private deviceReconnectCallbacks: Map<DeviceName, () => void> = new Map();
+  // Debug: track if hopper_feeder ever sent Ready (for instrumentation)
+  private hopperFeederReadyReceived = false;
 
   constructor(config: DeviceManagerConfig) {
     super('DeviceManager');
@@ -57,6 +60,14 @@ export class DeviceManager extends BaseComponent {
           JET_DURATIONS: settings.sorters.map((sorter) => sorter.jetDuration),
         });
       }
+
+      // #region agent log
+      // Log port metadata so we can see what device is at the hopper_feeder port
+      try {
+        const portList = await SerialPort.list();
+        fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:init',message:'Serial port list at startup',data:{ports:portList.map(p=>({path:p.path,manufacturer:p.manufacturer,serialNumber:p.serialNumber,vendorId:p.vendorId,productId:p.productId,pnpId:p.pnpId}))},timestamp:Date.now(),hypothesisId:'H6'})}).catch(()=>{});
+      } catch(e) {}
+      // #endregion
 
       if (settings.hopperFeederSerialPort) {
         try {
@@ -160,6 +171,45 @@ export class DeviceManager extends BaseComponent {
       };
       this.devices.set(deviceName, deviceInfo);
       this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.READY, null);
+
+      // For hopper_feeder: if no "Ready" received within 2s, proactively send settings.
+      // When powered via barrel jack, the Arduino boots before the server opens the port,
+      // so "Ready" (sent only once in setup()) is lost. The Arduino's loop() will still
+      // accept and process a settings command without having seen an ack for "Ready".
+      if (deviceName === DeviceName.HOPPER_FEEDER) {
+        const HOPPER_READY_TIMEOUT_MS = 4000;
+        setTimeout(() => {
+          if (!this.awaitingSettingsAck.get(deviceName) && this.devices.has(deviceName)) {
+            // Check if we already received "Ready" and are past the handshake
+            const info = this.devices.get(deviceName);
+            if (info) {
+              const configMessage = this.buildHopperFeederInitMessage(info.config);
+              if (configMessage) {
+                console.log(
+                  `\x1b[33m[${deviceName}] No 'Ready' received within ${HOPPER_READY_TIMEOUT_MS}ms. Proactively sending settings.\x1b[0m`,
+                );
+                this.sendCommand(deviceName, configMessage);
+                this.awaitingSettingsAck.set(deviceName, true);
+                // Set up ack timeout just like the normal handshake path
+                const ackTimeout = setTimeout(() => {
+                  if (this.awaitingSettingsAck.get(deviceName)) {
+                    console.warn(
+                      `\x1b[33m[${deviceName}] Settings ack timeout after proactive send. No acknowledgment received.\x1b[0m`,
+                    );
+                    this.socketManager.emitComponentStatusUpdate(
+                      deviceName,
+                      ComponentStatus.ERROR,
+                      'Settings ack timeout. No acknowledgment received after proactive send.',
+                    );
+                    this.awaitingSettingsAck.delete(deviceName);
+                  }
+                }, this.SETTINGS_ACK_TIMEOUT_MS);
+                this.settingsAckTimeouts.set(deviceName, ackTimeout);
+              }
+            }
+          }
+        }, HOPPER_READY_TIMEOUT_MS);
+      }
 
       // Add error listener for hopper_feeder
       if (deviceName === DeviceName.HOPPER_FEEDER) {
@@ -342,6 +392,12 @@ export class DeviceManager extends BaseComponent {
         device.on('open', () => {
           clearTimeout(timeout);
           console.log(`\x1b[36m Connected to ${deviceName} at ${portName}\x1b[0m`);
+          // #region agent log
+          if (deviceName === DeviceName.HOPPER_FEEDER) {
+            this.hopperFeederReadyReceived = false;
+            fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:open',message:'hopper_feeder port opened, parser attaching',data:{portName,ts:Date.now()},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+          }
+          // #endregion
           resolve();
         });
 
@@ -357,6 +413,36 @@ export class DeviceManager extends BaseComponent {
       parser.on('data', (data) => {
         this.handleDeviceData(deviceName, data);
       });
+
+      // #region agent log
+      if (deviceName === DeviceName.HOPPER_FEEDER && !isDevMode) {
+        const sp = device as SerialPort;
+        // Raw byte listener
+        sp.on('data', (buf: Buffer) => {
+          fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:raw',message:'hopper_feeder raw bytes',data:{len:buf.length,preview:buf.slice(0,40).toString('hex'),ascii:buf.slice(0,60).toString('ascii').replace(/[^\x20-\x7e]/g,'.')},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+        });
+        // Force Arduino reset via DTR toggle (low for 250ms then high)
+        sp.set({ dtr: false }, (err) => {
+          const dtrLowErr = err ? err.message : null;
+          fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:dtr',message:'DTR set LOW',data:{err:dtrLowErr},timestamp:Date.now(),hypothesisId:'H7'})}).catch(()=>{});
+          setTimeout(() => {
+            sp.set({ dtr: true }, (err2) => {
+              const dtrHighErr = err2 ? err2.message : null;
+              fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:dtr',message:'DTR set HIGH (reset pulse sent)',data:{err:dtrHighErr},timestamp:Date.now(),hypothesisId:'H7'})}).catch(()=>{});
+            });
+          }, 250);
+        });
+        // Check for no Ready after 5s (give extra time for DTR reset)
+        setTimeout(() => {
+          if (!this.hopperFeederReadyReceived) {
+            // Also read port signal lines for diagnostics
+            sp.get((err, status) => {
+              fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:noReady',message:'hopper_feeder no Ready within 5s (post DTR reset)',data:{ts:Date.now(),portSignals:status,signalErr:err?err.message:null,isOpen:sp.isOpen},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+            });
+          }
+        }, 5000);
+      }
+      // #endregion
 
       return device;
     } catch (error) {
@@ -434,6 +520,12 @@ export class DeviceManager extends BaseComponent {
 
     // Handle handshake/acknowledgment protocol
     if (data.trim() === 'Ready') {
+      // #region agent log
+      if (deviceName === DeviceName.HOPPER_FEEDER) {
+        this.hopperFeederReadyReceived = true;
+        fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:handleDeviceData',message:'hopper_feeder Ready received',data:{raw:data},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+      }
+      // #endregion
       if (!this.awaitingSettingsAck.get(deviceName)) {
         let configMessage = '';
         switch (deviceInfo.config.deviceType) {
@@ -511,10 +603,12 @@ export class DeviceManager extends BaseComponent {
       return;
     }
 
-    // Invoke registered callback for this device (for messages not handled above)
-    const callback = this.deviceDataCallbacks.get(deviceName);
-    if (callback) {
-      callback(data);
+    // Invoke all registered callbacks for this device (for messages not handled above)
+    const callbacks = this.deviceDataCallbacks.get(deviceName);
+    if (callbacks) {
+      for (const callback of callbacks) {
+        callback(data);
+      }
     }
   }
 
@@ -533,15 +627,31 @@ export class DeviceManager extends BaseComponent {
         console.error(`\x1b[33mError sending message to ${deviceName}:\x1b[0m`, err);
         this.socketManager.emitComponentStatusUpdate(deviceName, ComponentStatus.ERROR, err.message);
       }
+      // #region agent log
+      if (deviceName === DeviceName.HOPPER_FEEDER) {
+        fetch('http://127.0.0.1:7242/ingest/77bec187-a61d-4074-85de-e8b63550bba7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DeviceManager.ts:write',message:'hopper_feeder write callback',data:{err:err?err.message:null,msg:formattedMessage},timestamp:Date.now(),hypothesisId:'H8'})}).catch(()=>{});
+      }
+      // #endregion
     });
   }
 
   public registerDeviceDataCallback(deviceName: DeviceName, callback: (data: string) => void): void {
-    this.deviceDataCallbacks.set(deviceName, callback);
+    let callbacks = this.deviceDataCallbacks.get(deviceName);
+    if (!callbacks) {
+      callbacks = new Set();
+      this.deviceDataCallbacks.set(deviceName, callbacks);
+    }
+    callbacks.add(callback);
   }
 
-  public unregisterDeviceDataCallback(deviceName: DeviceName): void {
-    this.deviceDataCallbacks.delete(deviceName);
+  public unregisterDeviceDataCallback(deviceName: DeviceName, callback: (data: string) => void): void {
+    const callbacks = this.deviceDataCallbacks.get(deviceName);
+    if (callbacks) {
+      callbacks.delete(callback);
+      if (callbacks.size === 0) {
+        this.deviceDataCallbacks.delete(deviceName);
+      }
+    }
   }
 
   public registerDeviceReconnectCallback(deviceName: DeviceName, callback: () => void): void {

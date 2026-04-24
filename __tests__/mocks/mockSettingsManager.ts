@@ -1,6 +1,6 @@
 // __tests__/mocks/mockSettingsManager.ts
 
-import { PositionCalibrationType, SettingsType } from '../../types/settings.type';
+import { PositionCalibrationType, SettingsType, TravelTimeCalibrationType } from '../../types/settings.type';
 
 /**
  * Default position calibration for tests.
@@ -43,8 +43,9 @@ export const createMockSettingsManager = (calibrationOverrides?: Partial<Positio
     ...calibrationOverrides,
   };
 
-  const settings = {
+  const settings: SettingsType = {
     positionCalibration,
+    travelTimeCalibration: [],
     maxConveyorRPM: 100,
     detectDistanceThreshold: 1,
     conveyorJetsSerialPort: '',
@@ -66,7 +67,7 @@ export const createMockSettingsManager = (calibrationOverrides?: Partial<Positio
     sorters: [],
     hopperCycleInterval: 20000,
     hopperCycleSteps: 2020,
-  } as SettingsType;
+  };
 
   return {
     getSettings: jest.fn().mockReturnValue(settings),

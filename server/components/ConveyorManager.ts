@@ -144,7 +144,7 @@ export class ConveyorManager extends BaseComponent {
 
   public async deinitialize(): Promise<void> {
     // Unregister device data callback
-    this.deviceManager.unregisterDeviceDataCallback(DeviceName.CONVEYOR_JETS);
+    this.deviceManager.unregisterDeviceDataCallback(DeviceName.CONVEYOR_JETS, this.boundHandleConveyorData);
     // Unregister device reconnect callback
     this.deviceManager.unregisterDeviceReconnectCallback(DeviceName.CONVEYOR_JETS);
     // Unregister settings callback (using same bound reference as registration)
@@ -552,6 +552,25 @@ export class ConveyorManager extends BaseComponent {
     // Don't process actions if encoder data is stale
     if (this.isEncoderDataStale()) {
       console.warn('[ENCODER_ACTION] Skipping action processing - encoder data is stale');
+      return;
+    }
+
+    if (this.sorterManager.isCalibrationInProgress()) {
+      const reason = 'Calibration in progress - sorting disabled';
+      const skippedParts = this.encoderPartQueue.filter(
+        (part) => part.status !== 'sorted' && part.status !== 'skipped',
+      );
+
+      for (const part of skippedParts) {
+        part.status = 'skipped';
+        this.socketManager.emitEncoderPartSkipped(part.partId, reason, part.sorter, part.bin);
+        console.warn(`[ENCODER_ACTION] Skipped part ${part.partId}: ${reason}`);
+      }
+
+      if (skippedParts.length > 0) {
+        this.encoderPartQueue = this.encoderPartQueue.filter((part) => part.status !== 'skipped');
+      }
+
       return;
     }
 

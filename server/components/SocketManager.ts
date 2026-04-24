@@ -30,6 +30,8 @@ export interface SocketManagerConfig extends ComponentConfig {
     cameraWidthPixels?: number;
     jetEncoderOffsets: [number, number, number, number];
   }) => Promise<void>;
+  // Phase 8: Travel time calibration handler
+  onStartTravelTimeCalibration: () => Promise<void>;
 }
 
 export class SocketManager extends BaseComponent {
@@ -82,6 +84,9 @@ export class SocketManager extends BaseComponent {
     this.socket.on(FrontToBackEvents.RECORD_CAMERA_WIDTH, this.handlers.onRecordCameraWidth);
     this.socket.on(FrontToBackEvents.RECORD_JET_POSITION, this.handlers.onRecordJetPosition);
     this.socket.on(FrontToBackEvents.SAVE_CALIBRATION_DATA, this.handlers.onSaveCalibrationData);
+
+    // Phase 8: Travel time calibration
+    this.socket.on(FrontToBackEvents.START_TRAVEL_TIME_CALIBRATION, this.handlers.onStartTravelTimeCalibration);
 
     this.socket.on('disconnect', () => {
       this.setStatus(ComponentStatus.UNINITIALIZED);
@@ -210,6 +215,23 @@ export class SocketManager extends BaseComponent {
       position,
       success,
       sorter,
+    });
+  }
+
+  // --- Phase 8: Travel Time Calibration Events ---
+
+  /**
+   * Emits travel time calibration status to the frontend.
+   */
+  public emitTravelTimeCalibrationStatus(
+    status: 'started' | 'complete' | 'partial_failure' | 'error',
+    error?: string,
+    results?: { sorter: number; success: boolean; error?: string }[],
+  ): void {
+    this.socket?.emit(BackToFrontEvents.TRAVEL_TIME_CALIBRATION_STATUS, {
+      status,
+      error,
+      results,
     });
   }
 

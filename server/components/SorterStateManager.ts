@@ -175,7 +175,7 @@ export class SorterStateManager extends BaseComponent {
 
     // Unregister all sorter data callbacks
     for (const [deviceName, callback] of Array.from(this.boundHandleSorterData)) {
-      this.deviceManager.unregisterDeviceDataCallback(deviceName);
+      this.deviceManager.unregisterDeviceDataCallback(deviceName, callback);
     }
     this.boundHandleSorterData.clear();
 
@@ -207,7 +207,7 @@ export class SorterStateManager extends BaseComponent {
    */
   public getCurrentBin(sorterNum: number): number {
     const state = this.sorterStates.get(sorterNum);
-    return state?.currentBin ?? 1;
+    return state?.currentBin ?? 0;
   }
 
   /**

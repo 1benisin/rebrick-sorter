@@ -34,7 +34,6 @@ const SortPage = () => {
         <div className="col-span-2 flex flex-col gap-2">
           <EncoderStatusDisplay />
           <JetCalibrationPanel />
-          <div id="video-capture-container">{/* Detection images injected here */}</div>
         </div>
       </div>
       <div className="w-full">
